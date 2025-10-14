@@ -1,2 +1,2 @@
-# CGROOT-
+# CGROOT
 Simple educational ML framework
