@@ -4,3 +4,7 @@ build
 .cursorindexingignore
 
 .specstory/**
+
+*.log
+
+**log**
