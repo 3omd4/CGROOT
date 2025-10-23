@@ -3,28 +3,36 @@ A C++ Deep Learning Framework
 
 ## Build and Run
 
-To build and run the C++ application, follow these steps:
+### Quick Start (Recommended)
 
-### Windows (MinGW)
+**For Windows users, simply double-click `CGROOT_Manager.bat`** to open the interactive project manager with all options!
+
+### Manual Build Instructions
+
+#### Windows (Visual Studio)
 
 1.  Configure the project with CMake:
-    ```powershell
-    cmake -B build -G "MinGW Makefiles"
+    ```cmd
+    cmake -B build -G "Visual Studio 16 2019"
     ```
-2.  Compile the project:
-    ```powershell
-    cmake --build build
+2.  Compile the project (Debug):
+    ```cmd
+    cmake --build build --config Debug
     ```
-3.  Run the main executable:
-    ```powershell
-    .\build\bin\cgrunner.exe
+3.  Compile the project (Release):
+    ```cmd
+    cmake --build build --config Release
     ```
-4.  Run the example:
-    ```powershell
-    .\build\bin\simple_test.exe
+4.  Run the main executable (Debug):
+    ```cmd
+    .\build\bin\Debug\cgrunner.exe
+    ```
+5.  Run the example (Debug):
+    ```cmd
+    .\build\bin\Debug\simple_test.exe
     ```
 
-### Linux/macOS
+#### Linux/macOS
 
 1.  Create a build directory and navigate into it:
     ```bash
@@ -42,6 +50,15 @@ To build and run the C++ application, follow these steps:
     ```bash
     ./cgrunner
     ```
+
+### Available Scripts
+
+- **`CGROOT_Manager.bat`** - Comprehensive interactive manager with all features
+- **`build_debug.bat`** - Build Debug configuration only
+- **`build_release.bat`** - Build Release configuration only
+- **`run_debug.bat`** - Run Debug executables only
+- **`run_release.bat`** - Run Release executables only
+- **`build_and_run.bat`** - Interactive build and run script
 
 ## Project Structure
 
