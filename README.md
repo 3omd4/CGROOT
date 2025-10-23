@@ -7,7 +7,7 @@
 ![Visual Studio](https://img.shields.io/badge/Visual%20Studio-2019-purple.svg?style=for-the-badge&logo=visual-studio)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
 
-**A High-Performance C++ Deep Learning Framework**
+**A High-Performance Educational C++ Deep Learning Framework**
 
 [🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation) • [💡 Examples](#-examples) • [🤝 Contributing](#-contributing)
 
@@ -19,6 +19,8 @@
 
 - [🎯 Overview](#-overview)
 - [✨ Features](#-features)
+- [👥 Our Team](#-our-team)
+- [🗺️ Development Roadmap](#️-development-roadmap)
 - [🚀 Quick Start](#-quick-start)
 - [🔧 Installation](#-installation)
 - [📖 Documentation](#-documentation)
@@ -33,42 +35,133 @@
 
 ## 🎯 Overview
 
-CGROOT++ is a modern, high-performance deep learning framework built from the ground up in C++. Designed for both research and production use, it provides a clean, intuitive API similar to PyTorch while leveraging the speed and efficiency of C++.
+**CGroot++** is a mini educational machine learning (ML) framework designed specifically for ML developers and the open-source community. Its primary goal is to serve as an educational tool, demystifying the internal workings of ML models. The project's unique value proposition lies in its combination of being fully open-source, having a strong educational focus, and including capabilities for explaining model decisions.
+
+The framework is built using a hybrid technical stack to balance performance and usability. The core computational engine is written in **C++** for maximum efficiency, while **Python** is leveraged for a user-friendly GUI and plotting capabilities. The project uses **CMake** for building project files and is designed for entirely **local** deployment, as it functions as a standalone framework without needing a backend, frontend, or database.
 
 ### 🎯 Key Goals
+- **Education**: Clear, well-documented code structure for learning deep learning internals
+- **Explainability**: Capabilities for explaining model decisions and internal workings
 - **Performance**: Optimized C++ implementation for maximum speed
-- **Simplicity**: Clean, intuitive API design
-- **Flexibility**: Modular architecture for easy extension
-- **Education**: Clear code structure for learning deep learning internals
+- **Simplicity**: Clean, intuitive API design similar to PyTorch
+- **Open Source**: Fully open-source framework for the community
+- **Local Deployment**: Standalone framework requiring no external dependencies
 
 ---
 
 ## ✨ Features
 
-### 🧮 Core Components
-- **📊 Tensor Operations**: Multi-dimensional arrays with automatic differentiation
-- **🔄 Automatic Differentiation**: Dynamic computational graph with gradient computation
-- **⚡ CPU Kernels**: Optimized mathematical operations for CPU execution
+### 🎯 Core Features
 
-### 🧠 Neural Network Layers
-- **🔗 Linear Layer**: Fully connected linear transformations
-- **🔄 ReLU Activation**: Rectified Linear Unit activation function
-- **📈 Sigmoid Activation**: Sigmoid activation function
-- **🏗️ Sequential Container**: Stack multiple layers in sequence
-- **🖼️ Conv2D Layer**: 2D Convolutional layer (planned)
+#### 🧠 **Neural Network Engine**
+- **Core Matrix Operations**: High-performance tensor operations, Multi-dimensional arrays with automatic differentiation
+- **Automatic Differentiation**: Dynamic computational graph with gradient computation
+- **Forward & Backward Propagation**: Complete automatic differentiation
+- **Model Class**: Sequential container for stacking layers
+- **CPU Kernels**: Optimized mathematical operations for CPU execution
 
-### 📉 Loss Functions
-- **📊 MSE Loss**: Mean Squared Error for regression tasks
-- **🎯 Cross Entropy Loss**: Cross Entropy for classification tasks
+#### 🔗 **Core Layers**
+- **Dense Layer**: Fully connected linear transformations
+- **Activation Functions**: ReLU, Sigmoid, Tanh, Softmax
+- **Sequential Container**: Stack multiple layers in sequence
 
-### 🎛️ Optimizers
-- **📉 SGD**: Stochastic Gradient Descent
-- **⚡ Adam**: Adaptive Moment Estimation optimizer
+#### 📉 **Loss Functions**
+- **Mean Squared Error (MSE)**: For regression tasks
+- **Binary Cross-Entropy**: For binary classification tasks
+- **Categorical Cross-Entropy**: For multi-class classification tasks
+
+#### 🎛️ **Optimizers**
+- **Stochastic Gradient Descent (SGD)**: The fundamental baseline optimizer
+- **Momentum**: Common improvement on SGD
+- **Adam**: Popular and effective adaptive optimizer
+
+#### 🔧 **Initialization & Training**
+- **Weight Initialization**: Glorot (Xavier) and He initialization methods
+- **User-friendly API**: Intuitive interface similar to PyTorch
+- **Performance Tracking**: Loss and accuracy monitoring after each epoch
+- **Data Batching**: Efficient data loading and batching mechanism
+
+### 🚀 Secondary Features (Planned)
+
+#### 🏗️ **Advanced Layers**
+- **Convolutional Layer (Conv2D)**: 2D convolution operations
+- **Pooling Layer**: Max Pooling and Average Pooling
+- **Dropout Layer**: Regularization technique
+
+#### 🛡️ **Regularization Techniques**
+- **L2 Regularization**: Weight decay for preventing overfitting
+- **Dropout**: Random neuron deactivation during training
+
+#### 🎛️ **Training Control**
+- **Early Stopping**: Prevent overfitting by monitoring validation loss
+- **Model Saving/Loading**: Persist trained models
+
+#### 📊 **Additional Loss Functions**
+- **Mean Absolute Error (MAE)**: For robust regression tasks
 
 ### 🛠️ Development Tools
 - **🔧 Interactive Manager**: Windows batch script for easy project management
 - **🧪 Unit Tests**: Comprehensive test suite
 - **📚 Examples**: Ready-to-run example programs
+- **📖 Documentation**: Detailed API reference and tutorials
+
+---
+
+## 👥 Our Team
+
+The CGROOT++ project is developed by a dedicated team of software engineering students who share a passion for machine learning and educational technology. We work collaboratively to create a comprehensive deep learning framework that serves both educational and practical purposes.
+
+### 🎯 **Our Mission**
+To build an open-source, educational machine learning framework that demystifies the internal workings of neural networks while providing high-performance capabilities for real-world applications.
+
+### 🤝 **Collaborative Approach**
+- **Unified Development**: We work together as one cohesive team
+- **Shared Knowledge**: Regular code reviews and knowledge sharing sessions
+- **Collective Ownership**: Every team member contributes to all aspects of the project
+- **Continuous Learning**: We learn from each other and grow together as developers
+
+### 👨‍💻 **Team Members**
+- **Mohamed Emad-Eldeen**
+- **George Esmat**
+- **Ziad Khalid**
+- **Ahmed Hasan**
+- **Mohamed Amgd**
+- **Antony Ghayes**
+
+---
+
+## 🗺️ Development Roadmap
+
+### 🎯 **Current Focus: Core Foundation**
+- **Tensor Operations**: Multi-dimensional array implementation with memory management
+- **Shape Management**: Tensor shape and stride calculations
+- **Parameter System**: Learnable weights with proper initialization
+- **Basic Kernels**: CPU-optimized mathematical operations
+
+### 🧠 **Next Phase: Automatic Differentiation**
+- **Computational Graph**: Dynamic graph construction and management
+- **Operation Nodes**: Individual operation implementations (Add, Mul, MatMul, etc.)
+- **Backward Propagation**: Gradient computation and accumulation
+- **Gradient Checking**: Numerical gradient verification
+
+### 🏗️ **Future Development: Neural Networks**
+- **Module System**: Base class for all neural network components
+- **Linear Layer**: Fully connected layer implementation
+- **Activation Functions**: ReLU, Sigmoid, Tanh implementations
+- **Sequential Container**: Layer stacking and forward pass
+
+### 🚀 **Advanced Features (Planned)**
+- **Convolutional Layers**: Conv2D implementation with im2col
+- **Pooling Layers**: Max Pooling and Average Pooling
+- **Regularization**: Dropout and L2 Regularization
+- **Training Controls**: Early stopping and model persistence
+
+### 🔮 **Long-term Vision**
+- **GPU Support**: CUDA kernels for accelerated computation
+- **Python Bindings**: Seamless integration with Python ecosystem
+- **Visualization Tools**: Model architecture and training visualization
+- **Advanced Optimizers**: RMSprop, AdaGrad, and other optimizers
+- **More Layer Types**: BatchNorm, LayerNorm, and attention mechanisms
 
 ---
 
@@ -108,6 +201,40 @@ make
 
 ---
 
+## 🔧 Framework & Technology Stack
+
+The project's technical stack uses **C++** for core efficiency and **Python** for the GUI and plotting functionalities. **CMake** is utilized for building the project files, and the framework is designed for **local** deployment, as hosting, database, frontend, and backend components are not required.
+
+### 🛠️ **Technical Stack**
+- **Programming Language(s)**: C++ for efficiency, Python for GUI & plotting
+- **Deployment/Hosting**: Local; hosting isn't needed for an ML framework
+- **Other Tools/Libraries**: CMake for building project files
+- **Target Platform**: Cross-platform (Windows, Linux, macOS)
+
+### 🎯 **Design Philosophy**
+- **Educational Focus**: Clear, well-documented code for learning ML internals
+- **Performance**: Optimized C++ implementation for maximum speed
+- **Simplicity**: Clean, intuitive API design similar to PyTorch
+- **Modularity**: Well-structured components for easy extension
+- **Local Deployment**: Standalone framework with no external dependencies
+
+### 🌟 **Unique Value Proposition**
+
+| **What is the project's name?** | CGroot++ |
+|----------------------------------|----------|
+| **What is the core purpose of the software?** | Mini educational ML framework |
+| **Who is the target audience?** | ML developers + open-source communities |
+| **What is the unique value proposition?** | Open source + educational purpose + explaining model decisions |
+
+### 🎓 **Educational Benefits**
+- **Transparency**: Every component is clearly documented and easy to understand
+- **Learning Path**: Step-by-step implementation of ML concepts from scratch
+- **Model Explainability**: Built-in capabilities for understanding model decisions
+- **Hands-on Experience**: Direct interaction with low-level ML operations
+- **Community Learning**: Open-source nature encourages collaborative learning
+
+---
+
 ## 🔧 Installation
 
 ### Prerequisites
@@ -115,6 +242,7 @@ make
 - **C++ Compiler**: C++17 compatible (GCC 7+, Clang 5+, MSVC 2019+)
 - **CMake**: Version 3.10 or higher
 - **Visual Studio**: 2019 or later (Windows)
+- **Python**: 3.7+ (for GUI and plotting features)
 
 ### Windows Installation
 
@@ -333,11 +461,6 @@ CGROOT/
 | Script | Description | Usage |
 |--------|-------------|-------|
 | **`CGROOT_Manager.bat`** | 🎯 Interactive project manager with all features | Double-click or run from command line |
-| **`build_debug.bat`** | 🔨 Build Debug configuration only | `build_debug.bat` |
-| **`build_release.bat`** | 🔨 Build Release configuration only | `build_release.bat` |
-| **`run_debug.bat`** | ▶️ Run Debug executables only | `run_debug.bat` |
-| **`run_release.bat`** | ▶️ Run Release executables only | `run_release.bat` |
-| **`build_and_run.bat`** | 🔄 Interactive build and run script | `build_and_run.bat` |
 
 ### 🐧 Linux/macOS Commands
 
@@ -453,10 +576,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## 🔗 Repository & Links
+
+- **GitHub Repository**: [https://github.com/3omd4/CGROOT](https://github.com/3omd4/CGROOT)
+- **Gantt Chart**: [Project Timeline](https://www.notion.so/28fa5133a8ef8068aeb9c2e69dc66e37?pvs=21)
+- **Issues & Discussions**: [GitHub Issues](https://github.com/3omd4/CGROOT/issues)
+
+---
+
 <div align="center">
 
 **Made with ❤️ by the CGROOT++ Team**
 
-[⭐ Star us on GitHub](https://github.com/yourusername/CGROOT) • [🐛 Report Issues](https://github.com/yourusername/CGROOT/issues) • [💬 Discussions](https://github.com/yourusername/CGROOT/discussions)
+[⭐ Star us on GitHub](https://github.com/3omd4/CGROOT) • [🐛 Report Issues](https://github.com/3omd4/CGROOT/issues) • [💬 Discussions](https://github.com/3omd4/CGROOT/discussions)
 
 </div>
