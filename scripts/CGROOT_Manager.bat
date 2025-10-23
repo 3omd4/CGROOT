@@ -685,7 +685,7 @@ if exist "%build_dir%\bin\Debug\simple_test.exe" (
 
 if %test_found% EQU 0 (
     echo %RED%ERROR: No test executables found!%RESET%
-    echo Please build the Debug configuration first (Option 1).
+    echo Please build the Debug configuration first Option 1.
     echo %date% %time% - No test executables found >> "%log_file%"
     pause
     goto MAIN_MENU

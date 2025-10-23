@@ -24,3 +24,28 @@ loss.backward()
 optimizer.step()
 
 Print loss.*/
+
+
+/**
+ 
+#include <iostream>
+#include "../src/core/tensor.h"
+
+
+ int main() {
+    std::cout << "XOR Solver Example" << std::endl;
+    std::cout << "Solving XOR problem with neural network..." << std::endl;
+    
+    try {
+        // TODO: Implement XOR solver using the framework
+        // This is a placeholder until the neural network components are ready
+        std::cout << "XOR solver example completed successfully!" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    
+    return 0;
+}
+ */
