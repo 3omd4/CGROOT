@@ -8,3 +8,8 @@ build
 *.log
 
 **log**
+
+#*.md
+MATRIX_OPS_IO_REFERENCE.md
+
+*.exe
