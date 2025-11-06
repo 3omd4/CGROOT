@@ -28,14 +28,6 @@ void cpu_sigmoid_backward(T* grad_in, const T* grad_out, const T* input, unsigne
 } // namespace cgrootwhat 
 
 #endif
-
-
-
-
-
-
-
-
 /*
 Purpose: Header file declaring all low-level CPU math functions.
 To-Do:

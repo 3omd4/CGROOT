@@ -68,7 +68,6 @@ template void cpu_sigmoid_backward<double>(double*, const double*, const double*
 
 } // namespace math
 } // namespace cgroot
-
 /*Purpose: Implementation of all cpu_... kernels.
 To-Do:
 Implement all declared functions using raw C++ loops.
