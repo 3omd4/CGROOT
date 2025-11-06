@@ -1,15 +1,27 @@
 # ifndef CGROOT_SRC_OPTIMIZATION_OPTIMIZER_H_
 # define CGROOT_SRC_OPTIMIZATION_OPTIMIZER_H_
-
 # include <vector>
 #include "parameter.h"// A=Includes a simple wrapper for Tensors
 
-template <typename T>
+template<typename T>
 class Optimizer {
-    public:
-    virtual void step(std::vector<Tensor<T>>& params,
-                      const std::vector<Tensor<T>>& grads) = 0;
-    virtual ~Optimizer() = default;
+protected:
+    std::vector<Tensor<T>*> params_;
+    T lr_;
+
+public:
+    Optimizer(std::vector<Tensor<T>*>& params, T lr)
+        : params_(params), lr_(lr) {}
+
+    virtual void step() = 0;
+
+    virtual void zero_grad() {
+        for (size_t i = 0; i < params_.size(); ++i) {
+            params_[i]->zero_grad();
+        }
+    }
+
+    virtual ~Optimizer() {}
 };
 # endif
 /*Purpose: Defines the base class for all optimizers.
