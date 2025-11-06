@@ -3,15 +3,17 @@
 
 namespace cgroot {
 namespace math {
-
+// note that all funtions ar of type void and operate on raw pointers
 template <typename T>
 void cpu_add(T* out, const T* in1, const T* in2, unsigned long long size) {
+    // takes two input arrays in1 and in2 of given size, adds them element-wise, and stores the result in out
     for (unsigned long long i = 0; i < size; ++i)
         out[i] = in1[i] + in2[i];
 }
 
 template <typename T>
 void cpu_mul(T* out, const T* in1, const T* in2, unsigned long long size) {
+    // takes two input arrays in1 and in2 of given size, multiplies them element-wise, and stores the result in out
     for (unsigned long long i = 0; i < size; ++i)
         out[i] = in1[i] * in2[i];
 }
@@ -19,6 +21,7 @@ void cpu_mul(T* out, const T* in1, const T* in2, unsigned long long size) {
 template <typename T>
 void cpu_matmul(T* out, const T* A, const T* B,
                 unsigned long long M, unsigned long long N, unsigned long long K) {
+    // takes matrices A (MxK) and B (KxN), performs matrix multiplication, and stores the result in out (MxN)                
     // A is MxK, B is KxN, out is MxN
     for (unsigned long long i = 0; i < M; ++i) {
         for (unsigned long long j = 0; j < N; ++j) {
@@ -32,24 +35,28 @@ void cpu_matmul(T* out, const T* A, const T* B,
 
 template <typename T>
 void cpu_relu(T* out, const T* in, unsigned long long size) {
+    // takes input array in of given size, applies ReLU activation, and stores the result in out
     for (unsigned long long i = 0; i < size; ++i)
         out[i] = in[i] > 0 ? in[i] : 0;
 }
 
 template <typename T>
 void cpu_sigmoid(T* out, const T* in, unsigned long long size) {
+    // takes input array in of given size, applies Sigmoid activation, and stores the result in out
     for (unsigned long long i = 0; i < size; ++i)
         out[i] = 1 / (1 + std::exp(-in[i]));
 }
 
 template <typename T>
 void cpu_relu_backward(T* grad_in, const T* grad_out, const T* input, unsigned long long size) {
+    // takes gradient output grad_out and input, computes gradient input for ReLU, and stores it in grad_in
     for (unsigned long long i = 0; i < size; ++i)
         grad_in[i] = input[i] > 0 ? grad_out[i] : 0;
 }
 
 template <typename T>
 void cpu_sigmoid_backward(T* grad_in, const T* grad_out, const T* input, unsigned long long size) {
+    // takes gradient output grad_out and input, computes gradient input for Sigmoid, and stores it in grad_in
     for (unsigned long long i = 0; i < size; ++i) {
         T s = 1 / (1 + std::exp(-input[i]));
         grad_in[i] = grad_out[i] * s * (1 - s);
