@@ -1,3 +1,22 @@
+#ifndef CGOPTIMIZATION_ADAM_H
+#define CGOPTIMIZATION_ADAM_H_
+#include "optimizer.h"
+
+template <typename T>
+class Adam : public Optimizer<T> {
+private:
+    T lr_, beta1_, beta2_, epsilon_;
+    int t_;
+    std::vector<Tensor<T>> m_;  // first moment
+    std::vector<Tensor<T>> v_;  // second moment
+
+public:
+    Adam(T lr=0.001, T beta1=0.9, T beta2=0.999, T eps=1e-8);
+
+    void step(std::vector<Tensor<T>>& params,
+              const std::vector<Tensor<T>>& grads) override;
+};
+#endif
 /*Purpose: Adam optimizer.
 
 To-Do:
