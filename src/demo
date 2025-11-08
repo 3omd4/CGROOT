@@ -1,0 +1,35 @@
+//model
+#include <vector>
+using namespace std;
+typedef vector<vector<double>> image;
+
+class model{
+    private:
+    //data
+    class layer;
+    public:
+        struct archicture{
+            int numOfLayers;
+            int* neruonsPerLayer;
+        };
+    public:
+        model(archicture in_arch,image data){}
+
+    
+};
+
+
+class layer{
+    private:
+    //data
+    public:
+    struct neuron{};
+    public:
+        layer(image input_data){}
+
+};
+
+
+class convLayer{};
+
+class activationLayer{};
