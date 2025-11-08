@@ -13,7 +13,10 @@ class model{
             int* neruonsPerLayer;
         };
     public:
-        model(archicture in_arch,image data){}
+        model(archicture in_arch,image data){
+            //initialize a linked list by the layers in this aleternating fashion:
+            //conv->activation->conv-> 
+        }
 
     
 };
@@ -33,3 +36,5 @@ class layer{
 class convLayer{};
 
 class activationLayer{};
+
+class poolingLayer{};
