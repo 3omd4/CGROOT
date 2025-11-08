@@ -1,3 +1,33 @@
+#ifndef CPU_KERNELS_H
+#define CPU_KERNELS_H
+namespace cgroot {
+namespace math {
+
+template <typename T>
+void cpu_add(T* out, const T* in1, const T* in2, unsigned long long size);
+
+template <typename T>
+void cpu_mul(T* out, const T* in1, const T* in2, unsigned long long size);
+
+template <typename T>
+void cpu_matmul(T* out, const T* A, const T* B, unsigned long long M, unsigned long long N, unsigned long long K);
+
+template <typename T>
+void cpu_relu(T* out, const T* in, unsigned long long size);
+
+template <typename T>
+void cpu_sigmoid(T* out, const T* in, unsigned long long size);
+
+template <typename T>
+void cpu_relu_backward(T* grad_in, const T* grad_out, const T* input, unsigned long long size);
+
+template <typename T>
+void cpu_sigmoid_backward(T* grad_in, const T* grad_out, const T* input, unsigned long long size);
+
+} // namespace math
+} // namespace cgrootwhat 
+
+#endif
 /*
 Purpose: Header file declaring all low-level CPU math functions.
 To-Do:
@@ -16,6 +46,7 @@ void cpu_relu(T* C, const T* in, size_t size);
 void cpu_sigmoid(T* C, const T* in, size_t size);
 ...etc. for all ops.
 Backward Kernels:
+<<<<<<< HEAD
 void cpu_relu_backward(T* grad_in, const T* grad_C, const T* input, size_t size);
 void cpu_sigmoid_backward(T* grad_in, const T* grad_C, const T* input, size_t size);*/
 
@@ -55,3 +86,8 @@ void mat_transpose(const mat& A, mat& C);
 //Multiply A and B element-wise and return the new matrix C = A .* B
 void mat_mul_element_wise(const mat& A, const mat& B, mat& C); 
 
+=======
+void cpu_relu_backward(T* grad_in, const T* grad_out, const T* input, size_t size);
+void cpu_sigmoid_backward(T* grad_in, const T* grad_out, const T* input, size_t size);
+*/
+>>>>>>> 9b165e87d0767bcde891c264094b5411bb76d10a
