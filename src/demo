@@ -1,3 +1,19 @@
+//possible program new structure
+/*
+|program.cpp
+|program.h
+|-> |model.cpp
+    |model.h
+    |-> |layers.cpp
+        |layers.h
+        |-> |neurons.cpp (optional)
+            |neurons.h   (optional)
+|math.cpp
+|math.h
+*/
+
+
+
 //model
 #include <vector>
 using namespace std;
@@ -6,35 +22,99 @@ typedef vector<vector<double>> image;
 class model{
     private:
     //data
+    image data;
     class layer;
     public:
         struct archicture{
             int numOfLayers;
             int* neruonsPerLayer;
+            //array of activation functions
         };
     public:
-        model(archicture in_arch,image data){
+        model(archicture in_arch,image data, void* initalization_function){
             //initialize a linked list by the layers in this aleternating fashion:
-            //conv->activation->conv-> 
+            //conv->activation->conv->activation->pooling->...
+
+            //every neuron of each layer will be initialized by the initialization function
         }
 
-    
+    //update function(backword propagation)
+    //virtual void update() = 0;
 };
 
 
 class layer{
-    private:
+    public:
+
+
+    protected:
     //data
+    
+
     public:
-    struct neuron{};
-    public:
-        layer(image input_data){}
+        layer(){}
+
+        layer(vector<vector<double>> neurons_init_param)
+        {
+            //initialize the layer neurons
+
+        }
+
 
 };
 
 
-class convLayer{};
+class convLayer : public layer
+{
+    private:
+    //any additional data
+    vector<double> kernel;
 
-class activationLayer{};
+    public:
+    convLayer(vector<vector<double>> neurons_init_param)
+    {
+        //additional initialization
+    }
 
-class poolingLayer{};
+    //convolution();
+};
+
+class activationLayer : public layer
+{
+     private:
+    //any additional data
+    vector<double> weights;
+    //activation function type
+
+    public:
+    activationLayer(vector<vector<double>> neurons_init_param) 
+    {
+        //additional initialization
+    }
+
+    //forward propagation();
+};
+
+class poolingLayer : public layer
+{
+    private:
+    //any additional data
+
+    public:
+    poolingLayer(vector<vector<double>> neurons_init_param)
+    {
+        //additional initialization
+    }
+};
+
+class OutputLayer : public layer
+{
+     private:
+    //any additional data
+
+    public:
+    OutputLayer(vector<vector<double>> neurons_init_param)
+    {
+        //additional initialization
+    }
+};
