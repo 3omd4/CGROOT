@@ -17,14 +17,17 @@ using namespace std;
 #define _LAYERS_H
 
 //the data type of all vectors
-typedef vector<double> dataType;
+
 
 
 //this is the base class which every other layer class inherets from
 class Layer
 {
+    public:
+    typedef vector<double> outType;
+
     private:    
-    dataType toNextLayer;
+    outType layerOutput;
     //the vector containing the data to be used by the next layer
     //the data of the vector is written at every iteration/every data entered
 
@@ -68,12 +71,15 @@ class inputLayer : public Layer
 
 class convLayer : public Layer
 {
+    public:
+    typedef vector<double> kernelType;
+
     private:
-    dataType kernel;
+    kernelType kernel;
     //any additional data
 
     public:
-    convLayer(unsigned int outputVectorSize, dataType KerenlInitValues);
+    convLayer(unsigned int outputVectorSize, kernelType KerenlInitValues);
 
     //this function do convolution on the data using
     //kerenl and stores the result in the toNextLayer vector
@@ -84,12 +90,15 @@ class convLayer : public Layer
 
 class activationLayer : public Layer
 {
+    public:
+    typedef vector<vector<double>> weightsType;
+
     private:
-    dataType param;
+    weightsType weights;
     //any additional data
 
     public:
-    activationLayer(unsigned int outputVectorSize, dataType paramInitValues);
+    activationLayer(unsigned int outputVectorSize, weightsType weightsInitValues);
 
 
     //activation functions
