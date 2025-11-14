@@ -85,11 +85,11 @@ class convLayer : public Layer
 class activationLayer : public Layer
 {
     private:
-    dataType param;
+    dataType weights;
     //any additional data
 
     public:
-    activationLayer(unsigned int outputVectorSize, dataType paramInitValues);
+    activationLayer(unsigned int outputVectorSize, dataType weightsInitValues);
 
 
     //activation functions
