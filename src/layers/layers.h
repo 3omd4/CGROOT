@@ -26,7 +26,7 @@ class Layer
     public:
     typedef vector<double> outType;
 
-    private:    
+    protected:    
     outType layerOutput;
     //the vector containing the data to be used by the next layer
     //the data of the vector is written at every iteration/every data entered
@@ -40,9 +40,11 @@ class Layer
     virtual void forwardProp() = 0; 
     virtual void backwardProp() = 0;
 
+    //get the layer output data(neurons output)
+    outType& getLayerOutput();
 
 
-        //additional functions
+    //additional functions
 
     
 
@@ -63,7 +65,7 @@ class inputLayer : public Layer
 
     //this function flattens the data for ease of use
     //and optimzaton purposes later
-    void flatten();
+    void flatten(image& data);
     //additional functions
 
 
