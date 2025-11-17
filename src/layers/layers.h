@@ -37,8 +37,8 @@ class Layer
     //these fucntions do forward and backward propagation 
     //and must be implemented differently at every layer
     //(the declaration probably isn't correct)
-    virtual void forwardProp() = 0; 
-    virtual void backwardProp() = 0;
+    //virtual void forwardProp() = 0; 
+    //virtual void backwardProp() = 0;
 
     //get the layer output data(neurons output)
     outType& getLayerOutput();
@@ -46,7 +46,7 @@ class Layer
 
     //additional functions
 
-    
+    virtual ~Layer() = default;
 
 };
 
@@ -77,7 +77,9 @@ class convLayer : public Layer
     typedef vector<double> kernelType;
 
     private:
-    kernelType kernel;
+    vector<kernelType> kernels;
+    unsigned int kernel_height;
+    unsigned int kerenl_width;
     //any additional data
 
     public:
