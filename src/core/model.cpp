@@ -1,6 +1,6 @@
 #include "model.h"
-#include "layers.h"
-#include <math.h>
+#include "layers/layers.h"
+#include <cmath>
 #include <random>
 #include <iostream>
 using namespace std;
@@ -56,4 +56,31 @@ unsigned int NNModel::calcNumOfNPConvLayer(unsigned int kernelDimension, unsigne
     inputHorDim -= kernelDimension;
     inputVerDim -= kernelDimension;
     return inputHorDim*inputVerDim;
+}
+
+// -------------------------------------------------------------
+// TEMPORARY IMPLEMENTATION TO FIX LINKER ERRORS
+// These are placeholders until training logic is added
+// -------------------------------------------------------------
+
+void NNModel::train(image data, int trueOutput)
+{
+    // TODO: Add actual forward/backprop logic here
+
+    // For now, simply store the last input image so classify() can use it
+    this->data = data;
+
+    // Debug print (optional)
+    std::cout << "[NNModel] train() called. trueOutput = " << trueOutput << "\n";
+}
+
+
+int NNModel::classify(image data)
+{
+    // TODO: Add real forward pass here
+
+    // For now return a dummy class = 0
+    std::cout << "[NNModel] classify() called.\n";
+
+    return 0;
 }

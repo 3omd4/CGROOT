@@ -302,7 +302,7 @@ std::vector<float> rotate_image(
 ) {
     std::vector<float> rotated(width * height, 0.0f);
     
-    float radians = angle * M_PI / 180.0f;
+    float radians = static_cast<float>(angle * M_PI / 180.0f);
     float cos_angle = std::cos(radians);
     float sin_angle = std::sin(radians);
     

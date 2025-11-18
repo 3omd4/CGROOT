@@ -12,13 +12,14 @@ void inputLayer::start(image data)
 
 void inputLayer::flatten(image& data)
 {
-    unsigned int size = data.size();
-    unsigned int stepSize = data[0].size();
-    for(unsigned int i = 0; i < size; i++)
+    size_t size = data.size();
+    if (size == 0) return;
+    size_t stepSize = data[0].size();
+    for(size_t i = 0; i < size; i++)
     {
-        for(unsigned int j = 0; j < stepSize; j++)
+        for(size_t j = 0; j < stepSize; j++)
         {
-            layerOutput[i*stepSize + j] = data[i][j];
+            layerOutput[i*stepSize + j] = static_cast<double>(data[i][j]);
         }
     }
 }
