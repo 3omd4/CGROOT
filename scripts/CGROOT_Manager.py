@@ -46,12 +46,13 @@ project_root = script_dir.parent
 os.chdir(project_root)  # Change working dir to project root for all relative paths
 
 project_name = "CGROOT++"
-build_dir = Path("build")
-log_file = Path("build_log.txt")
+build_dir = project_root / "build"
+log_file = project_root / "build_log.txt"
 
 # Windows-specific compiler CMake paths
 username = os.getenv("USERNAME") or os.getenv("USER") or ""
 cmake_paths = {
+    "Original Version": Path(r"C:\Program Files\CMake\bin\cmake.exe"),
     "Visual Studio 16 2019": Path(r"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"),
     "Visual Studio 17 2022 (Build Tools)": Path(r"C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"),
     "Visual Studio 17 2022 (Community)": Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"),
@@ -96,6 +97,170 @@ def get_cmake_and_make_paths():
         if shutil.which("make") is None:
             print(f"{YELLOW}WARNING: 'make' not found in PATH. You may need to install build-essential or equivalent.{RESET}")
         return "linux"
+
+def find_windeployqt():
+    """
+    Find windeployqt.exe from Qt6 installation.
+    Searches common Qt6 installation paths on Windows.
+    Returns Path to windeployqt.exe or None if not found.
+    """
+    if get_os_type() != "windows":
+        return None
+    
+    # Common Qt6 installation paths on Windows
+    qt6_paths = [
+        # Qt6 installed via installer (default location)
+        Path(r"C:\Qt\6.10.0\msvc2019_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.9.0\msvc2019_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.8.0\msvc2019_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.7.0\msvc2019_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.6.0\msvc2019_64\bin\windeployqt.exe"),
+        # Visual Studio 2022 (msvc2022_64)
+        Path(r"C:\Qt\6.10.0\msvc2022_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.9.0\msvc2022_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.7.0\msvc2022_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.6.0\msvc2022_64\bin\windeployqt.exe"),
+        # MinGW
+        Path(r"C:\Qt\6.10.0\mingw_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.9.0\mingw_64\bin\windeployqt.exe"),
+        Path(r"C:\Qt\6.8.0\mingw_64\bin\windeployqt.exe"),
+        # User-specific installation
+        Path.home() / "Qt" / "6.10.0" / "msvc2019_64" / "bin" / "windeployqt.exe",
+        Path.home() / "Qt" / "6.9.0" / "msvc2019_64" / "bin" / "windeployqt.exe",
+        Path.home() / "Qt" / "6.10.0" / "msvc2022_64" / "bin" / "windeployqt.exe",
+        Path.home() / "Qt" / "6.9.0" / "msvc2022_64" / "bin" / "windeployqt.exe",
+    ]
+    
+    # Check if windeployqt is in PATH
+    windeployqt_in_path = shutil.which("windeployqt.exe")
+    if windeployqt_in_path:
+        return Path(windeployqt_in_path)
+    
+    # Search common installation paths
+    for qt_path in qt6_paths:
+        if qt_path.exists():
+            return qt_path
+    
+    # Try to find Qt6 installation directory by searching for Qt6Config.cmake
+    # This is a more robust method that works with CMAKE_PREFIX_PATH
+    try:
+        # Check if CMAKE_PREFIX_PATH environment variable is set
+        cmake_prefix = os.getenv("CMAKE_PREFIX_PATH", "")
+        if cmake_prefix:
+            prefix_path = Path(cmake_prefix.split(os.pathsep)[0])
+            windeployqt = prefix_path / "bin" / "windeployqt.exe"
+            if windeployqt.exists():
+                return windeployqt
+        
+        # Search in Program Files
+        program_files = Path(os.getenv("ProgramFiles", r"C:\Program Files"))
+        for qt_dir in program_files.glob("Qt/*/msvc*_64/bin/windeployqt.exe"):
+            if qt_dir.exists():
+                return qt_dir
+    except Exception:
+        pass
+    
+    return None
+
+def deploy_qt_dlls(gui_executable, configuration):
+    """
+    Deploy Qt DLLs for the GUI executable using windeployqt.
+    
+    Steps:
+    1. Create a separate folder (e.g., Debug/GuiApp or Release/GuiApp)
+    2. Copy the GUI executable to that folder
+    3. Run windeployqt on the copied executable
+    4. Return the path to the deployed executable
+    
+    Args:
+        gui_executable: Path to the original GUI executable
+        configuration: Build configuration (Debug or Release)
+    
+    Returns:
+        Path to the deployed GUI executable, or None if deployment failed
+    """
+    if get_os_type() != "windows":
+        # On non-Windows, just return the original path
+        return gui_executable
+    
+    if not gui_executable.exists():
+        print(f"{RED}ERROR: GUI executable not found: {gui_executable}{RESET}")
+        return None
+    
+    # Find windeployqt.exe
+    windeployqt = find_windeployqt()
+    if not windeployqt or not windeployqt.exists():
+        print(f"{YELLOW}WARNING: windeployqt.exe not found. Qt DLLs will not be deployed.{RESET}")
+        print(f"{YELLOW}Please ensure Qt6 is installed and windeployqt.exe is in PATH or set CMAKE_PREFIX_PATH.{RESET}")
+        return gui_executable
+    
+    print(f"{BLUE}Found windeployqt: {windeployqt}{RESET}")
+    
+    # Step 1: Create separate folder for GUI app (e.g., build/bin/Debug/GuiApp)
+    gui_app_dir = build_dir / "bin" / configuration / "GuiApp"
+    gui_app_dir.mkdir(parents=True, exist_ok=True)
+    print(f"{BLUE}Created GUI app directory: {gui_app_dir}{RESET}")
+    
+    # Step 2: Copy GUI executable to the separate folder
+    deployed_executable = gui_app_dir / gui_executable.name
+    try:
+        shutil.copy2(gui_executable, deployed_executable)
+        print(f"{GREEN}Copied GUI executable to: {deployed_executable}{RESET}")
+    except Exception as e:
+        print(f"{RED}ERROR: Failed to copy GUI executable: {e}{RESET}")
+        return None
+    
+    # Step 3: Run windeployqt on the copied executable
+    # Use --qmldir if you have QML files, --release for Release builds
+    print(f"{BLUE}Deploying Qt DLLs using windeployqt...{RESET}")
+    windeployqt_args = [
+        str(windeployqt),
+        "--compiler-runtime",  # Include Visual C++ runtime
+        "--force",  # Overwrite existing files
+    ]
+    
+    # Add --release flag for Release builds
+    if configuration.lower() == "release":
+        windeployqt_args.append("--release")
+    
+    # Add the executable path (use quotes to handle spaces)
+    windeployqt_args.append(str(deployed_executable))
+    
+    try:
+        # Run windeployqt with proper path handling
+        result = subprocess.run(
+            windeployqt_args,
+            capture_output=True,
+            text=True,
+            timeout=60  # 60 second timeout
+        )
+        
+        if result.returncode == 0:
+            print(f"{GREEN}Successfully deployed Qt DLLs to: {gui_app_dir}{RESET}")
+            if result.stdout:
+                # Show windeployqt output if verbose
+                print(f"{CYAN}windeployqt output:{RESET}")
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        print(f"  {line}")
+            return deployed_executable
+        else:
+            print(f"{RED}ERROR: windeployqt failed with exit code {result.returncode}{RESET}")
+            if result.stderr:
+                print(f"{RED}Error output:{RESET}")
+                print(result.stderr)
+            if result.stdout:
+                print(f"{YELLOW}Standard output:{RESET}")
+                print(result.stdout)
+            # Return the executable anyway - it might still work
+            return deployed_executable
+    except subprocess.TimeoutExpired:
+        print(f"{RED}ERROR: windeployqt timed out{RESET}")
+        return deployed_executable
+    except Exception as e:
+        print(f"{RED}ERROR: Failed to run windeployqt: {e}{RESET}")
+        return deployed_executable
 
 def detect_compilers():
     os_type = get_cmake_and_make_paths()
@@ -198,14 +363,14 @@ def build_configuration(cmake_path, config, compiler_name):
 
     os_type = get_os_type()
     if os_type == "windows":
-        generator = "Visual Studio 16 2019"
-        cmd_configure = f'"{cmake_path}" -B {build_dir} -G "{generator}"'
-        cmd_build = f'"{cmake_path}" --build {build_dir} --config {config}'
+        generator = "Visual Studio 17 2022"
+        cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
+        cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
     else:
         # For Linux/macOS use Unix Makefiles generator
         generator = "Unix Makefiles"
-        cmd_configure = f'cmake -B {build_dir} -G "{generator}"'
-        cmd_build = f'cmake --build {build_dir} --config {config}'
+        cmd_configure = f'cmake -B "{build_dir}" -G "{generator}"'
+        cmd_build = f'cmake --build "{build_dir}" --config {config}'
 
     # Configure project
     print(f"{BLUE}Configuring project with {compiler_name}...{RESET}")
@@ -235,8 +400,16 @@ def build_configuration(cmake_path, config, compiler_name):
     print(f"{WHITE}Executables created:{RESET}")
 
     ext = ".exe" if os_type == "windows" else ""
-    print(f"- {build_dir}\\bin\\{config}{os.sep}cgrunner{ext}")
-    print(f"- {build_dir}\\bin\\{config}{os.sep}simple_test{ext}")
+    print(f"- {build_dir / 'bin' / config / f'cgrunner{ext}'}")
+    print(f"- {build_dir / 'bin' / config / f'simple_test{ext}'}")
+    
+    # Check for GUI executable (only if Qt6 was found)
+    gui_exec = build_dir / f"bin/{config}/cgroot_gui{ext}"
+    if gui_exec.exists():
+        print(f"- {gui_exec} {GREEN}(GUI){RESET}")
+    else:
+        print(f"- {gui_exec} {YELLOW}(not built - Qt6 may not be found){RESET}")
+    
     log(f"{config} build completed successfully")
     pause()
     return True
@@ -256,30 +429,84 @@ def run_executables(configuration):
 
     main_exec = build_dir / f"bin/{configuration}/cgrunner{ext}"
     test_exec = build_dir / f"bin/{configuration}/simple_test{ext}"
+    gui_exec = build_dir / f"bin/{configuration}/cgroot_gui{ext}"
 
-    if not main_exec.exists():
-        print(f"{RED}ERROR: cgrunner executable not found!{RESET}")
+    executables_found = False
+
+    if main_exec.exists():
+        executables_found = True
+        print(f"{GREEN}Running main executable (cgrunner)...{RESET}")
+        print(f"{CYAN}========================================={RESET}")
+        subprocess.run(str(main_exec))
+        print()
+    else:
+        print(f"{YELLOW}WARNING: cgrunner executable not found (skipping){RESET}")
+        print()
+
+    if test_exec.exists():
+        executables_found = True
+        print(f"{GREEN}Running example executable (simple_test)...{RESET}")
+        print(f"{CYAN}========================================={RESET}")
+        subprocess.run(str(test_exec))
+        print()
+    else:
+        print(f"{YELLOW}WARNING: simple_test executable not found (skipping){RESET}")
+        print()
+
+    if gui_exec.exists():
+        executables_found = True
+        print(f"{GREEN}Preparing GUI executable (cgroot_gui)...{RESET}")
+        print(f"{CYAN}========================================={RESET}")
+        
+        # Deploy Qt DLLs for the GUI executable
+        # This will copy the exe to a separate folder and deploy Qt DLLs
+        deployed_gui_exec = deploy_qt_dlls(gui_exec, configuration)
+        
+        if not deployed_gui_exec or not deployed_gui_exec.exists():
+            print(f"{RED}ERROR: Failed to deploy GUI executable{RESET}")
+            print(f"{YELLOW}Skipping GUI launch.{RESET}")
+            print()
+        else:
+            print(f"{GREEN}Launching GUI executable...{RESET}")
+            print(f"{YELLOW}Note: GUI will open in a separate window. Close the window to continue.{RESET}")
+            print()
+            try:
+                # Run GUI without capturing output so window can appear
+                # Use shell=True on Windows to ensure proper window handling
+                # Use the deployed executable path (handles spaces correctly)
+                if get_os_type() == "windows":
+                    # Use quotes around path to handle spaces
+                    result = subprocess.run(
+                        f'"{deployed_gui_exec}"',
+                        shell=True,
+                        timeout=300
+                    )
+                else:
+                    result = subprocess.run(
+                        str(deployed_gui_exec),
+                        timeout=300
+                    )
+                if result.returncode != 0:
+                    print(f"{RED}GUI exited with error code {result.returncode}{RESET}")
+                    print(f"{YELLOW}If the GUI window didn't appear, check for runtime errors.{RESET}")
+            except subprocess.TimeoutExpired:
+                print(f"{YELLOW}GUI was closed or timed out.{RESET}")
+            except Exception as e:
+                print(f"{RED}Error running GUI: {e}{RESET}")
+                print(f"{YELLOW}Try running the GUI directly: {deployed_gui_exec}{RESET}")
+            print()
+    else:
+        print(f"{YELLOW}WARNING: cgroot_gui executable not found (Qt6 may not be installed){RESET}")
+        print()
+
+    if not executables_found:
+        print(f"{RED}ERROR: No executables found!{RESET}")
         print(f"Please build the {configuration} configuration first.")
-        log("cgrunner executable not found")
+        log("No executables found")
         pause()
         return
 
-    if not test_exec.exists():
-        print(f"{RED}ERROR: simple_test executable not found!{RESET}")
-        print(f"Please build the {configuration} configuration first.")
-        log("simple_test executable not found")
-        pause()
-        return
-
-    print(f"{GREEN}Running main executable (cgrunner)...{RESET}")
-    print(f"{CYAN}========================================={RESET}")
-    subprocess.run(str(main_exec))
-    print()
-    print(f"{GREEN}Running example executable (simple_test)...{RESET}")
-    print(f"{CYAN}========================================={RESET}")
-    subprocess.run(str(test_exec))
-    print()
-    print(f"{GREEN}SUCCESS: All {configuration} executables completed!{RESET}")
+    print(f"{GREEN}SUCCESS: All available {configuration} executables completed!{RESET}")
     log(f"{configuration} executables completed successfully")
     pause()
 
@@ -300,13 +527,13 @@ def build_and_run(cmake_path, config, compiler_name):
 
     os_type = get_os_type()
     if os_type == "windows":
-        generator = "Visual Studio 16 2019"
-        cmd_configure = f'"{cmake_path}" -B {build_dir} -G "{generator}"'
-        cmd_build = f'"{cmake_path}" --build {build_dir} --config {config}'
+        generator = "Visual Studio 17 2022"
+        cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
+        cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
     else:
         generator = "Unix Makefiles"
-        cmd_configure = f'cmake -B {build_dir} -G "{generator}"'
-        cmd_build = f'cmake --build {build_dir} --config {config}'
+        cmd_configure = f'cmake -B "{build_dir}" -G "{generator}"'
+        cmd_build = f'cmake --build "{build_dir}" --config {config}'
 
     print(f"{BLUE}Configuring project with {compiler_name}...{RESET}")
     ret = run_command(cmd_configure)
@@ -357,22 +584,34 @@ def show_status(compiler_name):
         for cfg in ['Debug', 'Release']:
             debug_cgrunner = build_dir / f"bin/{cfg}/cgrunner{ext}"
             debug_simple = build_dir / f"bin/{cfg}/simple_test{ext}"
-            for exe, name in [(debug_cgrunner, f"{cfg}\\cgrunner{ext}"), (debug_simple, f"{cfg}\\simple_test{ext}")]:
-                print(f"{GREEN if exe.exists() else RED}[{'EXISTS' if exe.exists() else 'MISSING'}]{RESET} {build_dir}\\bin\\{name}")
+            debug_gui = build_dir / f"bin/{cfg}/cgroot_gui{ext}"
+            for exe, name in [(debug_cgrunner, f"{cfg}/cgrunner{ext}"), 
+                              (debug_simple, f"{cfg}/simple_test{ext}"),
+                              (debug_gui, f"{cfg}/cgroot_gui{ext}")]:
+                exe_path = build_dir / "bin" / name
+                if "cgroot_gui" in name:
+                    status = "EXISTS" if exe.exists() else "MISSING (Qt6?)"
+                    color = GREEN if exe.exists() else YELLOW
+                else:
+                    status = "EXISTS" if exe.exists() else "MISSING"
+                    color = GREEN if exe.exists() else RED
+                print(f"{color}[{status}]{RESET} {exe_path}")
     else:
         print(f"{RED}[MISSING]{RESET} {build_dir}")
 
     print()
     print(f"{BLUE}Source Files:{RESET}")
-    for f in ["src/main.cpp", "examples/simple_test.cpp"]:
-        if Path(f).exists():
+    for f in ["src/main.cpp", "src/examples/simple_test.cpp"]:
+        file_path = project_root / f
+        if file_path.exists():
             print(f"{GREEN}[EXISTS]{RESET} {f}")
         else:
             print(f"{RED}[MISSING]{RESET} {f}")
 
     print()
     print(f"{BLUE}CMake Configuration:{RESET}")
-    if Path("CMakeLists.txt").exists():
+    cmake_file = project_root / "CMakeLists.txt"
+    if cmake_file.exists():
         print(f"{GREEN}[EXISTS]{RESET} CMakeLists.txt")
     else:
         print(f"{RED}[MISSING]{RESET} CMakeLists.txt")
@@ -380,7 +619,8 @@ def show_status(compiler_name):
     print()
     print(f"{BLUE}Test Files:{RESET}")
     for f in ["tests/test_tensor.cpp", "tests/test_autograd.cpp"]:
-        if Path(f).exists():
+        file_path = project_root / f
+        if file_path.exists():
             print(f"{GREEN}[EXISTS]{RESET} {f}")
         else:
             print(f"{RED}[MISSING]{RESET} {f}")
@@ -396,7 +636,11 @@ def open_vs_solution():
     print(f"{CYAN}================================================{RESET}")
     print()
 
+    # Solution file is in build directory or project root
     sln_path = build_dir / "CGROOT++.sln"
+    if not sln_path.exists():
+        sln_path = project_root / "CGROOT++.sln"
+    
     if not sln_path.exists():
         print(f"{RED}ERROR: Visual Studio solution not found!{RESET}")
         print("Please build the project first (Options 1 or 2).")
@@ -431,6 +675,7 @@ def run_tests():
 
     debug_main = build_dir / f"bin/Debug/cgrunner{ext}"
     debug_test = build_dir / f"bin/Debug/simple_test{ext}"
+    debug_gui = build_dir / f"bin/Debug/cgroot_gui{ext}"
 
     if debug_main.exists():
         test_found = True
@@ -445,6 +690,47 @@ def run_tests():
         print(f"{CYAN}========================================={RESET}")
         subprocess.run(str(debug_test))
         print()
+
+    if debug_gui.exists():
+        test_found = True
+        print(f"{GREEN}Preparing GUI executable...{RESET}")
+        print(f"{CYAN}========================================={RESET}")
+        
+        # Deploy Qt DLLs for the GUI executable
+        # This will copy the exe to a separate folder and deploy Qt DLLs
+        deployed_gui_exec = deploy_qt_dlls(debug_gui, "Debug")
+        
+        if not deployed_gui_exec or not deployed_gui_exec.exists():
+            print(f"{RED}ERROR: Failed to deploy GUI executable{RESET}")
+            print(f"{YELLOW}Skipping GUI launch.{RESET}")
+            print()
+        else:
+            print(f"{GREEN}Launching GUI executable...{RESET}")
+            print(f"{YELLOW}Note: GUI will open in a separate window. Close the window to continue.{RESET}")
+            print()
+            try:
+                # Use the deployed executable path (handles spaces correctly)
+                if get_os_type() == "windows":
+                    # Use quotes around path to handle spaces
+                    result = subprocess.run(
+                        f'"{deployed_gui_exec}"',
+                        shell=True,
+                        timeout=300
+                    )
+                else:
+                    result = subprocess.run(
+                        str(deployed_gui_exec),
+                        timeout=300
+                    )
+                if result.returncode != 0:
+                    print(f"{RED}GUI exited with error code {result.returncode}{RESET}")
+                    print(f"{YELLOW}If the GUI window didn't appear, check for runtime errors.{RESET}")
+            except subprocess.TimeoutExpired:
+                print(f"{YELLOW}GUI was closed or timed out.{RESET}")
+            except Exception as e:
+                print(f"{RED}Error running GUI: {e}{RESET}")
+                print(f"{YELLOW}Try running the GUI directly: {deployed_gui_exec}{RESET}")
+            print()
 
     if not test_found:
         print(f"{RED}ERROR: No test executables found!{RESET}")

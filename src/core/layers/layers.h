@@ -7,14 +7,14 @@
 //pooling layer
 //output layer
 
+#ifndef _LAYERS_H
+#define _LAYERS_H
 
 #include <vector>
 using namespace std;
-#include "../model/model.h"
 
-
-#ifndef _LAYERS_H
-#define _LAYERS_H
+// Forward declaration to avoid circular dependency
+typedef vector<vector<unsigned char>> image;
 
 //the data type of all vectors
 

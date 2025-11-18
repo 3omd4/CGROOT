@@ -1,11 +1,13 @@
 #ifndef _MODEL_H
 #define _MODEL_H
 
-
+#include <vector>
 #include <random>
-#include "../layers/layers.h"
+#include "layers/layers.h"
 
-typedef vector<vector<unsigned char>> image;
+using std::vector;
+
+// image typedef is defined in layers/layers.h to avoid circular dependency
 
 //the type of the activation function used in activation layers
 //for this model, the type of the activation function determines

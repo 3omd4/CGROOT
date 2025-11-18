@@ -10,6 +10,20 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Set output directories to keep build artifacts organized
+# All executables go to build/bin, libraries to build/lib
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Warn if building in-source (not recommended)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(WARNING "Building in-source is not recommended!")
+    message(WARNING "Please use an out-of-source build:")
+    message(WARNING "  mkdir build && cd build && cmake ..")
+    message(WARNING "  OR: cmake -B build -S .")
+endif()
+
 # Compiler-specific options
 if(MSVC)
     add_compile_options(/W4 /permissive-)
@@ -23,122 +37,53 @@ include_directories(src)
 # Find required packages
 find_package(GTest QUIET)
 
-# Core library sources
-set(CORE_SOURCES
-    src/core/tensor.cpp
-    src/core/tensor.h
-    src/core/parameter.h
-    src/core/shape.h
-)
+# Find Qt6 (optional - only needed for GUI)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
-set(AUTOGRAD_SOURCES
-    src/autograd/graph.cpp
-    src/autograd/graph.h
-    src/autograd/op_nodes.cpp
-    src/autograd/op_nodes.h
-)
+# Try to find Qt6 - allow user to set Qt6_DIR or CMAKE_PREFIX_PATH
+find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
 
-set(MATH_SOURCES
-    src/math/cpu_kernels.cpp
-    src/math/cpu_kernels.h
-)
-
-set(NN_SOURCES
-    src/nn/conv2d.h
-    src/nn/cross_entropy_loss.h
-    src/nn/linear.h
-    src/nn/module.h
-    src/nn/mse_loss.h
-    src/nn/relu.h
-    src/nn/sequential.h
-    src/nn/sigmoid.h
-)
-
-set(OPTIM_SOURCES
-    src/optim/adam.h
-    src/optim/optimizer.h
-    src/optim/sgd.h
-)
-
-# Data I/O sources (to be created)
-set(DATA_SOURCES
-    src/data/mnist_loader.cpp
-    src/data/mnist_loader.h
-    src/data/data_utils.cpp
-    src/data/data_utils.h
-)
-
-# Combine all library sources
-set(LIBRARY_SOURCES
-    ${CORE_SOURCES}
-    ${AUTOGRAD_SOURCES}
-    ${MATH_SOURCES}
-    ${NN_SOURCES}
-    ${OPTIM_SOURCES}
-    ${DATA_SOURCES}
-)
-
-# Create the main library
-add_library(cgroot_lib STATIC ${LIBRARY_SOURCES})
-
-# Set library properties
-set_target_properties(cgroot_lib PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-)
-
-# Create the main executable
-add_executable(cgrunner src/main.cpp)
-target_link_libraries(cgrunner cgroot_lib)
-
-# Create example executables
-add_executable(simple_test examples/simple_test.cpp)
-target_link_libraries(simple_test cgroot_lib)
-
-add_executable(xor_solver examples/xor_solver.cpp)
-target_link_libraries(xor_solver cgroot_lib)
-
-# Create test executables
-add_executable(test_tensor tests/test_tensor.cpp)
-target_link_libraries(test_tensor cgroot_lib)
-
-add_executable(test_autograd tests/test_autograd.cpp)
-target_link_libraries(test_autograd cgroot_lib)
-
-# If GoogleTest is available, use it for testing
-if(GTest_FOUND)
-    target_link_libraries(test_tensor GTest::GTest GTest::Main)
-    target_link_libraries(test_autograd GTest::GTest GTest::Main)
-    
-    # Enable testing
-    enable_testing()
-    add_test(NAME TensorTests COMMAND test_tensor)
-    add_test(NAME AutogradTests COMMAND test_autograd)
+# If Qt6 not found and on Windows, try common installation path
+if(NOT Qt6_FOUND AND WIN32)
+    if("${CMAKE_PREFIX_PATH}" STREQUAL "")
+        set(CMAKE_PREFIX_PATH "C:/Qt/6.10.0/msvc2022_64")
+        find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
+        # Try common Qt6 installation paths
+        # set(QT_PATHS
+        #     "C:/Qt/6.10.0/msvc2022_64"
+        #     "C:/Qt/6.10.0/msvc2019_64"
+        #     "C:/Qt/6.9.0/msvc2022_64"
+        #     "C:/Qt/6.9.0/msvc2019_64"
+        # )
+        # foreach(QT_PATH ${QT_PATHS})
+        #     if(EXISTS ${QT_PATH})
+        #         set(CMAKE_PREFIX_PATH ${QT_PATH})
+        #         find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
+        #         if(Qt6_FOUND)
+        #             break()
+        #         endif()
+        #     endif()
+        # endforeach()
+    endif()
 endif()
 
-# Set output directories
-set_target_properties(cgrunner PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+# Provide helpful message if Qt6 not found
+if(NOT Qt6_FOUND)
+    message(STATUS "Qt6 not found - GUI will not be built")
+    message(STATUS "To enable GUI, set CMAKE_PREFIX_PATH to your Qt6 installation:")
+    message(STATUS "  cmake .. -DCMAKE_PREFIX_PATH=C:/Qt/6.x.x/msvc2022_64")
+else()
+    message(STATUS "Qt6 found: ${Qt6_VERSION}")
+endif()
 
-set_target_properties(simple_test PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-set_target_properties(xor_solver PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-set_target_properties(test_tensor PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-set_target_properties(test_autograd PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+# Add subdirectories
+add_subdirectory(src)
+add_subdirectory(tests)
 
 # Installation
-install(TARGETS cgroot_lib cgrunner simple_test xor_solver
+install(TARGETS cgroot_lib
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -154,4 +99,10 @@ message(STATUS "  Version: ${PROJECT_VERSION}")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C++ standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  GoogleTest found: ${GTest_FOUND}")
+message(STATUS "  Qt6 found: ${Qt6_FOUND}")
+if(Qt6_FOUND)
+    message(STATUS "  Qt6 version: ${Qt6_VERSION}")
+    message(STATUS "  Qt6 Widgets: ${Qt6Widgets_FOUND}")
+    message(STATUS "  Qt6 Charts: ${Qt6Charts_FOUND}")
+endif()
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")

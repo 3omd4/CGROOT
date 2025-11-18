@@ -11,8 +11,6 @@ TEST(Autograd, NumericalGradCheck): This is the most important test. Write a fun
 */
 
 
-/**
-
 
 #include <iostream>
 #include "../src/autograd/graph.h"
@@ -33,5 +31,3 @@ int main() {
     
     return 0;
 }
-
-*/
