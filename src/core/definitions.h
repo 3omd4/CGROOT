@@ -2,6 +2,11 @@
 #define _DEFINITIONS_H
 
 
+//the types of different optimizers
+enum Optimizer {
+    SGD,
+    Adam,
+};
 
 //types of distribution to be used by all layers initializers
 enum distributionType
