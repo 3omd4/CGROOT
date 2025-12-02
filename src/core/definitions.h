@@ -65,4 +65,12 @@ struct featureMapDim
     size_t FM_depth;
 };
 
+
+//the types of pooling layer
+enum poolingLayerType{
+    maxPooling,
+    averagePooling,
+    maxNumOfPoolingLayerType,
+};
+
 #endif

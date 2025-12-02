@@ -36,5 +36,18 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
             break;
         }
     }
+
+
+    //initialze the biases
+    //because of the Dying ReLU problem, if the activation function is ReLU then 
+    //initialize with 0.01, else initialize with zero
+    if(actFunc == RelU)
+    {
+        bias.assign(numOfNeurons, 0.01);
+    }
+    else
+    {
+        bias.assign(numOfNeurons, 0.0);
+    }
     
 }

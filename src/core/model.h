@@ -41,6 +41,8 @@ struct architecture
     size_t poolingLayersInterval;   //the number of convolution layer after which a 
                                     //pooling layer is inserted, if equal to 0, no pooling layer 
                                     //will be inserted
+                
+    poolingLayerType poolingtype;   //the type of all pooling layers(max or average)
 
     //additional data used to initialize the data
 };
