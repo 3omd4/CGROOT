@@ -15,6 +15,7 @@
 
 #include "../model.h"
 #include "../definitions.h"
+#include "../activation/activation.h"
 
 #include <vector>
 using namespace std;
@@ -149,9 +150,22 @@ class convLayer : public Layer
     //get the type of the activation function
     activationFunction getActivationFunctionType() const {return act_Funct;}
 
-    //this function do convolution on the data using
-    //kernel and stores the result in the toNextLayer vector
-    void convolute();
+    //do the convolution operation by sweeping the kernels through 
+    //the input feature map and putin the result in the (output) feature map
+    //essentially doing the forward propagation
+    //input:        inputFeatureMaps (previous layer output feature maps)
+    //output:       N/A
+    //side effect:  this layer (output) feature maps is filled
+    //Note:         N/A
+    void convolute(vector<featureMapType>& inputFeatureMaps);
+
+    //do the forward propagation of the convolution layer
+    //by first applying the convolution and then the activation functions
+    //input:        inputFeatureMaps
+    //output:       N/A
+    //side effect:  the feature maps are filled with the forward propagation values 
+    //note:         N/A
+    void forwardProp(vector<featureMapType>& inputFeatureMaps);
 
     //get the feature map
     //used by the next layer (convolution, pooling or flatten)

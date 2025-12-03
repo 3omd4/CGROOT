@@ -73,4 +73,25 @@ void FullyConnected::forwardProp(vector<double>& inputData)
         //add the bias
         outputData[i] += bias[i];
     }
+
+
+    //apply the activatio function
+    for(size_t i = 0; i < outputData.size(); i++)
+    {
+        //choose which activation function
+        switch(act_Funct)
+        {
+        case RelU:
+            reLU_Funct(outputData[i]);
+            break;
+        case Sigmoid:
+            sigmoid_Funct(outputData[i]);
+            break;
+        case Tanh:
+            tanh_Funct(outputData[i]);
+            break;
+        case Softmax:
+            break;
+        }
+    }
 }
