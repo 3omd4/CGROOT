@@ -51,3 +51,26 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
     }
     
 }
+
+//forward propagate the input data to the output
+//input:        inputData
+//output:       N/A
+//side effects: the outputData vector is filled with the dot product 
+//              of the input data and each neuron weights
+//Note:         N/A
+void FullyConnected::forwardProp(vector<double>& inputData)
+ {
+    //do the dot product with input vector and the weights 
+    //of each neurons and store the result in the corrisponding
+    //entry in the outputData vector
+    for(size_t i = 0; i < neurons.size(); i++)
+    {
+        //do the dot product
+        for(size_t j = 0; j < inputData.size(); j++)
+        {
+            outputData[i] += neurons[i][j]*inputData[j];
+        }
+        //add the bias
+        outputData[i] += bias[i];
+    }
+}

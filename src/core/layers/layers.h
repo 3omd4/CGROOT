@@ -19,13 +19,14 @@
 #include <vector>
 using namespace std;
 
+//circular dependency stuff, probably needs more editing
 enum distributionType;
 enum activationFunction;
 enum LayerType;
 enum initFunctions;
 struct convKernels;
 // Forward declaration to avoid circular dependency
-typedef vector<vector<unsigned char>> image;
+typedef vector<vector<vector<unsigned char>>> image;
 
 //the data type of all vectors
 
@@ -61,23 +62,39 @@ class Layer
 
 class inputLayer : public Layer
 {
+    public:
+    typedef vector<vector<vector<double>>> imageType;
     private:
     //any additional data
     LayerType type = input;
+    imageType normalizedImage;
 
     public:
+    //input Layer constructor
+    //input:        -imageHeight
+    //              -imageWidth
+    //              -imageDepth
+    //output:       N/A
+    //side effect:  The input layer is constructed
+    //Note:         N/A
     inputLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth);
 
-    //at the start of training this fucntion is 
-    //used to make the data ready for the other layers
+    //start the process of training or classification by taking the input image,
+    //normalizing it, and storing it in the normalizedImage matrix to be used by 
+    //the next layers   
+    //input:        -inputImage (3D unsigned char vector)
+    //output:       N/A
+    //side effect:  the normalizedImage matrix is initialzied by the image after normalization
+    //Note:         N/A
     void start(image data);
 
-    //this function flattens the data for ease of use
-    //and optimzaton purposes later
-    //void flatten(image& data); //not needed here
-    //additional functions
-    
-      LayerType getLayerType() override {return type;}
+
+    //get the layer type
+    LayerType getLayerType() override {return type;}   
+
+    //get the normlized image
+    imageType& getOutput()  {return normalizedImage;}   
+
 };
 
 class convLayer : public Layer
@@ -142,6 +159,9 @@ class convLayer : public Layer
 
     //get the layer type
     LayerType getLayerType() override {return type;}
+
+    //get the output feature maps
+     vector<featureMapType>& getOutput() {return featureMaps;}
 };
 
 
@@ -188,8 +208,18 @@ class FullyConnected : public Layer
     FullyConnected(size_t numOfNeurons, activationFunction actFunc, 
                 initFunctions initFunc, distributionType distType,
                         size_t numOfWeights);
- 
     
+    
+    //forward propagate the input data to the output
+    //input:        inputData
+    //output:       N/A
+    //side effects: the outputData vector is filled with the dot product 
+    //              of the input data and each neuron weights
+    //Note:         N/A
+    void forwardProp(vector<double>& inputData);
+   
+
+
     //get the ouput data size (used by the constructor)
     size_t getOutputSize() {return outputData.size();}
 
