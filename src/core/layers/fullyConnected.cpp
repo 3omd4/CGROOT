@@ -13,8 +13,7 @@
 //Note:         N/A
 FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc, 
                 initFunctions initFunc, distributionType distType,
-                        size_t numOfWeights)
-    :act_Funct(actFunc)
+                        size_t numOfWeights) : act_Funct(actFunc)
 {
     //resize the neurons vector to the number of neurons
     neurons.resize(numOfNeurons);
@@ -59,7 +58,11 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
 //              of the input data and each neuron weights
 //Note:         N/A
 void FullyConnected::forwardProp(vector<double>& inputData)
- {
+ {  
+    //cache the input data for backpropagation
+    inputcache = inputData;
+    fill(outputData.begin(), outputData.end(), 0.0);//reset the output data to ensure no residue from previous passes
+    
     //do the dot product with input vector and the weights 
     //of each neurons and store the result in the corrisponding
     //entry in the outputData vector
