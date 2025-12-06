@@ -38,11 +38,13 @@ struct architecture
 
     distributionType distType; //type of distribution to be used by all layers initializers
 
-    size_t poolingLayersInterval;   //the number of convolution layer after which a 
-                                    //pooling layer is inserted, if equal to 0, no pooling layer 
-                                    //will be inserted
+    vector<size_t> poolingLayersInterval;   //the number of convolution layers after which a 
+                                            //pooling layer is inserted
                 
-    poolingLayerType poolingtype;   //the type of all pooling layers(max or average)
+    vector<poolingLayerType> poolingtype;   //the type of each pooling layer(max or average)
+
+    vector<poolKernel> kernelsPerPoolingLayer; //the information about each kernel of  each
+                                               //pooling layer and the number of strides
 
     //additional data used to initialize the data
 };
@@ -54,6 +56,8 @@ class NNModel
     private:
     vector<Layer*> Layers;
     image data;
+    size_t numOfConvLayers;
+    size_t numOfFCLayers;
 
     public:
 //the NNModel constructor
@@ -91,9 +95,12 @@ class NNModel
     //this function takes the input image to train the model
     void train(image data, int trueOutput);
 
-    //this function is used after the model is trained 
-    //to either validate the model or use it
-    //returns an int based on the classification
+    //classify the image by applying the forward propagation on the image
+    //input:        data (the image)
+    //output:       int (the class of the image)
+    //side effect:  N/A
+    //Note:         This function is either called directly to get the image class
+    //              or by the train fucntion to train the model 
     int classify(image data);
 
     //additional functions

@@ -55,9 +55,22 @@ enum initFunctions
 struct convKernels
 {
     size_t numOfKerenels;
-    size_t kernel_height;
     size_t kernel_width;
+    size_t kernel_height;
     size_t kernel_depth;
+};
+
+
+//The specification of the pooling layer kernel
+//The dimensions of the kernel and the number of strides
+//Used in the model construction
+//Note: filter_depth is calculated at the model constructor
+struct poolKernel
+{
+    size_t filter_width;
+    size_t filter_height;
+    size_t filter_depth;
+    size_t stride;
 };
 
 //the dimensions of the feature maps of each convolutions layer

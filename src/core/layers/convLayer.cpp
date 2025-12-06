@@ -11,9 +11,9 @@
 //ouput:        N/A
 //side effect:  the convolution layer is constructed
 //Note:         N/A
-convLayer::convLayer(convKernels kernelConfig, activationFunction actFunc, 
+convLayer::convLayer(convKernels& kernelConfig, activationFunction actFunc, 
                 initFunctions initFunc, distributionType distType
-                , featureMapDim FM_Dim)
+                , featureMapDim& FM_Dim)
     : kernel_info(kernelConfig), fm(FM_Dim), act_Funct(actFunc)
 {
 
@@ -43,7 +43,7 @@ convLayer::convLayer(convKernels kernelConfig, activationFunction actFunc,
 //output:       kernelType (the initialized kernel)
 //side effect:  N/A
 //Note:         N/A
-convLayer::kernelType convLayer::initKernel(convKernels kernelConfig, initFunctions initFunc,
+convLayer::kernelType convLayer::initKernel(convKernels& kernelConfig, initFunctions initFunc,
                  distributionType distType)
 {
     //make a 3D kernel

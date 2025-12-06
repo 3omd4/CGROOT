@@ -27,36 +27,33 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
     Layers.emplace_back(new inputLayer(imageHeight,imageWidth,imageDepth));
     
 
+    //poolCount is used to count the number of convolution layers after which 
+    //a pooling layer will be inserted
+    size_t poolCount = 0;
+    
+    //an iterator that is used to iterate the poolying layers information vectors
+    size_t poolIter = 0;
+
     //start initializaing the convolution and pooling layers
-    //a pooling layer is inserted after every a number of convolution layers
+    //a pooling layer is inserted after a number of convolution layers
     for(size_t i = 0; i < modelArch.numOfConvLayers; i++)
     {
-        //insert a pooling layer if
-        //1. it isn't the first layer after the input layer
-        //2. poolingLayersInterval >= 1 , which means that pooling layer insertion is allowed
-        //3. the interval of convolution layers is compeleted so pooling layer insertion is allowed
-        //if poolingLayersInterval == 1, then a pooling layer is inserted after each convolution layer
-        if((i) && modelArch.poolingLayersInterval && !(i%modelArch.poolingLayersInterval))
-        {
-            //insert a pooling layer
-            //Layers.emplace_back(new poolingLayer());
-        }
+        
 
-
-
-        featureMapDim FM_dims; //a struct to hold the dimensions of the feature map of the next convolution layer        //here the dimesions of the feature map of the next convolution layer is calculated
+        featureMapDim FM_dims; //a struct to hold the dimensions of the feature map of the next convolution layer        
+        //here the dimesions of the feature map of the next convolution layer is calculated
         
         //using calcFeatureMapDim function, which takes the current kernel 2D dimensions 
         //and the dimension of the image, the feature map of last pooling layer 
         //or the feature map of the last convolution layer
-        if(i && (i%modelArch.poolingLayersInterval))
+        if(i && !(Layers[Layers.size()-1]->getLayerType() != pooling))
         {
         //enter the condition if:
         //1. this isn't the first iteration (otherwise use the image dimensions)
         //2. the last layer isn't a pooling layer
             FM_dims = calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
-                 modelArch.kernelsPerconvLayers[i].kernel_width, dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
-                                    dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
+                 modelArch.kernelsPerconvLayers[i].kernel_width, static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
+                                    static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
         }
         else if(i)
         {
@@ -65,9 +62,9 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
         //this condition is entered in the case that the last layer is a pooling layer
 
 
-            //FM_dims = calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
-            //     modelArch.kernelsPerconvLayers[i].kernel_width, dynamic_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
-            //                        dynamic_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
+            FM_dims = calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
+                 modelArch.kernelsPerconvLayers[i].kernel_width, static_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
+                                    static_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
         }
         else
         {
@@ -89,6 +86,48 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
         Layers.emplace_back(new convLayer(modelArch.kernelsPerconvLayers[i], 
                 modelArch.convLayerActivationFunc[i], modelArch.convInitFunctionsType[i]
                     ,modelArch.distType, FM_dims));
+
+        //increment the counter (or the number elapsed convolution layers)
+        poolCount++;
+
+        //insert a pooling layer if:
+        //1. there is a pooling layers to be inserted
+        //2. the number of convolution layers before the pooling layer have been reached 
+        if((poolIter < modelArch.poolingLayersInterval.size()) && (poolCount == modelArch.poolingLayersInterval[poolIter]))
+        {
+            //reset the counter
+            poolCount = 0;
+            
+            //make the dimensions of the output feature map of the pooling layer
+            featureMapDim FM_dims_pooling;
+
+            //the depth is the same as the last convolution layer
+            FM_dims_pooling.FM_depth = static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapDepth();
+
+            //calculate the height according to (H_in - H_f)/S_f + 1
+            //where:    H_in : input feature map height
+            //          H_f  : filter height 
+            //          S_f  : stride
+            FM_dims_pooling.FM_height = static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight() - modelArch.kernelsPerPoolingLayer[poolIter].filter_height;
+            FM_dims_pooling.FM_height = (FM_dims_pooling.FM_height/modelArch.kernelsPerPoolingLayer[poolIter].stride) + 1;
+
+            //calculate the height according to (W_in - W_f)/S_f + 1
+            //where:    W_in : input feature map width
+            //          W_f  : filter width 
+            //          S_f  : stride
+            FM_dims_pooling.FM_width = static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth() - modelArch.kernelsPerPoolingLayer[poolIter].filter_width;
+            FM_dims_pooling.FM_width = (FM_dims_pooling.FM_width/modelArch.kernelsPerPoolingLayer[poolIter].stride) + 1;
+
+            //the filter depth is the same as the input feature map depth
+            //this useless though
+            modelArch.kernelsPerPoolingLayer[poolIter].filter_depth = FM_dims_pooling.FM_depth;
+
+            //add the pooling layer
+            Layers.emplace_back(new poolingLayer(modelArch.kernelsPerPoolingLayer[poolIter], FM_dims, modelArch.poolingtype[poolIter]));
+
+            //increment the iterator
+            poolIter++;
+        }
 
     }
 
@@ -120,12 +159,12 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
         if(i)
         {
         //if the last layer is fully connected
-            numOfWeights = dynamic_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutputSize();
+            numOfWeights = static_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutputSize();
         }
         else
         {
         //if the last layer is flatten layer, that is, the first iteration
-            numOfWeights = dynamic_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArrSize();
+            numOfWeights = static_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArrSize();
         }
 
         //construct the fully connected layer
@@ -167,19 +206,91 @@ featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight, size_t kernelWidth
 
 void NNModel::train(image data, int trueOutput)
 {
-    // TODO: Add actual forward/backprop logic here
-
-    // For now, simply store the last input image so classify() can use it
+    //simply store the last input image so classify() can use it
     this->data = data;
+
+    //forward propagation
+    int result = classify(data);
+
+    // TODO: Add actual backprop logic here
+    
 
     // Debug print (optional)
     std::cout << "[NNModel] train() called. trueOutput = " << trueOutput << "\n";
 }
 
-
+//classify the image by applying the forward propagation on the image
+//input:        data (the image)
+//output:       int (the class of the image)
+//side effect:  N/A
+//Note:         This function is either called directly to get the image class
+//              or by the train fucntion to train the model 
 int NNModel::classify(image data)
 {
-    // TODO: Add real forward pass here
+    //make the data ready to be processed by different layers
+    static_cast<inputLayer*>(Layers[0])->start(data);
+
+    //Iterate over all the layers after the input layer and before the output layer
+    for(size_t i = 0; i < Layers.size()-1 ; i++)
+    {
+        //see which layer this is to call the forward propagation function
+        //and if needed, see which is the last layer to get the data from
+        switch(Layers[i]->getLayerType())
+        {
+            case conv:
+                //for convolution layer check whether the last layer is the input layer,
+                //pooling layer or another convoultion layer 
+                switch(Layers[i-1]->getLayerType())
+                {
+                    case input:
+                        static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput());
+                        break;
+                    case pooling:
+                        static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps());
+                        break;
+                    default:
+                        static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
+                    break;
+                }
+
+                break;
+            case pooling:
+                //for the pooling layer, the last layer is always a convolution layer
+                static_cast<poolingLayer*>(Layers[i])->forwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
+                break;
+            case fullyConnected:
+                //for the fully connected layer, the last layer is either the flatten layer or another
+                //fully connected layer
+                switch(Layers[i]->getLayerType())
+                {
+                    case flatten:
+                        static_cast<FullyConnected*>(Layers[i])->forwardProp(static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr());
+                        break;
+                    case fullyConnected:
+                        static_cast<FullyConnected*>(Layers[i])->forwardProp(static_cast<FullyConnected*>(Layers[i-1])->getOutput());
+                        break;
+                }
+                break;
+            case flatten:
+                //for the flatten layer, the last layer is either the input layer
+                //(in Dense architecture) or a convolution layer(in CNN architecture)
+                switch(Layers[i-1]->getLayerType())
+                {
+                    case input:
+                        static_cast<FlattenLayer*>(Layers[i])->forwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput());
+                    break;
+                    case conv:
+                        static_cast<FlattenLayer*>(Layers[i])->forwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
+                    break;
+                }
+               
+                break;
+            default:
+            break;
+        }
+    }
+
+    //code about the getting the final result from the output layer
 
     // For now return a dummy class = 0
     std::cout << "[NNModel] classify() called.\n";

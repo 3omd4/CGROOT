@@ -87,7 +87,7 @@ class inputLayer : public Layer
     //output:       N/A
     //side effect:  the normalizedImage matrix is initialzied by the image after normalization
     //Note:         N/A
-    void start(image data);
+    void start(image& data);
 
 
     //get the layer type
@@ -125,9 +125,9 @@ class convLayer : public Layer
     //ouput:        N/A
     //side effect:  the convolution layer is constructed
     //Note:         N/A
-    convLayer(convKernels kernelConfig, activationFunction actFunc, 
+    convLayer(convKernels& kernelConfig, activationFunction actFunc, 
                 initFunctions initFunc, distributionType distType
-                , featureMapDim FM_Dim);
+                , featureMapDim& FM_Dim);
 
 
     //initialize a kernel
@@ -137,7 +137,7 @@ class convLayer : public Layer
     //output:       kernelType (the initialized kernel)
     //side effect:  N/A
     //Note:         N/A
-    kernelType initKernel(convKernels kernelConfig, initFunctions initFunc,
+    kernelType initKernel(convKernels& kernelConfig, initFunctions initFunc,
                  distributionType distType);
 
     //a set of getters to get the dimensions of the feature maps
@@ -173,25 +173,50 @@ class convLayer : public Layer
 
     //get the layer type
     LayerType getLayerType() override {return type;}
-
-    //get the output feature maps
-     vector<featureMapType>& getOutput() {return featureMaps;}
 };
 
 
 
 class poolingLayer : public Layer
 {
+    public:
+    typedef vector<vector<vector<double>>> kernelType;
+    typedef vector<vector<double>> featureMapType;
+
     private:
-    //any additional data
-    LayerType type = pooling;
+    poolKernel kernel_info;       //dimensions of the kernel and number of strides
+    LayerType type = pooling;      //layer type
+    poolingLayerType poolingType;   //max or average
+    vector<featureMapType> featureMaps; //array of the different layers of the feature map
+    featureMapDim fm;   //dimesions of the feature map
 
     public:
-    poolingLayer();
+    //pooling layer constructor
+    //input:                -kernelConfig (dimensions of the filter and number of strides)
+    //                      -FM_Dim (dimensions of the output feature map)
+    //                      -poolType (max or average)
+    //output:               N/A
+    //side effect:          the pooling layer is constructed
+    //Note:                 N/A
+    poolingLayer(poolKernel& kernelConfig, featureMapDim& FM_Dim, poolingLayerType& poolType);
 
-    //pooling functions
+    //forward propagation of the pooling layer
+    //done by applying max or average pooling to the feature maps
+    //input:                inputFeatureMaps
+    //output:               N/A
+    //side effect:          the output feature map is filled with the result of the pooling
+    //Note:                 N/A
+    void forwardProp(vector<featureMapType>& inputFeatureMaps);
 
-    //additional functions
+    //a set of getters to get the dimensions of the feature maps
+    //mostly used in the model construction
+    size_t getFeatureMapHeight() const {return fm.FM_height;}   //get the feature map height
+    size_t getFeatureMapWidth() const {return fm.FM_width;}     //get the feature map width
+    size_t getFeatureMapDepth() const {return fm.FM_depth;}     //get the feature map depth
+
+    //get the output feature map
+    vector<featureMapType>& getFeatureMaps() {return featureMaps;}
+    //get the layer type
     LayerType getLayerType() override {return type;}
 };
 
@@ -259,6 +284,15 @@ class FlattenLayer : public Layer
     //side effect:  the flatten layer is constructed
     //Notes:        N/A
     FlattenLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth);
+
+    //the flatten layer forward porpagation
+    //input:        featureMaps
+    //output:       N/A
+    //side effect:  flat funciton is called so the input layer is flattened
+    //              and put inside flattened_Arr
+    //Note:         N/A
+    void forwardProp(vector<convLayer::featureMapType>& featureMaps)
+    {flat(featureMaps);}
 
     //flattens the incomming image or feature map
     //input:        -feature map or image
