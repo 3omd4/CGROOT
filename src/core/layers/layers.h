@@ -250,7 +250,6 @@ class FullyConnected : public Layer
                 initFunctions initFunc, distributionType distType,
                         size_t numOfWeights);
     
-    
     //forward propagate the input data to the output
     //input:        inputData
     //output:       N/A
@@ -259,7 +258,10 @@ class FullyConnected : public Layer
     //Note:         N/A
     void forwardProp(vector<double>& inputData);
    
-
+    // Backward propagation function
+    // input:   nextLayerGrad (gradient from the layer ahead)
+    // output:  vector<double> (gradient to pass back to previous layer)
+    vector<double> backwardProp(vector<double>& nextLayerGrad);    
 
     //get the ouput data size (used by the constructor)
     size_t getOutputSize() {return outputData.size();}
