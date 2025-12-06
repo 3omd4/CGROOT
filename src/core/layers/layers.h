@@ -230,6 +230,8 @@ class FullyConnected : public Layer
     vector<weights> neurons;    //the vector of weights of each neuron
     vector<double> bias;        //the vector of biases
     vector<double> outputData;  //the vector of output data
+    vector<double> inputcache; //cache the input data for backpropagation
+    vector<vector<double>> d_weights, d_bias; //store the gradients for weights and biases
 
     activationFunction act_Funct;   //the type of the activation function 
     LayerType type = fullyConnected;    //the type of the layer
