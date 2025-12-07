@@ -48,3 +48,14 @@ void inputLayer::start(image inputImage)
         }
     }
 }
+
+vector<double> inputLayer::backwardProp(const vector<double>& outputError) {
+    // Input layer has no preceding layers to propagate gradients to.
+    // It returns an empty vector.
+    return {}; 
+}
+
+void inputLayer::applyOptimizer(Optimizer* opt) {
+    // Input layer has no trainable parameters, so do nothing.
+}
+

@@ -1,4 +1,5 @@
 
+#include "core/definitions.h"
 #include "layers.h"
 #include "../Initialization/initialization.h"
 
@@ -58,11 +59,13 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
 //              of the input data and each neuron weights
 //Note:         N/A
 void FullyConnected::forwardProp(vector<double>& inputData)
- {  
-    //cache the input data for backpropagation
-    inputcache = inputData;
-    fill(outputData.begin(), outputData.end(), 0.0);//reset the output data to ensure no residue from previous passes
+ {
+    this->inputCache = inputData; //SAVE INPUT FOR BACKPROP
     
+    // Resize output and reset
+    outputData.assign(neurons.size(), 0.0);
+    preActivation.assign(neurons.size(), 0.0); // Storage for 'z'
+
     //do the dot product with input vector and the weights 
     //of each neurons and store the result in the corrisponding
     //entry in the outputData vector
@@ -77,24 +80,79 @@ void FullyConnected::forwardProp(vector<double>& inputData)
         outputData[i] += bias[i];
     }
 
-
-    //apply the activatio function
-    for(size_t i = 0; i < outputData.size(); i++)
+    // 1. Handle Vector-wise Activations (Softmax)
+    if (act_Funct == Softmax) 
     {
-        //choose which activation function
-        switch(act_Funct)
+        softmax_Funct(outputData); // Run ONCE on the whole vector
+    }
+    // 2. Handle Element-wise Activations (ReLU, Sigmoid, Tanh)
+    else 
+    {
+        for(size_t i = 0; i < outputData.size(); i++)
         {
-        case RelU:
-            reLU_Funct(outputData[i]);
-            break;
-        case Sigmoid:
-            sigmoid_Funct(outputData[i]);
-            break;
-        case Tanh:
-            tanh_Funct(outputData[i]);
-            break;
-        case Softmax:
-            break;
+            switch(act_Funct)
+            {
+            case RelU:
+                reLU_Funct(outputData[i]);
+                break;
+            case Sigmoid:
+                sigmoid_Funct(outputData[i]);
+                break;
+            case Tanh:
+                tanh_Funct(outputData[i]);
+                break;
+            }
         }
     }
+}
+
+
+
+vector<double> FullyConnected::backwardProp(const vector<double>& outputError) {
+    size_t inputSize = inputCache.size();
+    size_t outputSize = neurons.size();
+    
+    vector<double> inputError(inputSize, 0.0); // Error to send to previous layer
+
+    // Initialize gradients
+    biasGradients.assign(outputSize, 0.0);
+    weightGradients.resize(outputSize);
+
+    for(size_t i = 0; i < outputSize; i++) {
+        // 1. Calculate Activation Slope
+        double derivative = 0.0;
+        switch(act_Funct) {
+            case RelU: derivative = reLU_Prime(preActivation[i]); break;
+            case Sigmoid: derivative = sigmoid_Prime(preActivation[i]); break;
+            case Tanh: derivative = tanh_Prime(preActivation[i]); break;
+            // ...
+        }
+
+        // 2. Calculate Delta (Error * Slope)
+        double delta = outputError[i] * derivative;
+
+        // 3. Calculate Bias Gradient (dL/db = delta)
+        biasGradients[i] = delta;
+
+        // 4. Calculate Weight Gradients (dL/dw = delta * input)
+        weightGradients[i].resize(inputSize);
+        for(size_t j = 0; j < inputSize; j++) {
+            weightGradients[i][j] = delta * inputCache[j];
+            
+            // 5. Accumulate Error for Previous Layer (dL/dx_prev = w * delta)
+            inputError[j] += delta * neurons[i][j];
+        }
+    }
+
+    return inputError; // Send this back to the previous layer
+}
+
+void FullyConnected::applyOptimizer(Optimizer* opt) {
+    // 1. Update Weights for each neuron (Must be done in loop because it's a vector of vectors)
+    for(size_t i = 0; i < neurons.size(); i++) {
+        opt->update(neurons[i], weightGradients[i]);
+    }
+
+    // 2. Update ALL Biases at once
+    opt->update(bias, biasGradients);
 }

@@ -1,50 +1,46 @@
+#ifndef OPTIMIZER_H
+#define OPTIMIZER_H
 
-
-#ifndef CGROOT_OPTIMIZER_H
-#define CGROOT_OPTIMIZER_H
-
+#include <vector>
 
 class Optimizer {
-public:
+protected:
     double learning_rate;
-
+public:
     Optimizer(double lr);
     virtual ~Optimizer() = default;
-
-    // Pure virtual update function
-    virtual void update(std::vector<double>& params, const std::vector<double>& grads) = 0;
+    virtual void update(std::vector<double>& weights, const std::vector<double>& grads) = 0;
 };
-
-
-// SGD Declaration
 
 class SGD : public Optimizer {
 public:
     SGD(double lr);
 
-    // We only declare the function here. Implementation goes in .cpp
-    void update(std::vector<double>& params, const std::vector<double>& grads) override;
+    /** * Updates parameters using gradients.
+     * * NOTE: The behavior depends on the input 'grads':
+     * - If 'grads' is from 1 image -> Acts as SGD.
+     * - If 'grads' is average of all images -> Acts as Batch GD.
+     */
+    void update(std::vector<double>& weights, const std::vector<double>& grads) override;
 };
 
-// Adam Declaration
 
 class Adam : public Optimizer {
 private:
-    double beta1;
-    double beta2;
-    double epsilon;
-    int t; // Time step
+    double beta1;   // Decay rate for momentum (default 0.9)
+    double beta2;   // Decay rate for squared gradients (default 0.999)
+    double epsilon; // Small number to prevent division by zero
+    int t;          // Time step counter
 
-    // Internal state
-    std::vector<double> m;
-    std::vector<double> v;
+    // These vectors hold the "memory" for every weight
+    std::vector<double> m; // First moment (Momentum)
+    std::vector<double> v; // Second moment (RMSprop)
 
 public:
+    // Standard Adam defaults: lr=0.001, b1=0.9, b2=0.999
     Adam(double lr = 0.001, double b1 = 0.9, double b2 = 0.999, double eps = 1e-8);
 
-    void update(std::vector<double>& params, const std::vector<double>& grads) override;
+    void update(std::vector<double>& weights, const std::vector<double>& grads) override;
 };
 
-
-
-#endif //CGROOT_OPTIMIZER_H
+#endif

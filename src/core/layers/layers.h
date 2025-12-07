@@ -55,6 +55,9 @@ class Layer
 
 
     //additional functions
+    // Returns the error gradient for the PREVIOUS layer
+    virtual vector<double> backwardProp(const vector<double>& outputError) = 0;
+    virtual void applyOptimizer(Optimizer* opt) = 0;
     
     virtual ~Layer() = default;
 
@@ -95,6 +98,8 @@ class inputLayer : public Layer
 
     //get the normlized image
     imageType& getOutput()  {return normalizedImage;}   
+    
+    virtual void applyOptimizer(Optimizer* opt) override;
 
 };
 
@@ -167,12 +172,10 @@ class convLayer : public Layer
     //note:         N/A
     void forwardProp(vector<featureMapType>& inputFeatureMaps);
 
-    //get the feature map
-    //used by the next layer (convolution, pooling or flatten)
-    vector<featureMapType>& getFeatureMaps() {return featureMaps;}
-
     //get the layer type
     LayerType getLayerType() override {return type;}
+
+    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 
@@ -218,6 +221,8 @@ class poolingLayer : public Layer
     vector<featureMapType>& getFeatureMaps() {return featureMaps;}
     //get the layer type
     LayerType getLayerType() override {return type;}
+
+    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 class FullyConnected : public Layer
@@ -227,11 +232,13 @@ class FullyConnected : public Layer
 
     private:
     //any additional data
+    vector<double> inputCache;      // Stores the input 'x' from forwardProp
+    vector<double> preActivation;   // Stores 'z' before ReLU/Sigmoid
     vector<weights> neurons;    //the vector of weights of each neuron
     vector<double> bias;        //the vector of biases
     vector<double> outputData;  //the vector of output data
-    vector<double> inputcache; //cache the input data for backpropagation
-    vector<vector<double>> d_weights, d_bias; //store the gradients for weights and biases
+    vector<vector<double>> weightGradients; 
+    vector<double> biasGradients;
 
     activationFunction act_Funct;   //the type of the activation function 
     LayerType type = fullyConnected;    //the type of the layer
@@ -257,11 +264,13 @@ class FullyConnected : public Layer
     //              of the input data and each neuron weights
     //Note:         N/A
     void forwardProp(vector<double>& inputData);
-   
+
     // Backward propagation function
     // input:   nextLayerGrad (gradient from the layer ahead)
     // output:  vector<double> (gradient to pass back to previous layer)
-    vector<double> backwardProp(vector<double>& nextLayerGrad);    
+    vector<double> backwardProp(const vector<double>& outputError) override;
+    virtual void applyOptimizer(Optimizer* opt) override;
+   
 
     //get the ouput data size (used by the constructor)
     size_t getOutputSize() {return outputData.size();}
@@ -314,6 +323,8 @@ class FlattenLayer : public Layer
 
     //get the layer type
     LayerType getLayerType() override {return type;}
+
+    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 class outputLayer : public Layer
@@ -329,6 +340,8 @@ class outputLayer : public Layer
     //additional functions
 
     LayerType getLayerType() override {return type;}
+
+    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 

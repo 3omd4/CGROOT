@@ -42,3 +42,15 @@ void FlattenLayer::flat(vector<convLayer::featureMapType>& featureMaps)
         }
     }
 }
+
+vector<double> FlattenLayer::backwardProp(const vector<double>& outputError) {
+    // For an MLP (Input -> Flatten -> FC), the Flatten layer just passes 
+    // the error backwards. 
+    // Ideally, this should reshape the 1D error back to 3D for Conv layers,
+    // but for now, passing it through is enough to compile.
+    return outputError; 
+}
+
+void FlattenLayer::applyOptimizer(Optimizer* opt) {
+    // Flatten layer has no weights, so do nothing.
+}
