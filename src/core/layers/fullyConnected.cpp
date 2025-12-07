@@ -78,6 +78,8 @@ void FullyConnected::forwardProp(vector<double>& inputData)
         }
         //add the bias
         outputData[i] += bias[i];
+        // Save the 'z' value (wx + b) BEFORE activation transforms it
+        preActivation[i] = outputData[i];
     }
 
     // 1. Handle Vector-wise Activations (Softmax)
@@ -125,8 +127,13 @@ vector<double> FullyConnected::backwardProp(const vector<double>& outputError) {
             case RelU: derivative = reLU_Prime(preActivation[i]); break;
             case Sigmoid: derivative = sigmoid_Prime(preActivation[i]); break;
             case Tanh: derivative = tanh_Prime(preActivation[i]); break;
-            // ...
-        }
+            case Softmax: 
+                derivative = 1.0;  //Because in training we already calculated (Pred - Target).
+                                  // That value IS the delta. We don't need to multiply it by anything else.
+                break;
+            
+            default: derivative = 1.0; break;
+    }
 
         // 2. Calculate Delta (Error * Slope)
         double delta = outputError[i] * derivative;

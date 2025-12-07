@@ -16,6 +16,7 @@
 #include "../model.h"
 #include "../definitions.h"
 #include "../activation/activation.h"
+#include "../optimizers/optimizer.h"
 
 #include <vector>
 using namespace std;
@@ -52,13 +53,7 @@ class Layer
 
     //get the layer output data(neurons output)
     //outType& getLayerOutput();
-
-
-    //additional functions
-    // Returns the error gradient for the PREVIOUS layer
-    virtual vector<double> backwardProp(const vector<double>& outputError) = 0;
-    virtual void applyOptimizer(Optimizer* opt) = 0;
-    
+ 
     virtual ~Layer() = default;
 
 };
@@ -99,7 +94,6 @@ class inputLayer : public Layer
     //get the normlized image
     imageType& getOutput()  {return normalizedImage;}   
     
-    virtual void applyOptimizer(Optimizer* opt) override;
 
 };
 
@@ -175,7 +169,6 @@ class convLayer : public Layer
     //get the layer type
     LayerType getLayerType() override {return type;}
 
-    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 
@@ -222,7 +215,6 @@ class poolingLayer : public Layer
     //get the layer type
     LayerType getLayerType() override {return type;}
 
-    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 class FullyConnected : public Layer
@@ -268,8 +260,9 @@ class FullyConnected : public Layer
     // Backward propagation function
     // input:   nextLayerGrad (gradient from the layer ahead)
     // output:  vector<double> (gradient to pass back to previous layer)
-    vector<double> backwardProp(const vector<double>& outputError) override;
-    virtual void applyOptimizer(Optimizer* opt) override;
+    vector<double> backwardProp(const vector<double>& outputError);
+
+    void applyOptimizer(Optimizer* opt);
    
 
     //get the ouput data size (used by the constructor)
@@ -324,7 +317,9 @@ class FlattenLayer : public Layer
     //get the layer type
     LayerType getLayerType() override {return type;}
 
-    virtual void applyOptimizer(Optimizer* opt) override;
+
+    vector<double> backwardProp(const vector<double>& outputError);
+    void applyOptimizer(Optimizer* opt);
 };
 
 class outputLayer : public Layer
@@ -341,7 +336,6 @@ class outputLayer : public Layer
 
     LayerType getLayerType() override {return type;}
 
-    virtual void applyOptimizer(Optimizer* opt) override;
 };
 
 

@@ -5,6 +5,7 @@
 #include <random>
 #include "layers/layers.h"
 #include "definitions.h"
+#include "optimizers/optimizer.h"
 
 using std::vector;
 
@@ -58,6 +59,7 @@ class NNModel
     image data;
     size_t numOfConvLayers;
     size_t numOfFCLayers;
+    Optimizer* optimizer;
 
     public:
 //the NNModel constructor
