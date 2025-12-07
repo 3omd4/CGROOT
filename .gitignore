@@ -38,6 +38,8 @@ qrc_*.cpp
 
 #*.md
 MATRIX_OPS_IO_REFERENCE.md
+*.md
+!README.md
 
 *.exe
 .vscode/settings.json
