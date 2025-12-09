@@ -13,6 +13,7 @@
 #include <QListWidget>
 #include <QImage>
 #include <QPixmap>
+#include <vector>
 
 class ImageViewerWidget;
 
@@ -24,7 +25,7 @@ public:
     explicit InferenceWidget(QWidget *parent = nullptr);
 
 public slots:
-    void displayPrediction(int predictedClass, const QImage& image, const QVector<double>& probabilities);
+    void displayPrediction(int predictedClass, const QImage& image, const std::vector<double>& probabilities);
     void onInferenceStarted();
     void onInferenceFinished();
 
@@ -35,7 +36,7 @@ private slots:
 
 private:
     void setupUI();
-    void updateClassProbabilities(const QVector<double>& probabilities);
+    void updateClassProbabilities(const std::vector<double>& probabilities);
     
     ImageViewerWidget* m_imageViewer;
     QLabel* m_predictedClassLabel;

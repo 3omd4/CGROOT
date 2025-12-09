@@ -16,6 +16,8 @@ set(GUI_WIDGETS_SOURCES
 set(GUI_CONTROLLERS_SOURCES
     controllers/modelcontroller.cpp
     controllers/modelcontroller.h
+    controllers/modelworker.cpp
+    controllers/modelworker.h
 )
 
 set(GUI_MAIN_SOURCES

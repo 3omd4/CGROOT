@@ -62,7 +62,11 @@ void ModelWorker::initializeModel() {
     return;
   emit logMessage("Worker: Initializing model...");
   architecture arch;
-  arch.numOfLayers = 3;
+  arch.numOfConvLayers = 0;
+  arch.numOfFCLayers = 0;
+  arch.distType = normalDistribution; // Default
+  // arch.numOfLayers = 3; // Incorrect member 
+  // TODO: Define a proper architecture (LeNet usually)
   // Note: NNModel usage here depends on how NNModel is defined.
   // Original code: m_model = std::make_unique<NNModel>(arch, 10, 28, 28);
   // NNModel constructor takes arch, numOfClasses, H, W, D.
@@ -80,12 +84,12 @@ void ModelWorker::trainModel(int epochs) {
   m_shouldStop = false;
   emit modelStatusChanged(true);
   // Prepare data structures for training loop to avoid repeated allocations
-  std::vector<std::vector<unsigned char>> imageData(
-      28, std::vector<unsigned char>(28));
+  std::vector<std::vector<std::vector<unsigned char>>> imageData(
+      1, std::vector<std::vector<unsigned char>>(28, std::vector<unsigned char>(28)));
   for (int epoch = 0; epoch < epochs && !m_shouldStop.load(); ++epoch) {
     emit logMessage(QString("Epoch %1/%2").arg(epoch + 1).arg(epochs));
 
-    double epochLoss = 0.0;
+    // double epochLoss = 0.0; // Unused
     int correctPredictions = 0;
     int totalSamples = 0;
 
@@ -104,7 +108,7 @@ void ModelWorker::trainModel(int epochs) {
         for (int row = 0; row < 28; ++row) {
           // memcpy might be faster but loop is safe
           for (int col = 0; col < 28; ++col) {
-            imageData[row][col] = image.pixels[row * 28 + col];
+            imageData[0][row][col] = image.pixels[row * 28 + col];
           }
         }
 
@@ -120,7 +124,7 @@ void ModelWorker::trainModel(int epochs) {
       }
 
       if (batch % 10 == 0) {
-        emit progressUpdated(batch + 1, numBatches);
+        emit progressUpdated(static_cast<int>(batch + 1), static_cast<int>(numBatches));
         // Process events to keep loop responsive to stop signal if it was set
         // via atomics? No, we check m_shouldStop.
       }
@@ -149,21 +153,21 @@ void ModelWorker::runInference() {
   emit modelStatusChanged(true);
   emit logMessage("Starting inference...");
   int numSamples = std::min(100, static_cast<int>(dataset->images.size()));
-  std::vector<std::vector<unsigned char>> imageData(
-      28, std::vector<unsigned char>(28));
+  std::vector<std::vector<std::vector<unsigned char>>> imageData(
+      1, std::vector<std::vector<unsigned char>>(28, std::vector<unsigned char>(28)));
   for (int i = 0; i < numSamples && !m_shouldStop.load(); ++i) {
     const auto &image = dataset->images[i];
 
     for (int row = 0; row < 28; ++row) {
       for (int col = 0; col < 28; ++col) {
-        imageData[row][col] = image.pixels[row * 28 + col];
+        imageData[0][row][col] = image.pixels[row * 28 + col];
       }
     }
     int predicted = m_model->classify(imageData);
 
     // Convert to QImage for display
     QImage qImage = convertMNISTImageToQImage(image.pixels, 28, 28);
-    QVector<double> probs(10, 0.0); // Dummy probabilities
+    std::vector<double> probs(10, 0.0); // Dummy probabilities
     probs[predicted] = 1.0;
     emit imagePredicted(predicted, qImage, probs);
     emit progressUpdated(i + 1, numSamples);

@@ -8,16 +8,12 @@
 #include <atomic>
 #include <memory>
 #include <vector>
+#include <QMetaType>
+#include "../metatypes.h"
 
 class NNModel;
 
-namespace cgroot {
-namespace data {
-namespace MNISTLoader {
-struct MNISTDataset;
-}
-} // namespace data
-} // namespace cgroot
+#include "../../core/utils/mnist_loader.h"
 
 /**
  * @brief The ModelWorker class handles long-running AI model operations on a
@@ -42,7 +38,7 @@ signals:
   void metricsUpdated(double loss, double accuracy, int epoch);
   void progressUpdated(int value, int maximum);
   void imagePredicted(int predictedClass, const QImage &image,
-                      const QVector<double> &probabilities);
+                      const std::vector<double> &probabilities);
   void trainingFinished();
   void inferenceFinished();
   void modelStatusChanged(bool isActive);
@@ -58,4 +54,5 @@ private:
   std::atomic<bool> m_shouldStop;
 };
 
+// Q_DECLARE_METATYPE(std::vector<double>) // Defined in metatypes.h
 #endif // MODELWORKER_H

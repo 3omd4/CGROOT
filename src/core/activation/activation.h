@@ -53,3 +53,5 @@ double reLU_Prime(double input);
 //side effect:  input vector is modified in-place to contain probabilities
 //note:         Uses "stability shift" (subtracting max) to prevent numerical overflow
 void softmax_Funct(vector<double>& input);
+
+#endif // _ACTIVATION_H

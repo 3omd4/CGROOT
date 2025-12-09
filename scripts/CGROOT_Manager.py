@@ -363,7 +363,7 @@ def build_configuration(cmake_path, config, compiler_name):
 
     os_type = get_os_type()
     if os_type == "windows":
-        generator = "Visual Studio 17 2022"
+        generator = "Visual Studio 16 2019"
         cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
         cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
     else:
@@ -527,7 +527,7 @@ def build_and_run(cmake_path, config, compiler_name):
 
     os_type = get_os_type()
     if os_type == "windows":
-        generator = "Visual Studio 17 2022"
+        generator = "Visual Studio 16 2019"
         cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
         cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
     else:

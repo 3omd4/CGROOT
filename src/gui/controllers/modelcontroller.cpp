@@ -14,6 +14,9 @@ ModelController::ModelController(QObject *parent)
           &ModelController::metricsUpdated);
   connect(m_worker, &ModelWorker::progressUpdated, this,
           &ModelController::progressUpdated);
+
+  qRegisterMetaType<std::vector<double>>("std::vector<double>");
+
   connect(m_worker, &ModelWorker::imagePredicted, this,
           &ModelController::imagePredicted);
   connect(m_worker, &ModelWorker::trainingFinished, this,
@@ -51,11 +54,11 @@ void ModelController::loadDataset(const std::string &imagesPath,
                           QString::fromStdString(labelsPath));
 }
 
-void ModelController::loadModel(const std::string &modelPath) {
+void ModelController::loadModel(const std::string & /*modelPath*/) {
   emit logMessage("Load Model implementation pending in Worker");
 }
 
-void ModelController::saveModel(const std::string &modelPath) {
+void ModelController::saveModel(const std::string & /*modelPath*/) {
   emit logMessage("Save Model implementation pending in Worker");
 }
 

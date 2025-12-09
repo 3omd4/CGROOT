@@ -10,22 +10,20 @@ set(MATH_SOURCES
 set(CORE_LAYERS_SOURCES
     core/layers/layer.cpp
     core/layers/layers.h
-    core/layers/dense.cpp
-    core/layers/dense.h
-    core/layers/dropout.h
-    core/layers/conv2d.cpp
-    core/layers/pooling.cpp
-    core/layers/ActivationLayer.cpp
+    core/layers/convLayer.cpp
+    core/layers/poolingLayer.cpp
+    core/layers/flatten.cpp
+    core/layers/fullyConnected.cpp
     core/layers/inputLayer.cpp
     core/layers/outputLayer.cpp
+    core/layers/dense.h
+    core/layers/dropout.h
 )
 
 # Core activations
 set(CORE_ACTIVATIONS_SOURCES
-    core/activations/relu.h
-    core/activations/sigmoid.h
-    core/activations/tanh.h
-    core/activations/softmax.h
+    core/activation/activation.cpp
+    core/activation/activation.h
 )
 
 # Core losses
@@ -37,9 +35,14 @@ set(CORE_LOSSES_SOURCES
 
 # Core optimizers
 set(CORE_OPTIMIZERS_SOURCES
-    core/optimizers/sgd.h
-    core/optimizers/momentum.h
-    core/optimizers/adam.h
+    core/optimizers/optimizer.cpp
+    core/optimizers/optimizer.h
+)
+
+# Core initializations
+set(CORE_INITIALIZATION_SOURCES
+    core/Initialization/initialization.cpp
+    core/Initialization/initialization.h
 )
 
 # Core utils
@@ -65,6 +68,7 @@ set(LIBRARY_SOURCES
     ${CORE_ACTIVATIONS_SOURCES}
     ${CORE_LOSSES_SOURCES}
     ${CORE_OPTIMIZERS_SOURCES}
+    ${CORE_INITIALIZATION_SOURCES}
     ${CORE_UTILS_SOURCES}
     ${CORE_MODEL_SOURCES}
 )

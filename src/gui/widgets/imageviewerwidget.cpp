@@ -43,7 +43,7 @@ void ImageViewerWidget::setZoomFactor(double factor)
     update();
 }
 
-void ImageViewerWidget::paintEvent(QPaintEvent* event)
+void ImageViewerWidget::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
     painter.fillRect(rect(), QColor(240, 240, 240));

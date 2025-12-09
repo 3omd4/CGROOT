@@ -1,6 +1,7 @@
 #include "inferencewidget.h"
 #include "imageviewerwidget.h"
 #include <QFileDialog>
+#include <QVector>
 #include <QListWidgetItem>
 #include <QProgressBar>
 #include <QGroupBox>
@@ -85,7 +86,7 @@ void InferenceWidget::setupUI()
     mainLayout->addWidget(resultsGroup, 1);
 }
 
-void InferenceWidget::displayPrediction(int predictedClass, const QImage& image, const QVector<double>& probabilities)
+void InferenceWidget::displayPrediction(int predictedClass, const QImage& image, const std::vector<double>& probabilities)
 {
     if (m_imageViewer) {
         m_imageViewer->displayImage(image);
@@ -104,12 +105,12 @@ void InferenceWidget::displayPrediction(int predictedClass, const QImage& image,
     updateClassProbabilities(probabilities);
 }
 
-void InferenceWidget::updateClassProbabilities(const QVector<double>& probabilities)
+void InferenceWidget::updateClassProbabilities(const std::vector<double>& probabilities)
 {
     m_probabilityList->clear();
     
     QVector<QPair<int, double>> sortedProbs;
-    for (int i = 0; i < probabilities.size() && i < m_classNames.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(probabilities.size()) && i < m_classNames.size(); ++i) {
         sortedProbs.append(qMakePair(i, probabilities[i]));
     }
     
@@ -151,7 +152,7 @@ void InferenceWidget::onLoadImage()
     }
 }
 
-void InferenceWidget::onImageSelected(int index)
+void InferenceWidget::onImageSelected(int /*index*/)
 {
     // Handle image selection from dataset
 }

@@ -15,6 +15,7 @@
 #include <QLabel>
 #include <QTabWidget>
 #include <QScrollArea>
+#include <QVector>
 
 class ConfigurationWidget : public QWidget
 {

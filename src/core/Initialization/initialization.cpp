@@ -18,7 +18,9 @@ void init_Func(vector<double>& arr, size_t N, distributionType distType)
     //choose which distribution to use
     switch(distType)
     {
+
         case normalDistribution:
+        {
             //in normal distribution, the distribution is made using the mean (0.0) and the varince
             double variance = sqrt(2.0/static_cast<double>(N)); //calculate the vairance 
             normal_distribution<double> dist(0.0, variance);  //make the distribution to be used
@@ -27,7 +29,9 @@ void init_Func(vector<double>& arr, size_t N, distributionType distType)
                 arr[i] = dist(gen);
             }
             return;
+        }
         case uniformDistribution:
+        {
             //in uniform distribution, the distribution is made using range of values(limits)
             double limit = sqrt(6.0/static_cast<double>(N));    //the limit is the variance*sqrt(3)
             uniform_real_distribution<double> dist(-limit, limit);  //make the distribution to be used
@@ -36,6 +40,7 @@ void init_Func(vector<double>& arr, size_t N, distributionType distType)
                 arr[i] = dist(gen);
             }
             return;
+        }
     }
     
 }

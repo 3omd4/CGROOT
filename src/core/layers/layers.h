@@ -13,7 +13,7 @@
 
 
 
-#include "../model.h"
+// #include "../model.h" // REMOVED to avoid circular dependency
 #include "../definitions.h"
 #include "../activation/activation.h"
 #include "../optimizers/optimizer.h"
@@ -28,7 +28,7 @@ enum LayerType;
 enum initFunctions;
 struct convKernels;
 // Forward declaration to avoid circular dependency
-typedef vector<vector<vector<unsigned char>>> image;
+// typedef vector<vector<vector<unsigned char>>> image; // MOVED TO definitions.h
 
 //the data type of all vectors
 
@@ -66,7 +66,7 @@ class inputLayer : public Layer
     private:
     //any additional data
     LayerType type = input;
-    imageType normalizedImage;
+    imageType m_normalizedImage;
 
     public:
     //input Layer constructor
@@ -92,8 +92,10 @@ class inputLayer : public Layer
     LayerType getLayerType() override {return type;}   
 
     //get the normlized image
-    imageType& getOutput()  {return normalizedImage;}   
+    imageType& getOutput()  {return m_normalizedImage;}   
     
+    vector<double> backwardProp(const vector<double>& outputError);
+    void applyOptimizer(Optimizer* opt);
 
 };
 
@@ -165,6 +167,9 @@ class convLayer : public Layer
     //side effect:  the feature maps are filled with the forward propagation values 
     //note:         N/A
     void forwardProp(vector<featureMapType>& inputFeatureMaps);
+
+    //get the output feature map
+    vector<featureMapType>& getFeatureMaps() {return featureMaps;}
 
     //get the layer type
     LayerType getLayerType() override {return type;}

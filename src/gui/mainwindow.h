@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <memory>
+#include <vector>
 
 
 class TrainingWidget;
@@ -50,7 +51,7 @@ private slots:
   void onUpdateProgress(int value, int maximum);
   void onLogMessage(const QString &message);
   void onImagePrediction(int predictedClass, const QImage &image,
-                         const QVector<double> &probabilities);
+                         const std::vector<double> &probabilities);
   void onTrainingFinished();
   void onModelStatusChanged(bool isTraining);
 

@@ -6,6 +6,9 @@
 #include <QThread>
 #include <QVector>
 #include <string>
+#include <vector>
+#include <QMetaType>
+#include "../metatypes.h"
 
 class ModelWorker;
 
@@ -43,7 +46,7 @@ signals:
   void progressUpdated(int value, int maximum);
   void logMessage(const QString &message);
   void imagePredicted(int predictedClass, const QImage &image,
-                      const QVector<double> &probabilities);
+                      const std::vector<double> &probabilities);
   void trainingFinished();
   void modelStatusChanged(bool isTraining);
 
@@ -55,4 +58,5 @@ private:
   bool m_isTraining;
 };
 
+// Q_DECLARE_METATYPE(std::vector<double>) // Moved to metatypes.h
 #endif // MODELCONTROLLER_H

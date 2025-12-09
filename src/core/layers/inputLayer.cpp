@@ -13,13 +13,13 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth)
     //intialize the dimensions of the normalized image matrix
     //when an image is fed for training or classifcation
     //it is first normalized and stored in the normalized image matrix
-    normalizedImage.resize(imageDepth);
+    m_normalizedImage.resize(imageDepth);
     for(size_t i = 0; i < imageDepth; i++)
     {
-        normalizedImage[i].resize(imageHeight);
+        m_normalizedImage[i].resize(imageHeight);
         for(size_t j = 0; j < imageHeight; j++)
         {
-            normalizedImage[i][j].assign(imageWidth, 0.0);
+            m_normalizedImage[i][j].assign(imageWidth, 0.0);
         }
     }
 
@@ -33,24 +33,24 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth)
 //output:       N/A
 //side effect:  the normalizedImage matrix is initialzied by the image after normalization
 //Note:         N/A
-void inputLayer::start(image inputImage)
+void inputLayer::start(image& inputImage)
 {
     //stor the inputImage in the normlized Image matrix
-    for(size_t i = 0; i < normalizedImage.size(); i++)
+    for(size_t i = 0; i < m_normalizedImage.size(); i++)
     {
-        for(size_t j = 0; j < normalizedImage[i].size(); j++)
+        for(size_t j = 0; j < m_normalizedImage[i].size(); j++)
         {
-            for(size_t k = 0; k < normalizedImage[i][j].size(); k++)
+            for(size_t k = 0; k < m_normalizedImage[i][j].size(); k++)
             {
                 //normalize each pixel before storage
-                normalizedImage[i][j][k] = static_cast<double>(inputImage[i][j][k])/255.0;
+                m_normalizedImage[i][j][k] = static_cast<double>(inputImage[i][j][k])/255.0;
             }
         }
     }
 }
 
 vector<double> inputLayer::backwardProp(const vector<double>& outputError) {
-    // Input layer has no preceding layers to propagate gradients to.
+    // Input layer has no preceding layers to propagate gradientsto.
     // It returns an empty vector.
     return {}; 
 }

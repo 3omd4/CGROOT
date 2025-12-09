@@ -2,8 +2,13 @@
 #define _DEFINITIONS_H
 
 
+#include <vector>
+using namespace std;
+
+typedef vector<vector<vector<unsigned char>>> image;
+
 //the types of different optimizers
-enum Optimizer {
+enum OptimizerType {
     SGD,
     Adam,
 };

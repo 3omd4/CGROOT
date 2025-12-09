@@ -38,19 +38,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   m_workerThread->start();
 
-  m_updateTimer = new QTimer(this);
-
-  connect(m_updateTimer, &QTimer::timeout, this, [this]() {
-
-    if (m_modelController) {
-
-      m_modelController->updateMetrics();
-
-    }
-
-  });
-
-  m_updateTimer->start(100);
+    // Timer removed as metrics are push-based via signals
 
   setWindowTitle("MNIST Neural Network Trainer");
 
@@ -112,7 +100,7 @@ void MainWindow::setupMenuBar() {
       fileMenu->addAction("&Save Model...", this, &MainWindow::onSaveModel);
 
   fileMenu->addSeparator();
-  fileMenu->addAction("E&xit", this, &QWidget::close, QKeySequence::Quit);
+  fileMenu->addAction("E&xit", QKeySequence::Quit, this, &QWidget::close);
 
   QMenu *trainingMenu = menuBar()->addMenu("&Training");
   m_startTrainingAction = trainingMenu->addAction("&Start Training", this,
@@ -277,7 +265,7 @@ void MainWindow::onLogMessage(const QString &message) {
 }
 
 void MainWindow::onImagePrediction(int predictedClass, const QImage &image,
-                                   const QVector<double> &probabilities) {
+                                   const std::vector<double> &probabilities) {
   if (m_inferenceWidget) {
     m_inferenceWidget->displayPrediction(predictedClass, image, probabilities);
   }

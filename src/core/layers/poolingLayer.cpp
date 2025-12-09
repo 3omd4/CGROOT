@@ -50,6 +50,7 @@ void poolingLayer::forwardProp(vector<featureMapType>& inputFeatureMaps)
                                 switch(poolingType)
                                 {
                                 case maxPooling:
+                                {
                                         //max pooling works by comparing each entry of the overlapped part of the 
                                         //filter and the input feature map and take the max and put it in the output feature map
                                         double max = inputFeatureMaps[d][i][j];
@@ -67,6 +68,7 @@ void poolingLayer::forwardProp(vector<featureMapType>& inputFeatureMaps)
 
                                         featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = max;
                                         break;
+                                }
 
                                 case averagePooling:
                                         //average pooling works by averaging each entry of the overlapped part of the 
