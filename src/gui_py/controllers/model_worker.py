@@ -167,12 +167,11 @@ class ModelWorker(QObject):
             self.logMessage.emit(f"Inference Result: {predicted_class}")
             
             # Probabilities (mock for now as C++ classify returns int)
-            # Logic: Assign high prob to predicted, low to others
+            # Logic: Since core logic is minimal, we reflect uncertainty.
+            # But visually we highlight the predicted class.
             probs = [0.0] * 10
-            probs[predicted_class] = 0.95
-            for i in range(10):
-                if i != predicted_class:
-                    probs[i] = 0.05 / 9.0
+            probs[predicted_class] = 1.0 # 100% confidence in the specific prediction
+            # Ideally C++ classify should return vector<double>
             
             self.imagePredicted.emit(predicted_class, qimage_obj, probs)
             

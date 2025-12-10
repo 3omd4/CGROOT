@@ -12,8 +12,7 @@ class InferenceWidget(QWidget):
         super().__init__()
         self.controller = controller
         self.class_names = [
-            "T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
-            "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot"
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
         ]
         self.current_image = None
         self.init_ui()

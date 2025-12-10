@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
                              QStatusBar, QGroupBox, QTextEdit, QMenu, QToolBar, 
-                             QLabel, QProgressBar, QMessageBox, QApplication)
+                             QLabel, QProgressBar, QMessageBox, QApplication, QSplitter)
 from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtGui import QAction, QKeySequence, QFont
 
@@ -31,6 +31,9 @@ class MainWindow(QMainWindow):
         
         main_layout = QVBoxLayout(central_widget)
         
+        # Splitter to allow resizing
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        
         # Tabs
         self.tabs = QTabWidget()
         
@@ -44,18 +47,25 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.metrics_tab, "Metrics")
         self.tabs.addTab(self.config_tab, "Configuration")
         
-        main_layout.addWidget(self.tabs)
+        splitter.addWidget(self.tabs)
         
         # Log Output
         log_group = QGroupBox("Log Output")
         log_layout = QVBoxLayout(log_group)
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
-        self.log_output.setMaximumHeight(150)
+        # Remove fixed height to allow resizing
+        # self.log_output.setMaximumHeight(150) 
         self.log_output.setFont(QFont("Consolas", 10))
         log_layout.addWidget(self.log_output)
         
-        main_layout.addWidget(log_group)
+        splitter.addWidget(log_group)
+        
+        # Set initial sizes (e.g., 4:1 ratio)
+        splitter.setStretchFactor(0, 4)
+        splitter.setStretchFactor(1, 1)
+        
+        main_layout.addWidget(splitter)
 
     def setup_menubar(self):
         menu_bar = self.menuBar()
