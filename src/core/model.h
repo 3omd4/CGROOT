@@ -80,7 +80,7 @@ class NNModel
     //              and so is the architecture of a single model (object)
     NNModel(struct architecture, size_t numOfClasses, size_t imageVerDim,
                                                 size_t imageHorDim, size_t imageDepDim);
-
+    
     // NNModel constructor helper function:
     // calculates the dimension of the output feature map of each convolution layer
     // input:        -current layer kernel height (size_t kernelHeight)
@@ -114,7 +114,12 @@ class NNModel
     //              or by the train fucntion to train the model
     int classify(image data);
 
-    //additional functions
+    ~NNModel() {
+    for(Layer* l : Layers) {
+        delete l;
+    }
+    Layers.clear();
+}
 
 };
 

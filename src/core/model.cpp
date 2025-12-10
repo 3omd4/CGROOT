@@ -53,8 +53,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
         //1. this isn't the first iteration (otherwise use the image dimensions)
         //2. the last layer isn't a pooling layer
             FM_dims = calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
-                 modelArch.kernelsPerconvLayers[i].kernel_width, static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
-                                    static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
+                 modelArch.kernelsPerconvLayers[i].kernel_width, dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
+                                    dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
         }
         else if(i)
         {
@@ -64,8 +64,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
 
 
             FM_dims = calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
-                 modelArch.kernelsPerconvLayers[i].kernel_width, static_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
-                                    static_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
+                 modelArch.kernelsPerconvLayers[i].kernel_width, dynamic_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight(),
+                                    dynamic_cast<poolingLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth());
         }
         else
         {
@@ -103,20 +103,20 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
             featureMapDim FM_dims_pooling;
 
             //the depth is the same as the last convolution layer
-            FM_dims_pooling.FM_depth = static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapDepth();
+            FM_dims_pooling.FM_depth = dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapDepth();
 
             //calculate the height according to (H_in - H_f)/S_f + 1
             //where:    H_in : input feature map height
             //          H_f  : filter height 
             //          S_f  : stride
-            FM_dims_pooling.FM_height = static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight() - modelArch.kernelsPerPoolingLayer[poolIter].filter_height;
+            FM_dims_pooling.FM_height = dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapHeight() - modelArch.kernelsPerPoolingLayer[poolIter].filter_height;
             FM_dims_pooling.FM_height = (FM_dims_pooling.FM_height/modelArch.kernelsPerPoolingLayer[poolIter].stride) + 1;
 
             //calculate the height according to (W_in - W_f)/S_f + 1
             //where:    W_in : input feature map width
             //          W_f  : filter width 
             //          S_f  : stride
-            FM_dims_pooling.FM_width = static_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth() - modelArch.kernelsPerPoolingLayer[poolIter].filter_width;
+            FM_dims_pooling.FM_width = dynamic_cast<convLayer*>(Layers[Layers.size()-1])->getFeatureMapWidth() - modelArch.kernelsPerPoolingLayer[poolIter].filter_width;
             FM_dims_pooling.FM_width = (FM_dims_pooling.FM_width/modelArch.kernelsPerPoolingLayer[poolIter].stride) + 1;
 
             //the filter depth is the same as the input feature map depth
@@ -160,12 +160,12 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
         if(i)
         {
         //if the last layer is fully connected
-            numOfWeights = static_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutputSize();
+            numOfWeights = dynamic_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutputSize();
         }
         else
         {
         //if the last layer is flatten layer, that is, the first iteration
-            numOfWeights = static_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArrSize();
+            numOfWeights = dynamic_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArrSize();
         }
 
         //construct the fully connected layer
@@ -182,10 +182,10 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
     switch(Layers[Layers.size()-1]->getLayerType())
     {
         case flatten:
-            outputNumOfWeights = static_cast<FlattenLayer*>(Layers[Layers.size()-1])->getFlattenedArrSize();
+            outputNumOfWeights = dynamic_cast<FlattenLayer*>(Layers[Layers.size()-1])->getFlattenedArrSize();
             break;
         case fullyConnected:
-            outputNumOfWeights = static_cast<FullyConnected*>(Layers[Layers.size()-1])->getOutputSize();
+            outputNumOfWeights = dynamic_cast<FullyConnected*>(Layers[Layers.size()-1])->getOutputSize();
             break;
     }
     //construct the output layer
@@ -241,10 +241,10 @@ void NNModel::train(image imgData, int trueOutput)
             switch(Layers[i-1]->getLayerType())
             {
                 case fullyConnected:
-                    static_cast<outputLayer*>(Layers[i])->backwardProp(static_cast<FullyConnected*>(Layers[i-1])->getOutput(), trueOutput);
+                    dynamic_cast<outputLayer*>(Layers[i])->backwardProp(dynamic_cast<FullyConnected*>(Layers[i-1])->getOutput(), trueOutput);
                     break;
                 case flatten:
-                    static_cast<outputLayer*>(Layers[i])->backwardProp(static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr(), trueOutput);
+                    dynamic_cast<outputLayer*>(Layers[i])->backwardProp(dynamic_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr(), trueOutput);
                     break;
             }
             break;
@@ -259,12 +259,12 @@ void NNModel::train(image imgData, int trueOutput)
                     switch(Layers[i+1]->getLayerType())
                     {
                     case output:
-                        static_cast<FullyConnected*>(Layers[i])->backwardProp(static_cast<FullyConnected*>(Layers[i-1])->getOutput(), 
-                                                        static_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected*>(Layers[i])->backwardProp(dynamic_cast<FullyConnected*>(Layers[i-1])->getOutput(), 
+                                                        dynamic_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
                         break;
                     case fullyConnected:
-                        static_cast<FullyConnected*>(Layers[i])->backwardProp(static_cast<FullyConnected*>(Layers[i-1])->getOutput(), 
-                                                        static_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected*>(Layers[i])->backwardProp(dynamic_cast<FullyConnected*>(Layers[i-1])->getOutput(), 
+                                                        dynamic_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
                         break;
                     }
                     break;
@@ -274,12 +274,12 @@ void NNModel::train(image imgData, int trueOutput)
                     switch(Layers[i+1]->getLayerType())
                     {
                     case output:
-                        static_cast<FullyConnected*>(Layers[i])->backwardProp(static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr(), 
-                                                        static_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected*>(Layers[i])->backwardProp(dynamic_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr(), 
+                                                        dynamic_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
                         break;
                     case fullyConnected:
-                        static_cast<FullyConnected*>(Layers[i])->backwardProp(static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr(), 
-                                                        static_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected*>(Layers[i])->backwardProp(dynamic_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr(), 
+                                                        dynamic_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
                         break;
                     }
                     break;
@@ -296,10 +296,10 @@ void NNModel::train(image imgData, int trueOutput)
         switch(Layers[i]->getLayerType())
         {
         case output:
-            static_cast<outputLayer*>(Layers[i])->update(learningRate);
+            dynamic_cast<outputLayer*>(Layers[i])->update(learningRate);
             break;
         case fullyConnected:
-            static_cast<FullyConnected*>(Layers[i])->update(learningRate);
+            dynamic_cast<FullyConnected*>(Layers[i])->update(learningRate);
             break;
         }
     }
@@ -334,10 +334,10 @@ void NNModel::train_batch(vector<image> batchData, vector<int> trueOutput)
                 switch (Layers[i - 1]->getLayerType())
                 {
                 case fullyConnected:
-                    static_cast<outputLayer *>(Layers[i])->backwardProp_batch(static_cast<FullyConnected *>(Layers[i - 1])->getOutput(), trueOutput[sample]);
+                    dynamic_cast<outputLayer *>(Layers[i])->backwardProp_batch(dynamic_cast<FullyConnected *>(Layers[i - 1])->getOutput(), trueOutput[sample]);
                     break;
                 case flatten:
-                    static_cast<outputLayer *>(Layers[i])->backwardProp_batch(static_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(), trueOutput[sample]);
+                    dynamic_cast<outputLayer *>(Layers[i])->backwardProp_batch(dynamic_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(), trueOutput[sample]);
                     break;
                 }
                 break;
@@ -352,12 +352,12 @@ void NNModel::train_batch(vector<image> batchData, vector<int> trueOutput)
                     switch (Layers[i + 1]->getLayerType())
                     {
                     case output:
-                        static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(static_cast<FullyConnected *>(Layers[i - 1])->getOutput(),
-                                                                               static_cast<outputLayer *>(Layers[i + 1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected *>(Layers[i])->backwardProp_batch(dynamic_cast<FullyConnected *>(Layers[i - 1])->getOutput(),
+                                                                               dynamic_cast<outputLayer *>(Layers[i + 1])->getPrevLayerGrad());
                         break;
                     case fullyConnected:
-                        static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(static_cast<FullyConnected *>(Layers[i - 1])->getOutput(),
-                                                                               static_cast<FullyConnected *>(Layers[i + 1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected *>(Layers[i])->backwardProp_batch(dynamic_cast<FullyConnected *>(Layers[i - 1])->getOutput(),
+                                                                               dynamic_cast<FullyConnected *>(Layers[i + 1])->getPrevLayerGrad());
                         break;
                     }
                     break;
@@ -367,12 +367,12 @@ void NNModel::train_batch(vector<image> batchData, vector<int> trueOutput)
                     switch (Layers[i + 1]->getLayerType())
                     {
                     case output:
-                        static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(static_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(),
-                                                                               static_cast<outputLayer *>(Layers[i + 1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected *>(Layers[i])->backwardProp_batch(dynamic_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(),
+                                                                               dynamic_cast<outputLayer *>(Layers[i + 1])->getPrevLayerGrad());
                         break;
                     case fullyConnected:
-                        static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(static_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(),
-                                                                               static_cast<FullyConnected *>(Layers[i + 1])->getPrevLayerGrad());
+                        dynamic_cast<FullyConnected *>(Layers[i])->backwardProp_batch(dynamic_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(),
+                                                                               dynamic_cast<FullyConnected *>(Layers[i + 1])->getPrevLayerGrad());
                         break;
                     }
                     break;
@@ -388,10 +388,10 @@ void NNModel::train_batch(vector<image> batchData, vector<int> trueOutput)
         switch (Layers[i]->getLayerType())
         {
         case output:
-            static_cast<outputLayer *>(Layers[i])->update_batch(learningRate, static_cast<int>(batchData.size()));
+            dynamic_cast<outputLayer *>(Layers[i])->update_batch(learningRate, static_cast<int>(batchData.size()));
             break;
         case fullyConnected:
-            static_cast<FullyConnected *>(Layers[i])->update_batch(learningRate, static_cast<int>(batchData.size()));
+            dynamic_cast<FullyConnected *>(Layers[i])->update_batch(learningRate, static_cast<int>(batchData.size()));
             break;
         }
     }
@@ -407,7 +407,7 @@ int NNModel::classify(image imgData)
 {
     // std::cout << "[DEBUG] Classify Start" << std::endl;
     //make the data ready to be processed by different layers
-    static_cast<inputLayer*>(Layers[0])->start(imgData);
+    dynamic_cast<inputLayer*>(Layers[0])->start(imgData);
 
     //Iterate over all the layers after the input layer and before the output layer
     for(size_t i = 0; i < Layers.size()-1 ; i++)
@@ -423,20 +423,20 @@ int NNModel::classify(image imgData)
                 switch(Layers[i-1]->getLayerType())
                 {
                     case input:
-                        static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput());
+                        dynamic_cast<convLayer*>(Layers[i])->forwardProp(dynamic_cast<inputLayer*>(Layers[i-1])->getOutput());
                         break;
                     case pooling:
-                        static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps());
+                        dynamic_cast<convLayer*>(Layers[i])->forwardProp(dynamic_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps());
                         break;
                     default:
-                        static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
+                        dynamic_cast<convLayer*>(Layers[i])->forwardProp(dynamic_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
                     break;
                 }
 
                 break;
             case pooling:
                 //for the pooling layer, the last layer is always a convolution layer
-                static_cast<poolingLayer*>(Layers[i])->forwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
+                dynamic_cast<poolingLayer*>(Layers[i])->forwardProp(dynamic_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
                 break;
             case fullyConnected:
                 //for the fully connected layer, the last layer is either the flatten layer or another
@@ -444,12 +444,12 @@ int NNModel::classify(image imgData)
                 switch(Layers[i-1]->getLayerType())
                 {
                     case flatten:
-                        // std::cout << "[DEBUG] FC Input from Flatten. Size: " << static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr().size() << std::endl;
-                        static_cast<FullyConnected*>(Layers[i])->forwardProp(static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr());
+                        // std::cout << "[DEBUG] FC Input from Flatten. Size: " << dynamic_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr().size() << std::endl;
+                        dynamic_cast<FullyConnected*>(Layers[i])->forwardProp(dynamic_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr());
                         break;
                     case fullyConnected:
-                        // std::cout << "[DEBUG] FC Input from FC. Size: " << static_cast<FullyConnected*>(Layers[i-1])->getOutput().size() << std::endl;
-                        static_cast<FullyConnected*>(Layers[i])->forwardProp(static_cast<FullyConnected*>(Layers[i-1])->getOutput());
+                        // std::cout << "[DEBUG] FC Input from FC. Size: " << dynamic_cast<FullyConnected*>(Layers[i-1])->getOutput().size() << std::endl;
+                        dynamic_cast<FullyConnected*>(Layers[i])->forwardProp(dynamic_cast<FullyConnected*>(Layers[i-1])->getOutput());
                         break;
                 }
                 break;
@@ -459,10 +459,10 @@ int NNModel::classify(image imgData)
                 switch(Layers[i-1]->getLayerType())
                 {
                     case input:
-                        static_cast<FlattenLayer*>(Layers[i])->forwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput());
+                        dynamic_cast<FlattenLayer*>(Layers[i])->forwardProp(dynamic_cast<inputLayer*>(Layers[i-1])->getOutput());
                     break;
                     case conv:
-                        static_cast<FlattenLayer*>(Layers[i])->forwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
+                        dynamic_cast<FlattenLayer*>(Layers[i])->forwardProp(dynamic_cast<convLayer*>(Layers[i-1])->getFeatureMaps());
                     break;
                 }
                
@@ -477,15 +477,15 @@ int NNModel::classify(image imgData)
     switch(Layers[Layers.size() -2]->getLayerType())
     {
         case flatten:
-            static_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(static_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArr());
+            dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(dynamic_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArr());
             break;
         case fullyConnected:
-            static_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(static_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutput());
+            dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(dynamic_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutput());
             break;
     }
 
     //get the image class
-    int cls = static_cast<outputLayer*>(Layers[Layers.size()-1])->getClass();
+    int cls = dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->getClass();
     // std::cout << "[DEBUG] Classify End. Result: " << cls << std::endl;
     return cls;
 }

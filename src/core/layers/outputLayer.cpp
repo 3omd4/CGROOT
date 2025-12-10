@@ -1,4 +1,5 @@
 #include <iostream>
+#include <math.h>
 #include "layers.h"
 #include "../Initialization/initialization.h"
 
@@ -72,14 +73,14 @@ void outputLayer::forwardProp(vector<double>& inputData)
                 }
                 //add the bias
                 outputData[i] += bias[i];
-                sum += outputData[i]; //add the value of this entry to the sum
+                sum += exp(outputData[i]); //add the value of this entry to the sum
         }
 
 
         //apply the softmax activation function
         for(size_t i = 0; i < outputData.size(); i++)
         {
-                outputData[i] /= sum;
+                outputData[i] = exp(outputData[i])/sum;
         }
 
 }
@@ -106,7 +107,7 @@ void outputLayer::backwardProp(vector<double>& inputData, size_t correctClass)
                 //as Y is the correct value
                 //A_n is the output of the activation function, softmax in this case
                 //the n in here indicates that this is the last/output layer
-                double dZ_n = -(outputData[i] - ((i == correctClass)? 1 : 0));
+                double dZ_n = (outputData[i] - ((i == correctClass)? 1 : 0));
 
                 //d_bias = dZ_n in the case of SGD
                 d_bias[i] = dZ_n;

@@ -80,11 +80,6 @@ void FullyConnected::forwardProp(vector<double>& inputData) {
 
     // std::cout << "[DEBUG] FC forwardProp. Input: " << inputData.size() << " Neurons: " << neurons.size() << std::endl;
 
-    
-    // Ensure output and preActivation are sized correctly
-    if(outputData.size() != neurons.size()) outputData.resize(neurons.size());
-    if(preActivation.size() != neurons.size()) preActivation.resize(neurons.size());
-
     // Debug Log (Optional, but requested)
     // // std::cout << "[DEBUG] FC forwardProp. Input: " << inputData.size() << " Neurons: " << neurons.size() << std::endl;
 
