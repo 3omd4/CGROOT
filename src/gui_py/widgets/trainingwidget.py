@@ -73,6 +73,7 @@ class TrainingWidget(QWidget):
         params_layout.addWidget(self.ckpt_path_edit, 7, 1)
         
         self.browse_btn = QPushButton("Browse...")
+        self.browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.browse_btn.clicked.connect(self.on_browse_ckpt)
         params_layout.addWidget(self.browse_btn, 7, 2)
         
@@ -82,9 +83,11 @@ class TrainingWidget(QWidget):
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("Start Training")
         self.start_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 10px; }")
+        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.stop_btn = QPushButton("Stop Training")
         self.stop_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; padding: 10px; }")
+        self.stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.stop_btn.setEnabled(False)
         
         self.start_btn.clicked.connect(self.on_start_clicked)

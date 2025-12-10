@@ -122,6 +122,11 @@ class MetricsWidget(QWidget):
     def clear(self):
         self.loss_series.clear()
         self.acc_series.clear()
+        
+        # Start from 0,0
+        self.loss_series.append(0, 0)
+        self.acc_series.append(0, 0)
+        
         self.curr_epoch_lbl.setText("Epoch: 0")
         self.curr_loss_lbl.setText("Loss: 0.0000")
         self.curr_acc_lbl.setText("Accuracy: 0.00%")

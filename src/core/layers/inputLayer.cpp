@@ -1,3 +1,4 @@
+#include <iostream>
 #include "layers.h"
 
 
@@ -36,10 +37,28 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth)
 void inputLayer::start(image& inputImage)
 {
     //stor the inputImage in the normlized Image matrix
+    if (inputImage.size() != m_normalizedImage.size()) {
+        std::cerr << "[CRITICAL ERROR] Input Depth Mismatch! Expected " << m_normalizedImage.size() 
+                  << " Got " << inputImage.size() << std::endl;
+        return;
+    }
+
     for(size_t i = 0; i < m_normalizedImage.size(); i++)
     {
+        if (inputImage[i].size() != m_normalizedImage[i].size()) {
+             std::cerr << "[CRITICAL ERROR] Input Height Mismatch at depth " << i 
+                       << "! Expected " << m_normalizedImage[i].size() 
+                       << " Got " << inputImage[i].size() << std::endl;
+             return;
+        }
         for(size_t j = 0; j < m_normalizedImage[i].size(); j++)
         {
+            if (inputImage[i][j].size() != m_normalizedImage[i][j].size()) {
+                 std::cerr << "[CRITICAL ERROR] Input Width Mismatch at depth " << i << " row " << j
+                           << "! Expected " << m_normalizedImage[i][j].size() 
+                           << " Got " << inputImage[i][j].size() << std::endl;
+                 return;
+            }
             for(size_t k = 0; k < m_normalizedImage[i][j].size(); k++)
             {
                 //normalize each pixel before storage

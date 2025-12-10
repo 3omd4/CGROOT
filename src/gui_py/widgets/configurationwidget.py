@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
                              QTabWidget, QSpinBox, QDoubleSpinBox, QComboBox, 
-                             QCheckBox, QPushButton, QScrollArea, QLabel, QMessageBox, QGroupBox, QFileDialog)
+                             QCheckBox, QPushButton, QScrollArea, QLabel, QMessageBox, QGroupBox, QFileDialog, QLineEdit)
 from PyQt6.QtCore import Qt, pyqtSignal
 
 class ConfigurationWidget(QWidget):
@@ -132,17 +132,55 @@ class ConfigurationWidget(QWidget):
         self.tab_widget.addTab(scroll, "Training")
 
     def setup_network_tab(self):
+        scroll = QScrollArea()
         widget = QWidget()
-        layout = QVBoxLayout(widget)
+        layout = QFormLayout(widget)
         
-        info_label = QLabel(
-            "Network architecture configuration will be available here.\n"
-            "You can configure layer types, activation functions, and layer sizes."
-        )
-        info_label.setWordWrap(True)
-        layout.addWidget(info_label)
+        # Conv Layers Config (Currently limited/disabled as per user request/core limit)
+        self.num_conv_layers = QSpinBox()
+        self.num_conv_layers.setRange(0, 5)
+        self.num_conv_layers.setValue(0) # Default to 0
+        layout.addRow("Number of Conv Layers:", self.num_conv_layers)
         
-        self.tab_widget.addTab(widget, "Network Architecture")
+        # FC Layers Config
+        self.num_fc_layers = QSpinBox()
+        self.num_fc_layers.setRange(1, 10)
+        self.num_fc_layers.setValue(2)
+        layout.addRow("Number of FC Layers:", self.num_fc_layers)
+        
+        self.neurons_fc_input = QLineEdit("128, 10")
+        self.neurons_fc_input.setPlaceholderText("comma separated, e.g. 128, 64, 10")
+        layout.addRow("Neurons per FC Layer:", self.neurons_fc_input)
+        
+        info_label = QLabel("Note: Ensure the last FC layer size matches the Number of Classes.")
+        info_label.setStyleSheet("color: gray; font-style: italic;")
+        layout.addRow(info_label)
+        
+        # Connect signals
+        self.num_conv_layers.valueChanged.connect(self.on_parameter_changed)
+        self.num_fc_layers.valueChanged.connect(self.on_parameter_changed)
+        self.neurons_fc_input.textChanged.connect(self.on_parameter_changed)
+        
+        scroll.setWidget(widget)
+        scroll.setWidgetResizable(True)
+        self.tab_widget.addTab(scroll, "Network Architecture")
+
+    def get_architecture_parameters(self):
+        # Parse neurons list
+        try:
+            neurons_str = self.neurons_fc_input.text()
+            neurons = [int(x.strip()) for x in neurons_str.split(',') if x.strip()]
+        except ValueError:
+            neurons = [128, 10]
+            
+        return {
+            'num_classes': self.num_classes.value(),
+            'image_width': self.image_width.value(),
+            'image_height': self.image_height.value(),
+            'num_conv_layers': self.num_conv_layers.value(),
+            'num_fc_layers': self.num_fc_layers.value(),
+            'neurons_per_fc_layer': neurons
+        }
 
     def on_parameter_changed(self):
         self.parametersChanged.emit()

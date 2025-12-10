@@ -30,6 +30,7 @@ class InferenceWidget(QWidget):
         
         btn_layout = QHBoxLayout()
         self.load_btn = QPushButton("Load Image")
+        self.load_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.load_btn.clicked.connect(self.on_load_image)
         btn_layout.addWidget(self.load_btn)
         btn_layout.addStretch()
@@ -65,6 +66,7 @@ class InferenceWidget(QWidget):
         
         self.run_btn = QPushButton("Run Inference")
         self.run_btn.setStyleSheet("QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 10px; }")
+        self.run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.run_btn.clicked.connect(self.on_run_inference)
         inf_layout.addRow(self.run_btn)
         

@@ -148,10 +148,15 @@ class MainWindow(QMainWindow):
         self.training_tab.stopTrainingRequested.connect(self.stop_training)
         
     def start_training(self):
-        # Get params from configuration (or training widget if split)
-        # For now, just trigger controller with default epochs
+        # Get params from configuration
+        config = self.config_tab.get_training_parameters() # Epochs, LR, etc.
+        arch_config = self.config_tab.get_architecture_parameters() # Layers, etc.
+        
+        # Merge dictionaries
+        full_config = {**config, **arch_config}
+        
         self.metrics_tab.clear()
-        self.controller.requestTrain.emit(self.training_tab.epochs_spin.value())
+        self.controller.requestTrain.emit(full_config)
         
     def stop_training(self):
         self.controller.requestStop.emit()

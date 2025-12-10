@@ -1,4 +1,5 @@
 
+#include <iostream>
 #include "core/definitions.h"
 #include "layers.h"
 #include "../Initialization/initialization.h"
@@ -71,6 +72,13 @@ void FullyConnected::forwardProp(vector<double>& inputData)
     //entry in the outputData vector
     for(size_t i = 0; i < neurons.size(); i++)
     {
+        if (neurons[i].size() != inputData.size()) {
+             std::cerr << "[CRITICAL ERROR] FC Layer Weight Mismatch! Neuron " << i 
+                       << " Weights: " << neurons[i].size() 
+                       << " Input: " << inputData.size() << std::endl;
+             return; 
+        }
+
         //do the dot product
         for(size_t j = 0; j < inputData.size(); j++)
         {

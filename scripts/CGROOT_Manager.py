@@ -308,6 +308,11 @@ def detect_make_tool():
             return None
 
 def choose_compiler(available):
+    if "--build" in sys.argv and len(available) > 0:
+         # Auto-select first available compiler
+         first_key = list(available.keys())[0]
+         return available[first_key]
+
     while True:
         choice = input(f"{YELLOW}Enter compiler choice (1-{len(available)}): {RESET}").strip()
         if not choice.isdigit():
@@ -320,6 +325,7 @@ def choose_compiler(available):
         return available[choice_int]
 
 def pause():
+    if "--build" in sys.argv: return
     input("Press Enter to continue...")
 
 def run_command(cmd, log_append=True):
@@ -807,6 +813,10 @@ def show_log():
     pause()
 
 def main_menu(cmake_cmd, compiler_name):
+    if "--build" in sys.argv:
+        build_and_run(cmake_cmd, "Release", compiler_name)
+        return False
+
     while True:
         clear_screen()
         print()

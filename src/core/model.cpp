@@ -2,8 +2,13 @@
 using namespace std;
 
 #include "model.h"
+#include "optimizers/optimizer.h"
 
 
+
+void DisplayDebugInfo(const char* msg, int layerIdx) {
+    std::cout << "[DEBUG] " << msg << " | Processing Layer " << layerIdx << std::endl;
+}
 
 //the NNModel constructor
 //input:        -modelArch (contains all the necessary information about the architecture of the model)
@@ -21,7 +26,18 @@ using namespace std;
 NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight, 
                                                 size_t imageWidth, size_t imageDepth)
 {
-    //(optional) additional initialization code  
+    std::cout << "[DEBUG] NNModel Constructor Start" << std::endl;
+    //initialize the model architecture parameters
+    //this->modelArch = modelArch; // Removed incorrect member access if it doesn't exist, log arg instead
+    
+    std::cout << "=== Architecture Debug Info ===" << std::endl;
+    std::cout << "Num Conv Layers: " << modelArch.numOfConvLayers << std::endl;
+    std::cout << "Num FC Layers: " << modelArch.numOfFCLayers << std::endl;
+    std::cout << "Neurons Per FC: ";
+    for(size_t n : modelArch.neuronsPerFCLayer) std::cout << n << " ";
+    std::cout << std::endl;
+    std::cout << "DistType: " << modelArch.distType << std::endl;
+    std::cout << "===============================" << std::endl;  
 
     //construct the input layer
     Layers.emplace_back(new inputLayer(imageHeight,imageWidth,imageDepth));
@@ -176,7 +192,10 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
     //construct the output layer
     //Layers.emplace_back(new outputLayer());
 
-    //(optional) additional initialization code  
+    //(optional) additional initialization code
+    std::cout << "[DEBUG] NNModel Init: Setting Optimizer..." << std::endl;
+    this->optimizer = new class SGD(0.01); // Default Learning Rate
+    std::cout << "[DEBUG] NNModel Init: Done" << std::endl;
 }
 
 
@@ -199,24 +218,62 @@ featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight, size_t kernelWidth
     return featureMapDim{inputHeight, inputWidth, 0};
 }
 
-// -------------------------------------------------------------
-// TEMPORARY IMPLEMENTATION TO FIX LINKER ERRORS
-// These are placeholders until training logic is added
-// -------------------------------------------------------------
-
-void NNModel::train(image data, int trueOutput)
+void NNModel::train(image imgData, int trueOutput)
 {
-    //simply store the last input image so classify() can use it
-    this->data = data;
+    std::cout << "[DEBUG] NNModel::train Start" << std::endl;
+    // 1. Forward Pass (caches data for backprop)
+    classify(imgData);
 
-    //forward propagation
-    int result = classify(data);
+    // 2. Calculate Output Gradient (Softmax Cross-Entropy)
+    // Assumes the last layer is a FullyConnected layer used as output
+    if (Layers.empty()) return;
 
-    // TODO: Add actual backprop logic here
+    Layer* lastLayer = Layers.back();
+    if (lastLayer->getLayerType() != fullyConnected) {
+        // Training currently only supports Fully Connected last layer
+        std::cerr << "[Error] Last layer is not FullyConnected. Backprop failed.\n";
+        return;
+    }
+
+    FullyConnected* fcParams = static_cast<FullyConnected*>(lastLayer);
+    vector<double>& predictions = fcParams->getOutput();
     
+    // Gradient of Softmax + Cross Entropy is just (Pred - Target)
+    vector<double> outputGradient = predictions;
+    if (trueOutput >= 0 && trueOutput < outputGradient.size()) {
+        outputGradient[trueOutput] -= 1.0;
+    }
 
-    // Debug print (optional)
-    std::cout << "[NNModel] train() called. trueOutput = " << trueOutput << "\n";
+    // 3. Backward Pass
+    vector<double> error = outputGradient;
+    for (int i = Layers.size() - 1; i >= 0; i--) 
+    {
+        Layer* curr = Layers[i];
+        switch (curr->getLayerType()) {
+            case fullyConnected:
+                error = static_cast<FullyConnected*>(curr)->backwardProp(error);
+                break;
+            case flatten:
+                error = static_cast<FlattenLayer*>(curr)->backwardProp(error);
+                break;
+            case input:
+                // End of backprop
+                break;
+            case conv:
+            case pooling:
+            case output:
+                // Not implemented yet
+                break;
+        }
+    }
+
+    // 4. Update Weights
+    for (Layer* l : Layers) 
+    {
+        if (l->getLayerType() == fullyConnected) {
+            static_cast<FullyConnected*>(l)->applyOptimizer(optimizer);
+        }
+    }
 }
 
 //classify the image by applying the forward propagation on the image
@@ -225,24 +282,41 @@ void NNModel::train(image data, int trueOutput)
 //side effect:  N/A
 //Note:         This function is either called directly to get the image class
 //              or by the train fucntion to train the model 
-int NNModel::classify(image data)
+int NNModel::classify(image imgData)
 {
+    std::cout << "[DEBUG] NNModel::classify Start" << std::endl;
+    if (Layers.empty()) {
+        std::cout << "[DEBUG] NNModel::classify Layers is empty" << std::endl;
+        return -1;
+    }
+    
     //make the data ready to be processed by different layers
-    static_cast<inputLayer*>(Layers[0])->start(data);
+    static_cast<inputLayer*>(Layers[0])->start(imgData);
+    std::cout << "[DEBUG] NNModel::classify Layers is not empty" << std::endl;
 
-    //Iterate over all the layers after the input layer and before the output layer
-    for(size_t i = 0; i < Layers.size()-1 ; i++)
+    //Iterate over all the layers after the input layer
+    // FIX: Iterate up to Layers.size() (inclusive of last layer)
+    for(size_t i = 1; i < Layers.size(); i++)
     {
+        if (Layers[i] == nullptr) {
+             std::cerr << "[CRITICAL] Layer " << i << " is NULL!" << std::endl;
+             return -1;
+        }
+        std::cout << "[DEBUG] Processing Layer " << i << " Type: " << Layers[i]->getLayerType() << std::endl;
+        
         //see which layer this is to call the forward propagation function
         //and if needed, see which is the last layer to get the data from
         switch(Layers[i]->getLayerType())
         {
             case conv:
                 //for convolution layer check whether the last layer is the input layer,
-                //pooling layer or another convoultion layer 
+                //pooling layer or another convoultion layer
+                
                 switch(Layers[i-1]->getLayerType())
                 {
+                    std::cout << "[DEBUG] NNModel::classify Last Layer = " << Layers[i-1]->getLayerType() << std::endl;
                     case input:
+                    
                         static_cast<convLayer*>(Layers[i])->forwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput());
                         break;
                     case pooling:
@@ -261,13 +335,20 @@ int NNModel::classify(image data)
             case fullyConnected:
                 //for the fully connected layer, the last layer is either the flatten layer or another
                 //fully connected layer
-                switch(Layers[i]->getLayerType())
+                switch(Layers[i-1]->getLayerType())
                 {
                     case flatten:
                         static_cast<FullyConnected*>(Layers[i])->forwardProp(static_cast<FlattenLayer*>(Layers[i-1])->getFlattenedArr());
                         break;
                     case fullyConnected:
-                        static_cast<FullyConnected*>(Layers[i])->forwardProp(static_cast<FullyConnected*>(Layers[i-1])->getOutput());
+                         {
+                            DisplayDebugInfo("FC->FC", i);
+                            std::vector<double>& prevOut = static_cast<FullyConnected*>(Layers[i-1])->getOutput();
+                            std::cout << "[DEBUG] L" << i << " Input Size (from L" << i-1 << "): " << prevOut.size() << std::endl;
+                            if (prevOut.empty()) { std::cerr << "[CRITICAL] Prev Output Empty!" << std::endl; }
+                            
+                            static_cast<FullyConnected*>(Layers[i])->forwardProp(prevOut);
+                         }
                         break;
                 }
                 break;
@@ -290,10 +371,23 @@ int NNModel::classify(image data)
         }
     }
 
-    //code about the getting the final result from the output layer
-
-    // For now return a dummy class = 0
-    std::cout << "[NNModel] classify() called.\n";
+    // Get Result
+    std::cout << "[DEBUG] NNModel::classify Last Layer = " << Layers.back()->getLayerType() << std::endl;
+    if (Layers.back()->getLayerType() == fullyConnected) {
+        
+        vector<double>& out = static_cast<FullyConnected*>(Layers.back())->getOutput();
+        int maxIndex = 0;
+        double maxVal = out[0];
+        std::cout << "[DEBUG] NNModel::classify Output Layer = " << out.size() << std::endl;
+        for (size_t k = 1; k < out.size(); k++) {
+            if (out[k] > maxVal) {
+                maxVal = out[k];
+                maxIndex = (int)k;
+            }
+        }
+        std::cout << "[DEBUG] NNModel::classify maxIndex = " << maxIndex << std::endl;
+        return maxIndex;
+    }
 
     return 0;
 }

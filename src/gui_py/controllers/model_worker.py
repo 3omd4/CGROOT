@@ -46,8 +46,10 @@ class ModelWorker(QObject):
         except Exception as e:
             self.logMessage.emit(f"Exception loading dataset: {e}")
 
-    @pyqtSlot(int)
-    def trainModel(self, epochs):
+    @pyqtSlot(dict)
+    def trainModel(self, config):
+        epochs = config.get('epochs', 10)
+        
         if not self.dataset:
             self.logMessage.emit("No dataset loaded")
             self.trainingFinished.emit()
@@ -57,17 +59,50 @@ class ModelWorker(QObject):
         self.modelStatusChanged.emit(True)
         
         try:
-            # Initialize model if not exists
-            if not self.model:
+            # Initialize model if not exists or force re-init
+            if not self.model: # or True if we want to reset
+                self.logMessage.emit("Initializing NNModel with Config...")
                 arch = cgroot_core.architecture()
-                # Setup architecture defaults... this might be tedious to do in Python if struct is complex
-                # Ideally we have a helper in C++ or defaults in binding.
-                arch.numOfConvLayers = 0
-                arch.numOfFCLayers = 0 # Example
+                # Clear vectors to ensure clean state
+                arch.kernelsPerconvLayers = []
+                arch.neuronsPerFCLayer = []
+                arch.convLayerActivationFunc = []
+                arch.FCLayerActivationFunc = []
+                arch.convInitFunctionsType = []
+                arch.FCInitFunctionsType = []
+                arch.poolingLayersInterval = []
+                arch.poolingtype = []
+                arch.kernelsPerPoolingLayer = []
+                
+                # Dynamic Config
+                arch.numOfConvLayers = config.get('num_conv_layers', 0)
+                
+                num_fc_layers = config.get('num_fc_layers', 2)
+                neurons_list = config.get('neurons_per_fc_layer', [128, 10])
+                
+                # Sanity check: Ensure neurons list length matches num_fc_layers
+                # If mismatch, pad or truncate. 
+                # Better approach: Adjust num_fc_layers to match list if list is explicit.
+                if len(neurons_list) != num_fc_layers:
+                    self.logMessage.emit(f"Warning: Neurons list length ({len(neurons_list)}) does not match FC Layers count ({num_fc_layers}). Using list length.")
+                    num_fc_layers = len(neurons_list)
+                    
+                arch.numOfFCLayers = num_fc_layers
+                arch.neuronsPerFCLayer = neurons_list
+                
+                # Default activations and init functions for now (can expand config later)
+                # We need one per layer
+                arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * (num_fc_layers - 1) + [cgroot_core.activationFunction.Softmax]
+                arch.FCInitFunctionsType = [cgroot_core.initFunctions.Kaiming] * (num_fc_layers - 1) + [cgroot_core.initFunctions.Xavier]
+                
                 arch.distType = cgroot_core.distributionType.normalDistribution
                 
-                self.model = cgroot_core.NNModel(arch, 10, 28, 28, 1)
-                self.logMessage.emit("Model initialized")
+                num_classes = config.get('num_classes', 10)
+                img_h = config.get('image_height', 28)
+                img_w = config.get('image_width', 28)
+                
+                self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
+                self.logMessage.emit(f"Model initialized (MLP: Input->{neurons_list})")
 
             # Real Training Loop
             num_images = self.dataset.num_images

@@ -12,7 +12,7 @@ class ModelController(QObject):
     
     # Signals to Worker
     requestLoadDataset = pyqtSignal(str, str)
-    requestTrain = pyqtSignal(int)
+    requestTrain = pyqtSignal(dict) # CHANGED: Accepts config dict now
     requestStop = pyqtSignal()
     requestInference = pyqtSignal(object)
 
