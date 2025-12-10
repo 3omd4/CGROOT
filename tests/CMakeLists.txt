@@ -11,6 +11,9 @@
 # endif()
 
 # If GoogleTest is available, use it for testing
+add_executable(test_diagnostics test_diagnostics.cpp)
+target_link_libraries(test_diagnostics cgroot_lib)
+
 if(GTest_FOUND)
     if(TARGET test_tensor)
         target_link_libraries(test_tensor GTest::GTest GTest::Main)

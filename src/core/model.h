@@ -120,6 +120,10 @@ class NNModel
     }
     Layers.clear();
 }
+    // Get the probability distribution for the last classification
+    vector<double> getProbabilities();
+
+    //additional functions
 
 };
 

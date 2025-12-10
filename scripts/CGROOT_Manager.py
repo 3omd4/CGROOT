@@ -354,12 +354,56 @@ def remove_readonly(func, path, exc):
     else:
         raise
 
+def kill_zombie_processes():
+    """
+    Kills common build processes and project executables that might lock files.
+    """
+    if get_os_type() != "windows":
+        return
+
+    # List of process names to kill
+    targets = [
+        "cmake.exe", "ninja.exe", "msbuild.exe", "make.exe",
+        "cgrunner.exe", "simple_test.exe", "cgroot_gui.exe"
+    ]
+
+    print(f"{YELLOW}Checking for zombie processes...{RESET}")
+    for target in targets:
+        try:
+            # check if process exists first to avoid spamming errors? 
+            # taskkill /IM <image> /F suppresses output if not found ? No, it errors.
+            # We redirect stderr to null to suppress "process not found" errors.
+            subprocess.run(f"taskkill /F /IM {target}", shell=True, 
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+import time
+
 def clean_build_dir():
+    # Attempt to kill potential locking processes first
+    kill_zombie_processes()
+
     if build_dir.exists() and build_dir.is_dir():
         print(f"{YELLOW}Cleaning build directory...{RESET}")
-        shutil.rmtree(build_dir, onerror=remove_readonly)
-        print(f"{GREEN}SUCCESS: Build directory cleaned!{RESET}")
-        log(f"Build directory cleaned successfully")
+        
+        # Retry logic for persistent locks
+        max_retries = 3
+        for i in range(max_retries):
+            try:
+                shutil.rmtree(build_dir, onerror=remove_readonly)
+                print(f"{GREEN}SUCCESS: Build directory cleaned!{RESET}")
+                log(f"Build directory cleaned successfully")
+                return
+            except Exception as e:
+                is_last_attempt = (i == max_retries - 1)
+                if is_last_attempt:
+                    print(f"{RED}ERROR: Failed to clean build directory after {max_retries} attempts: {e}{RESET}")
+                    print(f"{YELLOW}Please manually close any programs using the build folder.{RESET}")
+                    log(f"Failed to clean build directory: {e}")
+                else:
+                    print(f"{YELLOW}Clean failed, retrying in 1s... ({i+1}/{max_retries}){RESET}")
+                    time.sleep(1)
     else:
         print(f"{YELLOW}Build directory does not exist.{RESET}")
         log("Build directory did not exist")
@@ -375,9 +419,7 @@ def build_configuration(cmake_path, config, compiler_name):
     log(f"Starting {config} Build")
 
     if build_dir.exists():
-        print(f"{YELLOW}Cleaning previous build...{RESET}")
-        shutil.rmtree(build_dir, onerror=remove_readonly)
-        log(f"Cleaned previous build")
+        clean_build_dir()
 
     os_type = get_os_type()
     if os_type == "windows":
@@ -527,9 +569,8 @@ def build_and_run(cmake_path, config, compiler_name):
     log(f"Starting Build and Run {config}")
 
     if build_dir.exists():
-        print(f"{YELLOW}Cleaning previous build...{RESET}")
-        shutil.rmtree(build_dir, onerror=remove_readonly)
-        log("Cleaned previous build")
+         clean_build_dir()
+    
 
     os_type = get_os_type()
     if os_type == "windows":

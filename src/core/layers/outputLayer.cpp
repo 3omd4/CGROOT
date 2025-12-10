@@ -101,8 +101,11 @@ void outputLayer::backwardProp(vector<double>& inputData, size_t correctClass)
 
         //iterate over every neuron in the output layer and apply the backward
         //propagation alorithm
+                
+        
         for(size_t i = 0; i < neurons.size(); i++)
         {
+
                 //calculate the error, dZ_n = A_n - Y
                 //as Y is the correct value
                 //A_n is the output of the activation function, softmax in this case

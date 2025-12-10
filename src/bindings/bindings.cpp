@@ -95,7 +95,9 @@ void bind_model(py::module &m) {
              py::arg("modelArch"), py::arg("numOfClasses"), py::arg("imageVerDim"),
              py::arg("imageHorDim"), py::arg("imageDepDim"))
         .def("train", &NNModel::train)
-        .def("classify", &NNModel::classify);
+        .def("train_batch", &NNModel::train_batch)
+        .def("classify", &NNModel::classify)
+        .def("getProbabilities", &NNModel::getProbabilities);
 }
 
 PYBIND11_MODULE(cgroot_core, m) {

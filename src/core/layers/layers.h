@@ -453,6 +453,9 @@ class outputLayer : public Layer
     //                       that is given to the backwardProp() function
     int getClass();
 
+    //get the output probability vector
+    vector<double>& getOutput() {return outputData;}
+
 };
 
 

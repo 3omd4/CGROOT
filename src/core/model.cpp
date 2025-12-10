@@ -489,3 +489,12 @@ int NNModel::classify(image imgData)
     // std::cout << "[DEBUG] Classify End. Result: " << cls << std::endl;
     return cls;
 }
+
+// Get the probability distribution for the last classification
+vector<double> NNModel::getProbabilities()
+{
+    if (Layers.empty()) return {};
+    
+    // The last layer is the output layer
+    return static_cast<outputLayer*>(Layers[Layers.size()-1])->getOutput();
+}

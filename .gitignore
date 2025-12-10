@@ -49,3 +49,6 @@ MATRIX_OPS_IO_REFERENCE.md
 
 
 **/__pycache__/**
+
+
+**/build_temp/**
