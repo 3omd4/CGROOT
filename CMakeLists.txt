@@ -58,21 +58,21 @@ if(NOT Qt6_FOUND AND WIN32)
         set(CMAKE_PREFIX_PATH "C:/Qt/6.10.0/msvc2022_64")
         find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
         # Try common Qt6 installation paths
-        # set(QT_PATHS
-        #     "C:/Qt/6.10.0/msvc2022_64"
-        #     "C:/Qt/6.10.0/msvc2019_64"
-        #     "C:/Qt/6.9.0/msvc2022_64"
-        #     "C:/Qt/6.9.0/msvc2019_64"
-        # )
-        # foreach(QT_PATH ${QT_PATHS})
-        #     if(EXISTS ${QT_PATH})
-        #         set(CMAKE_PREFIX_PATH ${QT_PATH})
-        #         find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
-        #         if(Qt6_FOUND)
-        #             break()
-        #         endif()
-        #     endif()
-        # endforeach()
+        set(QT_PATHS
+            "C:/Qt/6.10.0/msvc2022_64"
+            "C:/Qt/6.10.0/msvc2019_64"
+            "C:/Qt/6.9.0/msvc2022_64"
+            "C:/Qt/6.9.0/msvc2019_64"
+        )
+        foreach(QT_PATH ${QT_PATHS})
+            if(EXISTS ${QT_PATH})
+                set(CMAKE_PREFIX_PATH ${QT_PATH})
+                find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
+                if(Qt6_FOUND)
+                    break()
+                endif()
+            endif()
+        endforeach()
     endif()
 endif()
 
@@ -113,3 +113,31 @@ if(Qt6_FOUND)
     message(STATUS "  Qt6 Charts: ${Qt6Charts_FOUND}")
 endif()
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
+
+# ==========================================
+# PyBind11 Bindings
+# ==========================================
+include(FetchContent)
+FetchContent_Declare(
+  pybind11
+  GIT_REPOSITORY https://github.com/pybind/pybind11.git
+  GIT_TAG        v2.11.1
+)
+FetchContent_MakeAvailable(pybind11)
+
+pybind11_add_module(cgroot_core src/bindings/bindings.cpp)
+target_link_libraries(cgroot_core PRIVATE cgroot_lib)
+target_include_directories(cgroot_core PRIVATE src)
+
+# Ensure the library is built as an extension
+set_target_properties(cgroot_core PROPERTIES 
+    CXX_VISIBILITY_PRESET "default"
+    VISIBILITY_INLINES_HIDDEN OFF
+)
+
+# Copy the extension to the bin directory (so Python can find it easily)
+add_custom_command(TARGET cgroot_core POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    $<TARGET_FILE:cgroot_core>
+    ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/$<TARGET_FILE_NAME:cgroot_core>
+)

@@ -101,7 +101,7 @@ endif()
 
 # Add subdirectories
 add_subdirectory(examples)
-if(Qt6_FOUND AND Qt6Core_FOUND AND Qt6Widgets_FOUND AND Qt6Charts_FOUND)
-    add_subdirectory(gui)
-endif()
+# if(Qt6_FOUND AND Qt6Core_FOUND AND Qt6Widgets_FOUND AND Qt6Charts_FOUND)
+#     add_subdirectory(gui)
+# endif()
 

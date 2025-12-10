@@ -1,0 +1,169 @@
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
+                             QStatusBar, QGroupBox, QTextEdit, QMenu, QToolBar, 
+                             QLabel, QProgressBar, QMessageBox, QApplication)
+from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtGui import QAction, QKeySequence, QFont
+
+from widgets.configurationwidget import ConfigurationWidget
+from widgets.trainingwidget import TrainingWidget
+from widgets.inferencewidget import InferenceWidget
+from widgets.metricswidget import MetricsWidget
+from controllers.model_controller import ModelController
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        
+        self.setWindowTitle("CGROOT++ Neural Network Trainer")
+        self.resize(1200, 800)
+        
+        self.controller = ModelController()
+        
+        self.setup_ui()
+        self.setup_menubar()
+        self.setup_toolbar()
+        self.setup_statusbar()
+        self.create_connections()
+        
+    def setup_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        main_layout = QVBoxLayout(central_widget)
+        
+        # Tabs
+        self.tabs = QTabWidget()
+        
+        self.training_tab = TrainingWidget(self.controller)
+        self.inference_tab = InferenceWidget(self.controller)
+        self.metrics_tab = MetricsWidget(self.controller)
+        self.config_tab = ConfigurationWidget(self.controller)
+        
+        self.tabs.addTab(self.training_tab, "Training")
+        self.tabs.addTab(self.inference_tab, "Inference")
+        self.tabs.addTab(self.metrics_tab, "Metrics")
+        self.tabs.addTab(self.config_tab, "Configuration")
+        
+        main_layout.addWidget(self.tabs)
+        
+        # Log Output
+        log_group = QGroupBox("Log Output")
+        log_layout = QVBoxLayout(log_group)
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setMaximumHeight(150)
+        self.log_output.setFont(QFont("Consolas", 10))
+        log_layout.addWidget(self.log_output)
+        
+        main_layout.addWidget(log_group)
+
+    def setup_menubar(self):
+        menu_bar = self.menuBar()
+        
+        # File Menu
+        file_menu = menu_bar.addMenu("&File")
+        
+        load_dataset_act = QAction("&Load Dataset...", self)
+        load_dataset_act.triggered.connect(self.on_load_dataset)
+        file_menu.addAction(load_dataset_act)
+        
+        file_menu.addSeparator()
+        
+        exit_act = QAction("E&xit", self)
+        exit_act.setShortcut(QKeySequence.StandardKey.Quit)
+        exit_act.triggered.connect(QApplication.instance().quit)
+        file_menu.addAction(exit_act)
+        
+        # Help Menu
+        help_menu = menu_bar.addMenu("&Help")
+        about_act = QAction("&About", self)
+        about_act.triggered.connect(self.show_about)
+        help_menu.addAction(about_act)
+
+    def on_load_dataset(self):
+        from PyQt6.QtWidgets import QFileDialog
+        import os
+        
+        # Default path
+        start_dir = "src/data"
+        if not os.path.exists(start_dir):
+            start_dir = "."
+            
+        images_path, _ = QFileDialog.getOpenFileName(
+            self, "Select MNIST Images File", start_dir,
+            "MNIST Images (*.idx3-ubyte);;All Files (*.*)"
+        )
+        if not images_path:
+            return
+            
+        labels_path, _ = QFileDialog.getOpenFileName(
+            self, "Select MNIST Labels File", os.path.dirname(images_path),
+            "MNIST Labels (*.idx1-ubyte);;All Files (*.*)"
+        )
+        if not labels_path:
+            return
+            
+        self.controller.requestLoadDataset.emit(images_path, labels_path)
+
+    def setup_toolbar(self):
+        toolbar = QToolBar("Main Toolbar")
+        self.addToolBar(toolbar)
+        
+        # Quick actions could go here
+        toolbar.addAction("Start Training", self.training_tab.on_start_clicked)
+        toolbar.addAction("Stop Training", self.training_tab.on_stop_clicked)
+
+    def setup_statusbar(self):
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        
+        self.status_label = QLabel("Ready")
+        self.status_bar.addWidget(self.status_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximumWidth(200)
+        self.progress_bar.setTextVisible(True)
+        self.status_bar.addPermanentWidget(self.progress_bar)
+
+    def create_connections(self):
+        # Controller -> MainWindow
+        self.controller.logMessage.connect(self.log_message)
+        self.controller.progressUpdated.connect(self.update_progress)
+        self.controller.metricsUpdated.connect(self.update_metrics)
+        self.controller.trainingFinished.connect(self.training_finished)
+        self.controller.imagePredicted.connect(self.inference_tab.displayPrediction)
+        
+        # Widget -> Controller/MainWindow
+        self.training_tab.startTrainingRequested.connect(self.start_training)
+        self.training_tab.stopTrainingRequested.connect(self.stop_training)
+        
+    def start_training(self):
+        # Get params from configuration (or training widget if split)
+        # For now, just trigger controller with default epochs
+        self.metrics_tab.clear()
+        self.controller.requestTrain.emit(self.training_tab.epochs_spin.value())
+        
+    def stop_training(self):
+        self.controller.requestStop.emit()
+        
+    def log_message(self, msg):
+        self.log_output.append(msg)
+        
+    def update_progress(self, val, max_val):
+        self.progress_bar.setMaximum(max_val)
+        self.progress_bar.setValue(val)
+        
+    def update_metrics(self, loss, acc, epoch):
+        self.metrics_tab.updateMetrics(loss, acc, epoch)
+        self.status_label.setText(f"Epoch: {epoch} | Loss: {loss:.4f} | Accuracy: {acc*100:.2f}%")
+        
+    def training_finished(self):
+        self.training_tab.training_finished()
+        self.status_label.setText("Training Completed")
+        QMessageBox.information(self, "Training Complete", "Model training has finished successfully!")
+        
+    def show_about(self):
+        QMessageBox.about(self, "About", 
+                          "CGROOT++ Neural Network Trainer\n\n"
+                          "Python Implementation (PyQt6)\n"
+                          "Replicated from C++ Reference GUI")

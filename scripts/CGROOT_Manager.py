@@ -336,10 +336,22 @@ def run_command(cmd, log_append=True):
     proc.wait()
     return proc.returncode
 
+import stat
+import errno
+
+def remove_readonly(func, path, exc):
+    excvalue = exc[1]
+    # Check if correct exception (PermissionError usually corresponds to EACCES on Windows)
+    if func in (os.rmdir, os.remove, os.unlink) and excvalue.errno == errno.EACCES:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    else:
+        raise
+
 def clean_build_dir():
     if build_dir.exists() and build_dir.is_dir():
         print(f"{YELLOW}Cleaning build directory...{RESET}")
-        shutil.rmtree(build_dir)
+        shutil.rmtree(build_dir, onerror=remove_readonly)
         print(f"{GREEN}SUCCESS: Build directory cleaned!{RESET}")
         log(f"Build directory cleaned successfully")
     else:
@@ -358,7 +370,7 @@ def build_configuration(cmake_path, config, compiler_name):
 
     if build_dir.exists():
         print(f"{YELLOW}Cleaning previous build...{RESET}")
-        shutil.rmtree(build_dir)
+        shutil.rmtree(build_dir, onerror=remove_readonly)
         log(f"Cleaned previous build")
 
     os_type = get_os_type()
@@ -453,51 +465,39 @@ def run_executables(configuration):
         print(f"{YELLOW}WARNING: simple_test executable not found (skipping){RESET}")
         print()
 
-    if gui_exec.exists():
-        executables_found = True
-        print(f"{GREEN}Preparing GUI executable (cgroot_gui)...{RESET}")
-        print(f"{CYAN}========================================={RESET}")
-        
-        # Deploy Qt DLLs for the GUI executable
-        # This will copy the exe to a separate folder and deploy Qt DLLs
-        deployed_gui_exec = deploy_qt_dlls(gui_exec, configuration)
-        
-        if not deployed_gui_exec or not deployed_gui_exec.exists():
-            print(f"{RED}ERROR: Failed to deploy GUI executable{RESET}")
-            print(f"{YELLOW}Skipping GUI launch.{RESET}")
-            print()
-        else:
-            print(f"{GREEN}Launching GUI executable...{RESET}")
-            print(f"{YELLOW}Note: GUI will open in a separate window. Close the window to continue.{RESET}")
-            print()
-            try:
-                # Run GUI without capturing output so window can appear
-                # Use shell=True on Windows to ensure proper window handling
-                # Use the deployed executable path (handles spaces correctly)
-                if get_os_type() == "windows":
-                    # Use quotes around path to handle spaces
-                    result = subprocess.run(
-                        f'"{deployed_gui_exec}"',
-                        shell=True,
-                        timeout=300
-                    )
-                else:
-                    result = subprocess.run(
-                        str(deployed_gui_exec),
-                        timeout=300
-                    )
-                if result.returncode != 0:
-                    print(f"{RED}GUI exited with error code {result.returncode}{RESET}")
-                    print(f"{YELLOW}If the GUI window didn't appear, check for runtime errors.{RESET}")
-            except subprocess.TimeoutExpired:
-                print(f"{YELLOW}GUI was closed or timed out.{RESET}")
-            except Exception as e:
-                print(f"{RED}Error running GUI: {e}{RESET}")
-                print(f"{YELLOW}Try running the GUI directly: {deployed_gui_exec}{RESET}")
-            print()
-    else:
-        print(f"{YELLOW}WARNING: cgroot_gui executable not found (Qt6 may not be installed){RESET}")
+    # Launch Python GUI (cgroot_gui is no longer a C++ executable but handled via Python)
+    print(f"{GREEN}Preparing Python GUI (PyQt6)...{RESET}")
+    print(f"{CYAN}========================================={RESET}")
+    
+    gui_script = project_root / "src" / "gui_py" / "main.py"
+    if gui_script.exists():
+        print(f"{GREEN}Launching GUI script: {gui_script}{RESET}")
+        print(f"{YELLOW}Note: GUI will open in a separate window. Close the window to continue.{RESET}")
         print()
+        try:
+            # Run Python GUI
+            if get_os_type() == "windows":
+                # Use pythonw or python to run script
+                result = subprocess.run(
+                    f'python "{gui_script}"',
+                    shell=True,
+                    timeout=None # GUI might run for a while
+                )
+            else:
+                result = subprocess.run(
+                    ["python3", str(gui_script)],
+                    timeout=None
+                )
+            
+            if result.returncode != 0:
+                print(f"{RED}GUI exited with error code {result.returncode}{RESET}")
+        except KeyboardInterrupt:
+             print(f"{YELLOW}GUI execution interrupted.{RESET}")
+        except Exception as e:
+            print(f"{RED}Error running GUI: {e}{RESET}")
+    else:
+        print(f"{RED}ERROR: Python GUI script not found at {gui_script}{RESET}")
+    print()
 
     if not executables_found:
         print(f"{RED}ERROR: No executables found!{RESET}")
@@ -522,7 +522,7 @@ def build_and_run(cmake_path, config, compiler_name):
 
     if build_dir.exists():
         print(f"{YELLOW}Cleaning previous build...{RESET}")
-        shutil.rmtree(build_dir)
+        shutil.rmtree(build_dir, onerror=remove_readonly)
         log("Cleaned previous build")
 
     os_type = get_os_type()

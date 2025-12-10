@@ -44,3 +44,8 @@ MATRIX_OPS_IO_REFERENCE.md
 *.exe
 .vscode/settings.json
 .vscode/tasks.json
+
+
+
+
+**/__pycache__/**
