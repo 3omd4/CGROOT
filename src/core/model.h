@@ -123,6 +123,8 @@ class NNModel
     // Get the probability distribution for the last classification
     vector<double> getProbabilities();
 
+    
+
     //additional functions
 
 };
