@@ -1,4 +1,3 @@
-#include <iostream>
 #include "layers.h"
 
 
@@ -14,13 +13,13 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth)
     //intialize the dimensions of the normalized image matrix
     //when an image is fed for training or classifcation
     //it is first normalized and stored in the normalized image matrix
-    m_normalizedImage.resize(imageDepth);
+    normalizedImage.resize(imageDepth);
     for(size_t i = 0; i < imageDepth; i++)
     {
-        m_normalizedImage[i].resize(imageHeight);
+        normalizedImage[i].resize(imageHeight);
         for(size_t j = 0; j < imageHeight; j++)
         {
-            m_normalizedImage[i][j].assign(imageWidth, 0.0);
+            normalizedImage[i][j].assign(imageWidth, 0.0);
         }
     }
 
@@ -37,44 +36,26 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth, size_t imageDepth)
 void inputLayer::start(image& inputImage)
 {
     //stor the inputImage in the normlized Image matrix
-    if (inputImage.size() != m_normalizedImage.size()) {
-        std::cerr << "[CRITICAL ERROR] Input Depth Mismatch! Expected " << m_normalizedImage.size() 
-                  << " Got " << inputImage.size() << std::endl;
-        return;
-    }
-
-    for(size_t i = 0; i < m_normalizedImage.size(); i++)
+    for(size_t i = 0; i < normalizedImage.size(); i++)
     {
-        if (inputImage[i].size() != m_normalizedImage[i].size()) {
-             std::cerr << "[CRITICAL ERROR] Input Height Mismatch at depth " << i 
-                       << "! Expected " << m_normalizedImage[i].size() 
-                       << " Got " << inputImage[i].size() << std::endl;
-             return;
-        }
-        for(size_t j = 0; j < m_normalizedImage[i].size(); j++)
+        for(size_t j = 0; j < normalizedImage[i].size(); j++)
         {
-            if (inputImage[i][j].size() != m_normalizedImage[i][j].size()) {
-                 std::cerr << "[CRITICAL ERROR] Input Width Mismatch at depth " << i << " row " << j
-                           << "! Expected " << m_normalizedImage[i][j].size() 
-                           << " Got " << inputImage[i][j].size() << std::endl;
-                 return;
-            }
-            for(size_t k = 0; k < m_normalizedImage[i][j].size(); k++)
+            for(size_t k = 0; k < normalizedImage[i][j].size(); k++)
             {
                 //normalize each pixel before storage
-                m_normalizedImage[i][j][k] = static_cast<double>(inputImage[i][j][k])/255.0;
+                normalizedImage[i][j][k] = static_cast<double>(inputImage[i][j][k])/255.0;
             }
         }
     }
 }
 
-vector<double> inputLayer::backwardProp(const vector<double>& outputError) {
-    // Input layer has no preceding layers to propagate gradientsto.
-    // It returns an empty vector.
-    return {}; 
-}
+// vector<double> inputLayer::backwardProp(const vector<double>& outputError) {
+//     // Input layer has no preceding layers to propagate gradients to.
+//     // It returns an empty vector.
+//     return {}; 
+// }
 
-void inputLayer::applyOptimizer(Optimizer* opt) {
-    // Input layer has no trainable parameters, so do nothing.
-}
+// void inputLayer::applyOptimizer(Optimizer* opt) {
+//     // Input layer has no trainable parameters, so do nothing.
+// }
 

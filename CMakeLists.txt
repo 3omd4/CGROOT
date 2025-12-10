@@ -26,9 +26,17 @@ endif()
 
 # Compiler-specific options
 if(MSVC)
-    add_compile_options(/W4 /permissive-)
+    # For full logs
+    # add_compile_options(/W4 /permissive-)
+
+    # For no warnings
+    add_compile_options(/w)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic)
+    # For full logs
+    # add_compile_options(-Wall -Wextra -Wpedantic)
+
+    # For no warnings
+    add_compile_options(-w)
 endif()
 
 # Include directories

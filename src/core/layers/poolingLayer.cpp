@@ -49,46 +49,44 @@ void poolingLayer::forwardProp(vector<featureMapType>& inputFeatureMaps)
                                 //choose the method of pooling based on the pooling type
                                 switch(poolingType)
                                 {
-                                case maxPooling:
-                                {
-                                        //max pooling works by comparing each entry of the overlapped part of the 
-                                        //filter and the input feature map and take the max and put it in the output feature map
-                                        double max = inputFeatureMaps[d][i][j];
-                                        for(size_t k1 = i; k1 < (i + kernel_info.filter_height) ; k1++)
-                                        {
-                                                for(size_t k2 = j; k2 < (j + kernel_info.filter_width); k2++)
+                                        case maxPooling:{
+                                                //max pooling works by comparing each entry of the overlapped part of the 
+                                                //filter and the input feature map and take the max and put it in the output feature map
+                                                double max = inputFeatureMaps[d][i][j];
+                                                for(size_t k1 = i; k1 < (i + kernel_info.filter_height) ; k1++)
                                                 {
-                                                        if(inputFeatureMaps[d][k1][k2] > max)
+                                                        for(size_t k2 = j; k2 < (j + kernel_info.filter_width); k2++)
                                                         {
-                                                                max = inputFeatureMaps[d][k1][k2];
+                                                                if(inputFeatureMaps[d][k1][k2] > max)
+                                                                {
+                                                                        max = inputFeatureMaps[d][k1][k2];
+                                                                }
                                                         }
                                                 }
+
+
+                                                featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = max;
+                                                break;
                                         }
-
-
-                                        featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = max;
-                                        break;
-                                }
-
-                                case averagePooling:
-                                        //average pooling works by averaging each entry of the overlapped part of the 
-                                        //filter and  the input feature map  
-                                        double average = inputFeatureMaps[d][i][j];
-                                        for(size_t k1 = i; k1 < (i + kernel_info.filter_height) ; k1++)
-                                        {
-                                                for(size_t k2 = j; k2 < (j + kernel_info.filter_width); k2++)
+                                        case averagePooling:{
+                                                //average pooling works by averaging each entry of the overlapped part of the 
+                                                //filter and  the input feature map  
+                                                double average = inputFeatureMaps[d][i][j];
+                                                for(size_t k1 = i; k1 < (i + kernel_info.filter_height) ; k1++)
                                                 {
-                                                        average += inputFeatureMaps[d][k1][k2];
+                                                        for(size_t k2 = j; k2 < (j + kernel_info.filter_width); k2++)
+                                                        {
+                                                                average += inputFeatureMaps[d][k1][k2];
+                                                        }
                                                 }
+
+                                                average /= static_cast<double>(kernel_info.filter_height*kernel_info.filter_width);
+                                                featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = average;
+                                                break;
                                         }
-
-                                        average /= static_cast<double>(kernel_info.filter_height*kernel_info.filter_width);
-                                        featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = average;
-                                        break;
-
-                                }
-                                //increment the width(column) iterator 
-                                out_FM_width_Iter++;
+                                 }
+                        //increment the width(column) iterator 
+                        out_FM_width_Iter++;
                         }
                         //increment the height(row) iterator
                         out_FM_height_Iter++;

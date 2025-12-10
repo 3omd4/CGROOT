@@ -1,11 +1,11 @@
 
-#include <iostream>
 #include "core/definitions.h"
 #include "layers.h"
 #include "../Initialization/initialization.h"
+#include <iostream>
 
 //the fully connected layer constructor
-//input:        -numOfNeurons 
+//input:        -numOfNeurons
 //              -actFunc (the layer activation function)
 //              -initFuc (the layer initializaiton function)
 //              -distType (the layer distribution used to initializet its weights)
@@ -13,17 +13,18 @@
 //output:       N/A
 //side effect:  a Fully connected layer is constructed
 //Note:         N/A
-FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc, 
+FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
                 initFunctions initFunc, distributionType distType,
                         size_t numOfWeights) : act_Funct(actFunc)
 {
-    //resize the neurons vector to the number of neurons
+    //resize the neurons and weights gradient vectors to the number of neurons
     neurons.resize(numOfNeurons);
+    d_weights.resize(numOfNeurons);
 
     //initialize the weigths of each neuron
     for(size_t i = 0; i < numOfNeurons; i++)
     {
-        //extend the weights vector of the neuron 
+        //extend the weights vector of the neuron
         neurons[i].assign(numOfWeights,0.0);
 
         //use the initialization function
@@ -36,11 +37,14 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
             init_Xavier(neurons[i], numOfWeights, numOfNeurons, distType);
             break;
         }
+        //resize the 2nd Dimension of the weights gradient vector
+        //which corrisponds to the weights of each neuron
+        d_weights[i].assign(numOfWeights, 0.0);
     }
 
 
     //initialze the biases
-    //because of the Dying ReLU problem, if the activation function is ReLU then 
+    //because of the Dying ReLU problem, if the activation function is ReLU then
     //initialize with 0.01, else initialize with zero
     if(actFunc == RelU)
     {
@@ -50,35 +54,44 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
     {
         bias.assign(numOfNeurons, 0.0);
     }
+
+    //resize the bias gradient vector
+    d_bias.assign(numOfNeurons, 0.0);
+
+    //resize the gradient vector which will be used by the previous layer
+    prevLayerGrad.assign(numOfWeights, 0.0);
     
+    // Resize outputData to expected size
+    outputData.resize(numOfNeurons, 0.0);
 }
 
 //forward propagate the input data to the output
 //input:        inputData
 //output:       N/A
-//side effects: the outputData vector is filled with the dot product 
-//              of the input data and each neuron weights
+//side effects:         the outputData vector is filled with the output of
+//                      the activation function of the dot product
+//                      of the input data and each neuron weights
 //Note:         N/A
-void FullyConnected::forwardProp(vector<double>& inputData)
- {
-    this->inputCache = inputData; //SAVE INPUT FOR BACKPROP
-    
-    // Resize output and reset
-    outputData.assign(neurons.size(), 0.0);
-    preActivation.assign(neurons.size(), 0.0); // Storage for 'z'
+void FullyConnected::forwardProp(vector<double>& inputData) {
 
     //do the dot product with input vector and the weights 
     //of each neurons and store the result in the corrisponding
     //entry in the outputData vector
+
+    // std::cout << "[DEBUG] FC forwardProp. Input: " << inputData.size() << " Neurons: " << neurons.size() << std::endl;
+
+    
+    // Ensure output and preActivation are sized correctly
+    if(outputData.size() != neurons.size()) outputData.resize(neurons.size());
+    if(preActivation.size() != neurons.size()) preActivation.resize(neurons.size());
+
+    // Debug Log (Optional, but requested)
+    // // std::cout << "[DEBUG] FC forwardProp. Input: " << inputData.size() << " Neurons: " << neurons.size() << std::endl;
+
     for(size_t i = 0; i < neurons.size(); i++)
     {
-        if (neurons[i].size() != inputData.size()) {
-             std::cerr << "[CRITICAL ERROR] FC Layer Weight Mismatch! Neuron " << i 
-                       << " Weights: " << neurons[i].size() 
-                       << " Input: " << inputData.size() << std::endl;
-             return; 
-        }
-
+        //reset the
+        outputData[i] = 0.0;
         //do the dot product
         for(size_t j = 0; j < inputData.size(); j++)
         {
@@ -86,22 +99,10 @@ void FullyConnected::forwardProp(vector<double>& inputData)
         }
         //add the bias
         outputData[i] += bias[i];
-        // Save the 'z' value (wx + b) BEFORE activation transforms it
-        preActivation[i] = outputData[i];
-    }
 
-    // 1. Handle Vector-wise Activations (Softmax)
-    if (act_Funct == Softmax) 
-    {
-        softmax_Funct(outputData); // Run ONCE on the whole vector
-    }
-    // 2. Handle Element-wise Activations (ReLU, Sigmoid, Tanh)
-    else 
-    {
-        for(size_t i = 0; i < outputData.size(); i++)
+        //choose which activation function and apply it
+        switch(act_Funct)
         {
-            switch(act_Funct)
-            {
             case RelU:
                 reLU_Funct(outputData[i]);
                 break;
@@ -111,63 +112,183 @@ void FullyConnected::forwardProp(vector<double>& inputData)
             case Tanh:
                 tanh_Funct(outputData[i]);
                 break;
-            }
         }
     }
 }
 
 
+//backward propagate the error
+//input:                -inputData
+//                      -thisLayerGrad
+//output:               N/A
+//side effect:          the d_bias and d_weights are filled with the gradients
+//                      and prevLayerGrad is filled with the error to be propagated
+//Note:                 This function works with SGD or for updating after a single
+//                      example, if the update should happen after multiple examples,
+//                      then use bacwardProp_batch() instead
+void FullyConnected::backwardProp(vector<double>& inputData, vector<double>& thisLayerGrad)
+{
+    //fill prevLayerGrad with zeros to be filled with the new gradients
+    fill(prevLayerGrad.begin(), prevLayerGrad.end(), 0.0);
 
-vector<double> FullyConnected::backwardProp(const vector<double>& outputError) {
-    size_t inputSize = inputCache.size();
-    size_t outputSize = neurons.size();
-    
-    vector<double> inputError(inputSize, 0.0); // Error to send to previous layer
+    //iterate over every neuron in the output layer and apply the backward
+    //propagation alorithm
+    for(size_t i = 0; i < neurons.size(); i++)
+    {
 
-    // Initialize gradients
-    biasGradients.assign(outputSize, 0.0);
-    weightGradients.resize(outputSize);
-
-    for(size_t i = 0; i < outputSize; i++) {
-        // 1. Calculate Activation Slope
+        //contains the value of the derivative of the activation function
+        //contains the value of the derivative of the activation function
         double derivative = 0.0;
-        switch(act_Funct) {
-            case RelU: derivative = reLU_Prime(preActivation[i]); break;
-            case Sigmoid: derivative = sigmoid_Prime(preActivation[i]); break;
-            case Tanh: derivative = tanh_Prime(preActivation[i]); break;
-            case Softmax: 
-                derivative = 1.0;  //Because in training we already calculated (Pred - Target).
-                                  // That value IS the delta. We don't need to multiply it by anything else.
+
+        //choose which activation function is used
+        //the outputData[i] is used since its the result of the activation function
+        switch(act_Funct)
+        {
+            case RelU:
+                derivative = d_reLU_Funct(outputData[i]);
                 break;
-            
-            default: derivative = 1.0; break;
-    }
+            case Sigmoid:
+                derivative = d_sigmoid_Funct(outputData[i]);
+                break;
+            case Tanh:
+                derivative = d_tanh_Funct(outputData[i]);
+                break;
+        }
 
-        // 2. Calculate Delta (Error * Slope)
-        double delta = outputError[i] * derivative;
+        //calculate dZ_l = dA1 * g'(Zl)
+        //as dA1 is thisLayerGrad, the error propagated from the next layer
+        //g'(Z1) is g'(Z1)
+        //l indicates that this error is of this layer
+        double dZ_l = derivative * thisLayerGrad[i];
 
-        // 3. Calculate Bias Gradient (dL/db = delta)
-        biasGradients[i] = delta;
+        //d_bias = dZ_n in the case of SGD
+        d_bias[i] = dZ_l;
 
-        // 4. Calculate Weight Gradients (dL/dw = delta * input)
-        weightGradients[i].resize(inputSize);
-        for(size_t j = 0; j < inputSize; j++) {
-            weightGradients[i][j] = delta * inputCache[j];
-            
-            // 5. Accumulate Error for Previous Layer (dL/dx_prev = w * delta)
-            inputError[j] += delta * neurons[i][j];
+
+        //iterate over each weight of this neuron and calculate d_W
+        //and the error to be used by the previous layer
+        for(size_t j = 0; j < neurons[i].size(); j++)
+        {
+            //calculate the weights gradient
+            d_weights[i][j] = dZ_l * inputData[j];
+
+            //calculate the error of the previous layer
+            //the error is calculated for each neuron and then sumed up
+            prevLayerGrad[j] += dZ_l * neurons[i][j];
         }
     }
-
-    return inputError; // Send this back to the previous layer
 }
 
-void FullyConnected::applyOptimizer(Optimizer* opt) {
-    // 1. Update Weights for each neuron (Must be done in loop because it's a vector of vectors)
-    for(size_t i = 0; i < neurons.size(); i++) {
-        opt->update(neurons[i], weightGradients[i]);
-    }
+//backward propagate the error
+//input:                -inputData
+//                      -thisLayerGrad
+//output:               N/A
+//side effect:          the d_bias and D_weights are filled with the accumlated gradients
+//                      and prevLayerGrad is filled with the error to be propagated
+//Note:                 This function works with BGD or for updating after a whole batch
+//                      of examples, if the update should happen after a single example,
+//                      then use bacwardProp() instead
+void FullyConnected::backwardProp_batch(vector<double>& inputData, vector<double>& thisLayerGrad)
+{
+    //fill prevLayerGrad with zeros to be filled with the new gradients
+    fill(prevLayerGrad.begin(), prevLayerGrad.end(), 0.0);
 
-    // 2. Update ALL Biases at once
-    opt->update(bias, biasGradients);
+    //iterate over every neuron in the output layer and apply the backward
+    //propagation alorithm
+    for(size_t i = 0; i < neurons.size(); i++)
+    {
+
+        //contains the value of the derivative of the activation function
+        //contains the value of the derivative of the activation function
+        double derivative = 0.0;
+
+        //choose which activation function is used
+        //the outputData[i] is used since its the result of the activation function
+        switch(act_Funct)
+        {
+            case RelU:
+                derivative = d_reLU_Funct(outputData[i]);
+                break;
+            case Sigmoid:
+                derivative = d_sigmoid_Funct(outputData[i]);
+                break;
+            case Tanh:
+                derivative = d_tanh_Funct(outputData[i]);
+                break;
+        }
+
+        //calculate dZ_l = dA1 * g'(Zl)
+        //as dA1 is thisLayerGrad, the error propagated from the next layer
+        //g'(Z1) is g'(Z1)
+        //l indicates that this error is of this layer
+        double dZ_l = derivative * thisLayerGrad[i];
+
+        //d_bias_new = d_bias_old dZ_n in the case of BGD
+        //accumlates the bias gradient
+        d_bias[i] += dZ_l;
+
+
+        //iterate over each weight of this neuron and calculate d_W
+        //and the error to be used by the previous layer
+        for(size_t j = 0; j < neurons[i].size(); j++)
+        {
+            //accumlates the weights gradient
+            d_weights[i][j] += dZ_l * inputData[j];
+
+            //calculate the error of the previous layer
+            //the error is calculated for each neuron and then sumed up
+            prevLayerGrad[j] += dZ_l * neurons[i][j];
+        }
+    }
+}
+
+
+//update the weights and biases of this fully connected layer
+//input:                learningRate
+//output:               N/A
+//side effect:          the weights and biases are updated
+//Note:                 N/A
+void FullyConnected::update(double learningRate)
+{
+    //iterate over each neuron and update its bias and weights
+    for(size_t i = 0; i < neurons.size(); i++)
+    {
+        //update the bias
+        bias[i] -= learningRate*d_bias[i];
+        d_bias[i] = 0.0;        //reset the bias gradient
+
+        //iterate over each weight and update it
+        for(size_t j = 0; j < neurons[i].size(); j++)
+        {
+            //update the weights
+            neurons[i][j] -= learningRate*d_weights[i][j];
+            d_weights[i][j] = 0.0; //reset the weigth gradient
+        }
+    }
+}
+
+
+//update the weights and biases of this fully connected layer after a batch
+//input:                -learningRate
+//                      -numOfExamples
+//output:               N/A
+//side effect:          the weights and biases are updated
+//Note:                 N/A
+void FullyConnected::update_batch(double learningRate, int numOfExamples)
+{
+    //iterate over each neuron and update its bias and weights
+    for(size_t i = 0; i < neurons.size(); i++)
+    {
+        //update the bias, with averaged bias gradient
+        bias[i] -= learningRate*(d_bias[i]/static_cast<double>(numOfExamples));
+        d_bias[i] = 0.0;        //reset the bias gradient
+
+        //iterate over each weight and update it
+        for(size_t j = 0; j < neurons[i].size(); j++)
+        {
+            //update the weights, with averaged weights gradient
+            neurons[i][j] -= learningRate*(d_weights[i][j]/static_cast<double>(numOfExamples));
+            d_weights[i][j] = 0.0; //reset the weigth gradient
+        }
+    }
 }
