@@ -81,16 +81,35 @@ std::unique_ptr<MNISTLoader::MNISTDataset> MNISTLoader::load_dataset(
     dataset->image_height = rows;
     dataset->images.reserve(num_images);
     
+    // Temporary buffer for reading one flat image (28x28 = 784 bytes)
+    std::vector<unsigned char> temp_buffer(rows * cols);
+
     // Read images and labels
     for (uint32_t i = 0; i < num_images; ++i) {
         MNISTImage image;
-        image.pixels.resize(rows * cols);
         
-        // Read image pixels
-        images_file.read(reinterpret_cast<char*>(image.pixels.data()), rows * cols);
+        // 1. Resize the 3D structure: [Depth][Height][Width]
+        // MNIST is grayscale, so Depth = 1
+        image.pixels.resize(1); 
+        image.pixels[0].resize(rows);
+        for(auto& row : image.pixels[0]) {
+            row.resize(cols);
+        }
+        
+        // 2. Read flat bytes from file into temp buffer
+        images_file.read(reinterpret_cast<char*>(temp_buffer.data()), rows * cols);
+        
         if (images_file.gcount() != static_cast<std::streamsize>(rows * cols)) {
             std::cerr << "Error: Failed to read image " << i << std::endl;
             return nullptr;
+        }
+        
+        // 3. Map flat buffer to 3D structure
+        for (uint32_t r = 0; r < rows; ++r) {
+            for (uint32_t c = 0; c < cols; ++c) {
+                // formula: index = row * width + col
+                image.pixels[0][r][c] = temp_buffer[r * cols + c];
+            }
         }
         
         // Read label
@@ -108,11 +127,10 @@ std::unique_ptr<MNISTLoader::MNISTDataset> MNISTLoader::load_dataset(
 }
 
 void MNISTLoader::normalize_dataset(MNISTDataset& dataset) {
-    for (auto& image : dataset.images) {
-        for (auto& pixel : image.pixels) {
-            pixel = static_cast<uint8_t>(static_cast<float>(pixel) / 255.0f);
-        }
-    }
+    // NOTE: Normalization is now handled by inputLayer::start().
+    // We leave the data as raw uint8_t [0-255] here to match the 
+    // inputLayer expectations.
+    std::cout << "Warning: normalize_dataset skipped. Normalization is handled by inputLayer." << std::endl;
 }
 
 void MNISTLoader::one_hot_encode_labels(MNISTDataset& dataset, size_t num_classes) {
@@ -211,10 +229,20 @@ namespace utils {
 
 std::vector<float> image_to_float_vector(const MNISTLoader::MNISTImage& image) {
     std::vector<float> result;
-    result.reserve(image.pixels.size());
+    // Calculate total size for reservation (Depth * Height * Width)
+    size_t total_size = 0;
+    if(!image.pixels.empty() && !image.pixels[0].empty()) {
+        total_size = image.pixels.size() * image.pixels[0].size() * image.pixels[0][0].size();
+    }
+    result.reserve(total_size);
     
-    for (uint8_t pixel : image.pixels) {
-        result.push_back(static_cast<float>(pixel) / 255.0f);
+    // Iterate 3D vector [Depth][Height][Width]
+    for (const auto& slice : image.pixels) {
+        for (const auto& row : slice) {
+            for (uint8_t pixel : row) {
+                result.push_back(static_cast<float>(pixel) / 255.0f);
+            }
+        }
     }
     
     return result;
@@ -257,8 +285,13 @@ void save_to_csv(const MNISTLoader::MNISTDataset& dataset,
         const auto& image = dataset.images[i];
         file << static_cast<int>(image.label);
         
-        for (uint8_t pixel : image.pixels) {
-            file << "," << static_cast<int>(pixel);
+        // Iterate 3D vector to flatten for CSV
+        for (const auto& slice : image.pixels) {
+            for (const auto& row : slice) {
+                for (uint8_t pixel : row) {
+                    file << "," << static_cast<int>(pixel);
+                }
+            }
         }
         file << std::endl;
     }

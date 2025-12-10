@@ -47,7 +47,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
         //using calcFeatureMapDim function, which takes the current kernel 2D dimensions 
         //and the dimension of the image, the feature map of last pooling layer 
         //or the feature map of the last convolution layer
-        if(i && !(Layers[Layers.size()-1]->getLayerType() != pooling))
+        if(i && (Layers[Layers.size()-1]->getLayerType() != pooling))
         {
         //enter the condition if:
         //1. this isn't the first iteration (otherwise use the image dimensions)
@@ -124,7 +124,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses, size_t imageHeight
             modelArch.kernelsPerPoolingLayer[poolIter].filter_depth = FM_dims_pooling.FM_depth;
 
             //add the pooling layer
-            Layers.emplace_back(new poolingLayer(modelArch.kernelsPerPoolingLayer[poolIter], FM_dims, modelArch.poolingtype[poolIter]));
+            Layers.emplace_back(new poolingLayer(modelArch.kernelsPerPoolingLayer[poolIter], FM_dims_pooling, modelArch.poolingtype[poolIter]));
 
             //increment the iterator
             poolIter++;
@@ -477,10 +477,10 @@ int NNModel::classify(image imgData)
     switch(Layers[Layers.size() -2]->getLayerType())
     {
         case flatten:
-            dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(dynamic_cast<FlattenLayer*>(Layers[Layers.size() -1])->getFlattenedArr());
+            dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(dynamic_cast<FlattenLayer*>(Layers[Layers.size() -2])->getFlattenedArr());
             break;
         case fullyConnected:
-            dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(dynamic_cast<FullyConnected*>(Layers[Layers.size() -1])->getOutput());
+            dynamic_cast<outputLayer*>(Layers[Layers.size()-1])->forwardProp(dynamic_cast<FullyConnected*>(Layers[Layers.size() -2])->getOutput());
             break;
     }
 

@@ -9,7 +9,7 @@
 
 namespace cgroot {
 namespace data {
-
+typedef std::vector<std::vector<std::vector<unsigned char>>> LayerInputImage;
 /**
  * @brief MNIST dataset loader for training and testing neural networks
  * 
@@ -23,9 +23,10 @@ public:
      */
     struct MNISTImage {
         std::vector<uint8_t> pixels;  // 28x28 = 784 pixels
+        LayerInputImage pixels;
         uint8_t label;                // Digit label (0-9)
         
-        MNISTImage() : pixels(784, 0), label(0) {}
+        MNISTImage() : label(0) {}
     };
 
     /**
