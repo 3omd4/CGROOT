@@ -1,10 +1,5 @@
 # Core library sources
-set(MATH_SOURCES
-    math/cpu_kernels.cpp
-    math/cpu_kernels.h
-    math/matrix_ops.cpp
-    math/matrix_ops.h
-)
+
 
 # Core layers
 set(CORE_LAYERS_SOURCES
@@ -16,8 +11,8 @@ set(CORE_LAYERS_SOURCES
     core/layers/fullyConnected.cpp
     core/layers/inputLayer.cpp
     core/layers/outputLayer.cpp
-    core/layers/dense.h
-    core/layers/dropout.h
+    # core/layers/dense.h
+    # core/layers/dropout.h
 )
 
 # Core activations
@@ -63,7 +58,7 @@ set(CORE_MODEL_SOURCES
 
 # Combine all core library sources
 set(LIBRARY_SOURCES
-    ${MATH_SOURCES}
+
     ${CORE_LAYERS_SOURCES}
     ${CORE_ACTIVATIONS_SOURCES}
     ${CORE_LOSSES_SOURCES}
@@ -92,6 +87,24 @@ set_target_properties(cgroot_lib PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
+
+# Enable OpenMP
+find_package(OpenMP)
+
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found: enabling parallelization")
+
+    if (MSVC)
+        target_compile_options(cgroot_lib PRIVATE /openmp)
+    else()
+        target_compile_options(cgroot_lib PRIVATE ${OpenMP_CXX_FLAGS})
+    endif()
+
+    target_link_libraries(cgroot_lib PRIVATE OpenMP::OpenMP_CXX)
+else()
+    message(WARNING "OpenMP NOT found — parallelization disabled")
+endif()
+
 
 # Create the main executable (only if main.cpp exists)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)

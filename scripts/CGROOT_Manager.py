@@ -163,6 +163,58 @@ def find_windeployqt():
     
     return None
 
+
+def find_ninja_tool():
+    """
+    Find ninja.exe in common locations.
+    """
+    # Check PATH first
+    if shutil.which("ninja"):
+        return "ninja"
+
+    # Common locations
+    search_paths = [
+        Path(r"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"),
+        Path(r"C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"),
+        Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"),
+        Path(r"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"),
+    ]
+    
+    for path in search_paths:
+        if path.exists():
+            return str(path)
+            
+    return None
+
+def get_current_generator():
+    """Reads CMakeCache.txt to find current generator"""
+    cache_path = build_dir / "CMakeCache.txt"
+    if not cache_path.exists():
+        return None
+        
+    try:
+        with open(cache_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if line.startswith("CMAKE_GENERATOR:INTERNAL="):
+                    return line.split("=")[1].strip()
+    except:
+        pass
+    return None
+
+def find_vcvars_bat():
+    """Find vcvars64.bat to set up MSVC environment for Ninja"""
+    search_paths = [
+        Path(r"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"),
+        Path(r"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat"),
+        Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"),
+        Path(r"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"),
+        Path(r"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"),
+    ]
+    for path in search_paths:
+        if path.exists():
+            return str(path)
+    return None
+
 def deploy_qt_dlls(gui_executable, configuration):
     """
     Deploy Qt DLLs for the GUI executable using windeployqt.
@@ -364,7 +416,7 @@ def kill_zombie_processes():
     # List of process names to kill
     targets = [
         "cmake.exe", "ninja.exe", "msbuild.exe", "make.exe",
-        "cgrunner.exe", "simple_test.exe", "cgroot_gui.exe"
+        "cgrunner.exe", "test_diagnostics.exe", "cgroot_gui.exe"
     ]
 
     print(f"{YELLOW}Checking for zombie processes...{RESET}")
@@ -418,18 +470,54 @@ def build_configuration(cmake_path, config, compiler_name):
 
     log(f"Starting {config} Build")
 
-    if build_dir.exists():
+    
+    # Smart clean: only clean if generator changed
+    generator_name = "Visual Studio 16 2019" # Default fallback
+    use_ninja = False
+    
+    ninja_path = find_ninja_tool()
+    if get_os_type() == "windows" and ninja_path:
+        use_ninja = True
+        generator_name = "Ninja"
+    
+    current_gen = get_current_generator()
+    if current_gen and current_gen != generator_name:
+        print(f"{YELLOW}Generator changed ({current_gen} -> {generator_name}). Cleaning build dir...{RESET}")
         clean_build_dir()
+    elif not build_dir.exists():
+        # Clean not needed, but ensure dir exists
+        pass
+    else:
+        print(f"{GREEN}Incremental build detected (Generator: {generator_name}){RESET}")
 
     os_type = get_os_type()
     if os_type == "windows":
-        generator = "Visual Studio 16 2019"
-        cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
-        cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
+        if use_ninja:
+            print(f"{GREEN}Using Ninja build system: {ninja_path}{RESET}")
+            cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "Ninja" -DCMAKE_MAKE_PROGRAM="{ninja_path}" -DCMAKE_BUILD_TYPE={config} -S .'
+            cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
+            
+            # Source vcvars64.bat for Ninja
+            vcvars = find_vcvars_bat()
+            if vcvars:
+                print(f"{BLUE}Sourcing vcvars: {vcvars}{RESET}")
+                cmd_configure = f'"{vcvars}" && {cmd_configure}'
+                cmd_build = f'"{vcvars}" && {cmd_build}'
+            else:
+                print(f"{YELLOW}WARNING: vcvars64.bat not found! Ninja build might fail.{RESET}")
+        else:
+            generator = "Visual Studio 16 2019"
+            cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
+            cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
     else:
         # For Linux/macOS use Unix Makefiles generator
-        generator = "Unix Makefiles"
-        cmd_configure = f'cmake -B "{build_dir}" -G "{generator}"'
+        # Check for Ninja on Linux too
+        if shutil.which("ninja"):
+             generator = "Ninja"
+             cmd_configure = f'cmake -B "{build_dir}" -G "{generator}" -DCMAKE_BUILD_TYPE={config}'
+        else:
+             generator = "Unix Makefiles"
+             cmd_configure = f'cmake -B "{build_dir}" -G "{generator}" -DCMAKE_BUILD_TYPE={config}'
         cmd_build = f'cmake --build "{build_dir}" --config {config}'
 
     # Configure project
@@ -458,17 +546,33 @@ def build_configuration(cmake_path, config, compiler_name):
     print(f"{GREEN}SUCCESS: {config} build completed!{RESET}")
     print()
     print(f"{WHITE}Executables created:{RESET}")
-
+    
     ext = ".exe" if os_type == "windows" else ""
-    print(f"- {build_dir / 'bin' / config / f'cgrunner{ext}'}")
-    print(f"- {build_dir / 'bin' / config / f'simple_test{ext}'}")
+    
+    # Check both config-specific and root bin folders (Ninja vs VS)
+    bin_config = build_dir / 'bin' / config
+    bin_root = build_dir / 'bin'
+    
+    # helper to find exe
+    def find_exe(name):
+        p1 = bin_config / f"{name}{ext}"
+        if p1.exists(): return p1
+        p2 = bin_root / f"{name}{ext}"
+        if p2.exists(): return p2
+        return p1 # default for display
+        
+    cgrunner_path = find_exe("cgrunner")
+    test_path = find_exe("test_diagnostics")
+    gui_path = find_exe("cgroot_gui")
+
+    print(f"- {cgrunner_path}")
+    print(f"- {test_path}")
     
     # Check for GUI executable (only if Qt6 was found)
-    gui_exec = build_dir / f"bin/{config}/cgroot_gui{ext}"
-    if gui_exec.exists():
-        print(f"- {gui_exec} {GREEN}(GUI){RESET}")
+    if gui_path.exists():
+        print(f"- {gui_path} {GREEN}(GUI){RESET}")
     else:
-        print(f"- {gui_exec} {YELLOW}(not built - Qt6 may not be found){RESET}")
+        print(f"- {gui_path} {YELLOW}(not built - Qt6 may not be found){RESET}")
     
     log(f"{config} build completed successfully")
     pause()
@@ -487,9 +591,20 @@ def run_executables(configuration):
     os_type = get_os_type()
     ext = ".exe" if os_type == "windows" else ""
 
-    main_exec = build_dir / f"bin/{configuration}/cgrunner{ext}"
-    test_exec = build_dir / f"bin/{configuration}/simple_test{ext}"
-    gui_exec = build_dir / f"bin/{configuration}/cgroot_gui{ext}"
+    # Helper to find exe in config dir or root bin (Ninja support)
+    def get_exe_path(name):
+        # Try config folder first (VS)
+        p = build_dir / f"bin/{configuration}/{name}{ext}"
+        if p.exists(): return p
+        # Try root bin folder (Ninja)
+        p = build_dir / f"bin/{name}{ext}"
+        if p.exists(): return p
+        # Default back to config for reporting missing
+        return build_dir / f"bin/{configuration}/{name}{ext}"
+
+    main_exec = get_exe_path("cgrunner")
+    test_exec = get_exe_path("test_diagnostics")
+    gui_exec = get_exe_path("cgroot_gui")
 
     executables_found = False
 
@@ -505,12 +620,12 @@ def run_executables(configuration):
 
     if test_exec.exists():
         executables_found = True
-        print(f"{GREEN}Running example executable (simple_test)...{RESET}")
+        print(f"{GREEN}Running diagnostics executable (test_diagnostics)...{RESET}")
         print(f"{CYAN}========================================={RESET}")
         subprocess.run(str(test_exec))
         print()
     else:
-        print(f"{YELLOW}WARNING: simple_test executable not found (skipping){RESET}")
+        print(f"{YELLOW}WARNING: test_diagnostics executable not found (skipping){RESET}")
         print()
 
     # Launch Python GUI (cgroot_gui is no longer a C++ executable but handled via Python)
@@ -568,18 +683,51 @@ def build_and_run(cmake_path, config, compiler_name):
 
     log(f"Starting Build and Run {config}")
 
-    if build_dir.exists():
-         clean_build_dir()
     
+    # Smart clean logic
+    generator_name = "Visual Studio 16 2019"
+    use_ninja = False
+    
+    ninja_path = find_ninja_tool()
+    if get_os_type() == "windows" and ninja_path:
+        use_ninja = True
+        generator_name = "Ninja"
+
+    current_gen = get_current_generator()
+    if current_gen and current_gen != generator_name:
+         print(f"{YELLOW}Generator changed. Cleaning build dir...{RESET}")
+         clean_build_dir()
 
     os_type = get_os_type()
     if os_type == "windows":
-        generator = "Visual Studio 16 2019"
-        cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
-        cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
+        if use_ninja:
+            print(f"{GREEN}Using Ninja build system: {ninja_path}{RESET}")
+            cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "Ninja" -DCMAKE_MAKE_PROGRAM="{ninja_path}" -DCMAKE_BUILD_TYPE={config} -S .'
+            
+             # Source vcvars64.bat for Ninja
+            vcvars = find_vcvars_bat()
+            if vcvars:
+                print(f"{BLUE}Sourcing vcvars: {vcvars}{RESET}")
+                cmd_configure = f'"{vcvars}" && {cmd_configure}'
+                
+            # Note: build_and_run runs configure then build, but locally wraps calls. 
+            # Wait, run_command takes shell=True so wrapping works.
+            # But here cmd_build is passed to run_command later. So wrap it too.
+            cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
+            if vcvars:
+                 cmd_build = f'"{vcvars}" && {cmd_build}'
+
+        else:
+            generator = "Visual Studio 16 2019"
+            cmd_configure = f'"{cmake_path}" -B "{build_dir}" -G "{generator}" -A x64 -S .'
+            cmd_build = f'"{cmake_path}" --build "{build_dir}" --config {config}'
     else:
-        generator = "Unix Makefiles"
-        cmd_configure = f'cmake -B "{build_dir}" -G "{generator}"'
+        if shutil.which("ninja"):
+             generator = "Ninja"
+             cmd_configure = f'cmake -B "{build_dir}" -G "{generator}" -DCMAKE_BUILD_TYPE={config}'
+        else:
+             generator = "Unix Makefiles"
+             cmd_configure = f'cmake -B "{build_dir}" -G "{generator}" -DCMAKE_BUILD_TYPE={config}'
         cmd_build = f'cmake --build "{build_dir}" --config {config}'
 
     print(f"{BLUE}Configuring project with {compiler_name}...{RESET}")
@@ -629,26 +777,33 @@ def show_status(compiler_name):
         os_type = get_os_type()
         ext = ".exe" if os_type == "windows" else ""
         for cfg in ['Debug', 'Release']:
-            debug_cgrunner = build_dir / f"bin/{cfg}/cgrunner{ext}"
-            debug_simple = build_dir / f"bin/{cfg}/simple_test{ext}"
-            debug_gui = build_dir / f"bin/{cfg}/cgroot_gui{ext}"
-            for exe, name in [(debug_cgrunner, f"{cfg}/cgrunner{ext}"), 
-                              (debug_simple, f"{cfg}/simple_test{ext}"),
-                              (debug_gui, f"{cfg}/cgroot_gui{ext}")]:
-                exe_path = build_dir / "bin" / name
-                if "cgroot_gui" in name:
-                    status = "EXISTS" if exe.exists() else "MISSING (Qt6?)"
-                    color = GREEN if exe.exists() else YELLOW
-                else:
-                    status = "EXISTS" if exe.exists() else "MISSING"
-                    color = GREEN if exe.exists() else RED
-                print(f"{color}[{status}]{RESET} {exe_path}")
+            print(f"  Configuration: {cfg}")
+            
+            # Helper to check paths
+            def check_exe(name):
+                # VS style
+                p1 = build_dir / f"bin/{cfg}/{name}{ext}"
+                # Ninja style (usually no config subdir for single-config generator, but we'll check root bin)
+                p2 = build_dir / f"bin/{name}{ext}"
+                
+                if p1.exists(): return p1, True
+                # Only check p2 if we are strictly in that mode? confusing for status.
+                # Just check if p1 exists. If not, check p2 ONLY if cfg matches cmake_build_type?
+                # For simplicity, check both and report found one.
+                if p2.exists(): return p2, True
+                return p1, False
+
+            for name in ["cgrunner", "test_diagnostics", "cgroot_gui"]:
+                path, exists = check_exe(name)
+                status_str = "EXISTS" if exists else "MISSING"
+                color = GREEN if exists else (YELLOW if "gui" in name else RED)
+                print(f"    {color}[{status_str}]{RESET} {name}")
     else:
         print(f"{RED}[MISSING]{RESET} {build_dir}")
 
     print()
     print(f"{BLUE}Source Files:{RESET}")
-    for f in ["src/main.cpp", "src/examples/simple_test.cpp"]:
+    for f in ["src/main.cpp", "tests/test_diagnostics.cpp"]:
         file_path = project_root / f
         if file_path.exists():
             print(f"{GREEN}[EXISTS]{RESET} {f}")
@@ -721,7 +876,7 @@ def run_tests():
     test_found = False
 
     debug_main = build_dir / f"bin/Debug/cgrunner{ext}"
-    debug_test = build_dir / f"bin/Debug/simple_test{ext}"
+    debug_test = build_dir / f"bin/Debug/test_diagnostics{ext}"
     debug_gui = build_dir / f"bin/Debug/cgroot_gui{ext}"
 
     if debug_main.exists():
@@ -733,7 +888,7 @@ def run_tests():
 
     if debug_test.exists():
         test_found = True
-        print(f"{GREEN}Running simple test executable...{RESET}")
+        print(f"{GREEN}Running diagnostics test executable...{RESET}")
         print(f"{CYAN}========================================={RESET}")
         subprocess.run(str(debug_test))
         print()
@@ -925,6 +1080,31 @@ def main_menu(cmake_cmd, compiler_name):
             print(f"{RED}Invalid choice! Please try again.{RESET}")
             pause()
 
+def run_tests_only(config):
+    # Only run test_diagnostics
+    os_type = get_os_type()
+    ext = ".exe" if os_type == "windows" else ""
+    
+    # Try to find test executable
+    candidates = [
+        build_dir / "bin" / config / f"test_diagnostics{ext}",
+        build_dir / "bin" / f"test_diagnostics{ext}"
+    ]
+    
+    test_exec = None
+    for c in candidates:
+        if c.exists():
+            test_exec = c
+            break
+            
+    if test_exec:
+        print(f"{GREEN}Running diagnostics executable (test_diagnostics)...{RESET}")
+        print(f"{CYAN}========================================={RESET}")
+        subprocess.run(str(test_exec))
+    else:
+         print(f"{RED}ERROR: test_diagnostics executable not found.{RESET}")
+         print(f"Please build the project first using --build.")
+
 def main():
     while True:
         available = detect_compilers()
@@ -948,4 +1128,7 @@ def main():
             break
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        run_tests_only("Release")
+    else:
+        main()

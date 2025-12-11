@@ -1,65 +1,119 @@
 #include "optimizer.h"
+#include "../definitions.h"
+#include <cmath> // For sqrt, pow
 #include <iostream>
-#include <cmath>      // For sqrt, pow
 
 // Optimizer Base
-
-Optimizer::Optimizer(double lr) : learning_rate(lr) {}
+Optimizer::Optimizer(double lr, double wd)
+    : learning_rate(lr), weight_decay(wd) {}
 
 // SGD Implementation
+SGD::SGD(double lr, double mom, double wd) : Optimizer(lr, wd), momentum(mom) {}
 
-SGD::SGD(double lr) : Optimizer(lr) {}
-
-void SGD::update(std::vector<double>& weights, const std::vector<double>& grads) {
-    if (weights.size() != grads.size()) {
-    std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size() 
+void SGD::update(std::vector<double> &weights,
+                 const std::vector<double> &grads) {
+#ifndef NDEBUG
+  if (weights.size() != grads.size()) {
+    std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size()
               << " Grads: " << grads.size() << std::endl;
     return;
-}
-    for (size_t i = 0; i < weights.size(); ++i) {
-        weights[i] -= learning_rate * grads[i];
-    }
+  }
+#endif
+
+  // Initialize velocity vector if empty (first update)
+  if (v.empty()) {
+    v.resize(weights.size(), 0.0);
+  }
+
+  for (size_t i = 0; i < weights.size(); ++i) {
+    // Apply Weight Decay (L2 Regularization): grad = grad + wd * weight
+    double g = grads[i] + weight_decay * weights[i];
+
+    // Apply Momentum: v = v * momentum + g
+    v[i] = momentum * v[i] + g;
+    weights[i] -= learning_rate * v[i];
+  }
 }
 
 // Adam Implementation
+Adam::Adam(double lr, double b1, double b2, double eps, double wd)
+    : Optimizer(lr, wd), beta1(b1), beta2(b2), epsilon(eps), t(0) {}
 
-Adam::Adam(double lr, double b1, double b2, double eps)
-    : Optimizer(lr), beta1(b1), beta2(b2), epsilon(eps), t(0) {}
-
-void Adam::update(std::vector<double>& weights, const std::vector<double>& grads) {
-    if (weights.size() != grads.size()) {
-    std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size() 
+void Adam::update(std::vector<double> &weights,
+                  const std::vector<double> &grads) {
+#ifndef NDEBUG
+  if (weights.size() != grads.size()) {
+    std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size()
               << " Grads: " << grads.size() << std::endl;
     return;
-    }
+  }
+#endif
 
-    // Initialize memory vectors on the very first update
-    if (m.empty()) {
-        m.resize(weights.size(), 0.0);
-        v.resize(weights.size(), 0.0);
-    }
+  if (m.empty()) {
+    m.resize(weights.size(), 0.0);
+    v.resize(weights.size(), 0.0);
+  }
 
-    // Increment time step (needed for bias correction)
-    t++;
+  t++;
 
-    for (size_t i = 0; i < weights.size(); ++i) {
-        double g = grads[i];
+  for (size_t i = 0; i < weights.size(); ++i) {
+    // Apply Weight Decay
+    double g = grads[i] + weight_decay * weights[i];
 
-        // 1. Update Momentum (First Moment)
-        // m = beta1 * m + (1 - beta1) * g
-        m[i] = beta1 * m[i] + (1.0 - beta1) * g;
+    m[i] = beta1 * m[i] + (1.0 - beta1) * g;
+    v[i] = beta2 * v[i] + (1.0 - beta2) * (g * g);
 
-        // 2. Update RMSprop/Variance (Second Moment)
-        // v = beta2 * v + (1 - beta2) * g^2
-        v[i] = beta2 * v[i] + (1.0 - beta2) * (g * g);
+    double m_hat = m[i] / (1.0 - std::pow(beta1, t));
+    double v_hat = v[i] / (1.0 - std::pow(beta2, t));
 
-        // 3. Bias Correction
-        // (Fixes the issue where m and v start at 0 and are too small initially)
-        double m_hat = m[i] / (1.0 - std::pow(beta1, t));
-        double v_hat = v[i] / (1.0 - std::pow(beta2, t));
+    weights[i] -= learning_rate * (m_hat / (std::sqrt(v_hat) + epsilon));
+  }
+}
 
-        // 4. Update Parameters
-        // w = w - lr * ( m_hat / (sqrt(v_hat) + epsilon) )
-        weights[i] -= learning_rate * (m_hat / (std::sqrt(v_hat) + epsilon));
-    }
+// RMSprop Implementation
+RMSprop::RMSprop(double lr, double b, double eps, double wd)
+    : Optimizer(lr, wd), beta(b), epsilon(eps) {}
+
+void RMSprop::update(std::vector<double> &weights,
+                     const std::vector<double> &grads) {
+#ifndef NDEBUG
+  if (weights.size() != grads.size()) {
+    std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size()
+              << " Grads: " << grads.size() << std::endl;
+    return;
+  }
+#endif
+
+  if (s.empty()) {
+    s.resize(weights.size(), 0.0);
+  }
+
+  for (size_t i = 0; i < weights.size(); ++i) {
+    // Apply Weight Decay
+    double g = grads[i] + weight_decay * weights[i];
+
+    // s = beta * s + (1 - beta) * g^2
+    s[i] = beta * s[i] + (1.0 - beta) * (g * g);
+
+    // w = w - lr * g / sqrt(s + eps)
+    weights[i] -= learning_rate * g / (std::sqrt(s[i]) + epsilon);
+  }
+}
+
+// Factory Implementation
+// Note: Using integer comparison to avoid name collision between enum values
+// (Adam, RMSprop, SGD) and class names (Adam, RMSprop, SGD). Enum order: SGD=0,
+// Adam=1, RMSprop=2
+Optimizer *createOptimizer(const OptimizerConfig &config) {
+  int type_val = static_cast<int>(config.type);
+  if (type_val == 1) { // Adam
+    return new class Adam(config.learningRate, config.beta1, config.beta2,
+                          config.epsilon, config.weightDecay);
+  } else if (type_val == 2) { // RMSprop
+    return new class RMSprop(config.learningRate, config.beta1, config.epsilon,
+                             config.weightDecay);
+  } else { // SGD (0) or default
+    return new class SGD(config.learningRate, config.momentum,
+                         config.weightDecay);
+  }
 }

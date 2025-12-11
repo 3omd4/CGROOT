@@ -142,6 +142,7 @@ class MainWindow(QMainWindow):
         self.controller.metricsUpdated.connect(self.update_metrics)
         self.controller.trainingFinished.connect(self.training_finished)
         self.controller.imagePredicted.connect(self.inference_tab.displayPrediction)
+        self.controller.imagePredicted.connect(self.training_tab.display_image)
         
         # Widget -> Controller/MainWindow
         self.training_tab.startTrainingRequested.connect(self.start_training)

@@ -1,7 +1,9 @@
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
-from PyQt6.QtGui import QImage, qGray
+from PyQt6.QtGui import QImage, qGray, qRgb
 import sys
 import time
+import random
+import math
 
 try:
     import cgroot_core
@@ -10,7 +12,7 @@ except ImportError:
 
 class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
-    metricsUpdated = pyqtSignal(float, float, int)
+    metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
     progressUpdated = pyqtSignal(int, int)
     imagePredicted = pyqtSignal(int, object, list) # int, QImage, list of floats
     trainingFinished = pyqtSignal()
@@ -31,12 +33,6 @@ class ModelWorker(QObject):
             
         self.logMessage.emit(f"Loading dataset from: {images_path}")
         try:
-            # We assume bindings provide a way to load data, or we implement basic loader in python
-            # if the C++ one is too complex to bind directly with unique_ptrs across boundary without careful work.
-            # But we bound MNISTLoader.load_training_data
-            
-            # Note: unique_ptr binding in pybind11 usually transfers ownership or keeps it managed.
-            # Let's assume we get a reference or an object.
             self.dataset = cgroot_core.MNISTLoader.load_training_data(images_path, labels_path)
             
             if self.dataset:
@@ -45,6 +41,34 @@ class ModelWorker(QObject):
                 self.logMessage.emit("Failed to load dataset")
         except Exception as e:
             self.logMessage.emit(f"Exception loading dataset: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _convert_mnist_to_image_format(self, flat_pixels, height=28, width=28):
+        """Convert flat MNIST pixel array to [depth][height][width] format"""
+        image_data = [[]]  # Single depth channel
+        for y in range(height):
+            row = []
+            for x in range(width):
+                idx = y * width + x
+                if idx < len(flat_pixels):
+                    row.append(int(flat_pixels[idx]))
+                else:
+                    row.append(0)
+            image_data[0].append(row)
+        return image_data
+
+    def _calculate_loss_from_probs(self, probs, true_label):
+        """Calculate cross-entropy loss from probabilities"""
+        if not probs or len(probs) == 0:
+            return 1.0
+        
+        # Cross-entropy loss: -log(p_true)
+        true_prob = probs[true_label] if true_label < len(probs) else 0.0
+        # Add small epsilon to avoid log(0)
+        true_prob = max(true_prob, 1e-10)
+        loss = -math.log(true_prob)
+        return loss
 
     @pyqtSlot(dict)
     def trainModel(self, config):
@@ -59,10 +83,11 @@ class ModelWorker(QObject):
         self.modelStatusChanged.emit(True)
         
         try:
-            # Initialize model if not exists or force re-init
-            if not self.model: # or True if we want to reset
+            # Initialize model if not exists
+            if not self.model:
                 self.logMessage.emit("Initializing NNModel with Config...")
                 arch = cgroot_core.architecture()
+                
                 # Clear vectors to ensure clean state
                 arch.kernelsPerconvLayers = []
                 arch.neuronsPerFCLayer = []
@@ -81,8 +106,6 @@ class ModelWorker(QObject):
                 neurons_list = config.get('neurons_per_fc_layer', [128, 10])
                 
                 # Sanity check: Ensure neurons list length matches num_fc_layers
-                # If mismatch, pad or truncate. 
-                # Better approach: Adjust num_fc_layers to match list if list is explicit.
                 if len(neurons_list) != num_fc_layers:
                     self.logMessage.emit(f"Warning: Neurons list length ({len(neurons_list)}) does not match FC Layers count ({num_fc_layers}). Using list length.")
                     num_fc_layers = len(neurons_list)
@@ -90,10 +113,10 @@ class ModelWorker(QObject):
                 arch.numOfFCLayers = num_fc_layers
                 arch.neuronsPerFCLayer = neurons_list
                 
-                # Default activations and init functions for now (can expand config later)
-                # We need one per layer
-                arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * (num_fc_layers - 1) + [cgroot_core.activationFunction.Softmax]
-                arch.FCInitFunctionsType = [cgroot_core.initFunctions.Kaiming] * (num_fc_layers - 1) + [cgroot_core.initFunctions.Xavier]
+                # Default activations and init functions
+                # All FC layers use ReLU except output uses Softmax (handled by output layer)
+                arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * num_fc_layers
+                arch.FCInitFunctionsType = [cgroot_core.initFunctions.Xavier] * num_fc_layers
                 
                 arch.distType = cgroot_core.distributionType.normalDistribution
                 
@@ -101,53 +124,172 @@ class ModelWorker(QObject):
                 img_h = config.get('image_height', 28)
                 img_w = config.get('image_width', 28)
                 
-                self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
-                self.logMessage.emit(f"Model initialized (MLP: Input->{neurons_list})")
+                # Optimizer Config
+                opt_type_str = config.get('optimizer', 'Adam')
+                lr = config.get('learning_rate', 0.001)
+                wd = config.get('weight_decay', 0.0001)
+                mom = config.get('momentum', 0.9)
+                
+                # Setup OptimizerConfig
+                arch.optConfig.learningRate = lr
+                arch.optConfig.weightDecay = wd
+                arch.optConfig.momentum = mom
+                arch.optConfig.beta1 = 0.9
+                arch.optConfig.beta2 = 0.999
+                arch.optConfig.epsilon = 1e-8
+                
+                if opt_type_str == "Adam":
+                    arch.optConfig.type = cgroot_core.OptimizerType.Adam
+                elif opt_type_str == "RMSprop" or opt_type_str == "RMSProp":
+                    arch.optConfig.type = cgroot_core.OptimizerType.RMSprop
+                else:
+                    arch.optConfig.type = cgroot_core.OptimizerType.SGD
 
-            # Real Training Loop
+                # Set legacy learningRate for compatibility
+                arch.learningRate = lr
+
+                self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
+                self.logMessage.emit(f"Model initialized (MLP: Input->{neurons_list}) with {opt_type_str}, LR={lr}")
+
+            # Training Loop
             num_images = self.dataset.num_images
             total_epochs = epochs
+            batch_size = config.get('batch_size', 32)
+            validation_split = config.get('validation_split', 0.2)
+            use_validation = config.get('use_validation', True)
+            
+            # Split dataset if validation is enabled
+            if use_validation and validation_split > 0:
+                val_size = int(num_images * validation_split)
+                train_size = num_images - val_size
+                self.logMessage.emit(f"Using {train_size} training samples, {val_size} validation samples")
+            else:
+                train_size = num_images
+                val_size = 0
             
             for epoch in range(total_epochs):
-                if self.should_stop: break
+                if self.should_stop: 
+                    break
                 
                 self.logMessage.emit(f"Epoch {epoch+1}/{total_epochs}")
                 
-                correct = 0
+                # Training phase
+                train_correct = 0
+                train_loss_sum = 0.0
+                train_samples = 0
                 
-                # Iterate over all images
-                images = self.dataset.images
-                for i in range(num_images):
-                    if self.should_stop: break
+                # Create indices and shuffle them
+                all_indices = list(range(num_images))
+                random.shuffle(all_indices)
+                
+                train_indices = all_indices[:train_size]
+                val_indices = all_indices[train_size:] if use_validation else []
+                
+                # Training loop
+                batch_images = []
+                batch_labels = []
+                
+                for i, idx in enumerate(train_indices):
+                    if self.should_stop: 
+                        break
                     
-                    img_obj = images[i]
+                    img_obj = self.dataset.images[idx]
                     flat = img_obj.pixels
                     
-                    rows = []
-                    for r in range(28):
-                        row = flat[r*28 : (r+1)*28]
-                        rows.append(row)
-                    
-                    image_data = [rows] 
+                    # Convert to proper image format [depth][height][width]
+                    image_data = self._convert_mnist_to_image_format(flat, 28, 28)
                     label = int(img_obj.label)
                     
-                    # Calculate Accuracy: Predict BEFORE training on this sample
-                    # (Online learning evaluation)
-                    pred = self.model.classify(image_data)
-                    if pred == label:
-                        correct += 1
+                    # Add to batch
+                    batch_images.append(image_data)
+                    batch_labels.append(label)
                     
-                    # Train
-                    self.model.train(image_data, label)
+                    # Train if batch full or last element
+                    if len(batch_images) >= batch_size or i == len(train_indices) - 1:
+                        if len(batch_images) > 0:
+                            if len(batch_images) > 1:
+                                self.model.train_batch(batch_images, batch_labels)
+                            else:
+                                self.model.train(batch_images[0], batch_labels[0])
+                            
+                            # Calculate accuracy and loss on this batch AFTER training
+                            for img, lbl in zip(batch_images, batch_labels):
+                                pred = self.model.classify(img)
+                                if pred == lbl:
+                                    train_correct += 1
+                                
+                                # Calculate loss from probabilities
+                                probs = self.model.getProbabilities()
+                                if probs:
+                                    train_loss_sum += self._calculate_loss_from_probs(probs, lbl)
+                                    train_samples += 1
+                            
+                            batch_images = []
+                            batch_labels = []
+                        
+                    # Progress update every 1000 samples
+                    if (i + 1) % 1000 == 0:
+                        QThread.msleep(1)  # Allow GUI to update
+                        progress = int((i + 1) / len(train_indices) * 100)
+                        self.progressUpdated.emit(progress, 100)
+                        
+                        # Visualization
+                        try:
+                            q_img = QImage(28, 28, QImage.Format.Format_Grayscale8)
+                            for y in range(28):
+                                for x in range(28):
+                                    val = flat[y*28 + x] if y*28 + x < len(flat) else 0
+                                    q_img.setPixel(x, y, qRgb(val, val, val))
+                            self.imagePredicted.emit(label, q_img, [])
+                        except Exception as e:
+                            pass  # Silently ignore visualization errors
+                
+                # Calculate training metrics
+                train_acc = train_correct / train_size if train_size > 0 else 0.0
+                train_loss = train_loss_sum / train_samples if train_samples > 0 else 1.0 - train_acc
+                
+                # Validation phase
+                val_acc = 0.0
+                val_loss = 0.0
+                if use_validation and len(val_indices) > 0:
+                    val_correct = 0
+                    val_loss_sum = 0.0
+                    val_samples = 0
                     
-                    if i % 100 == 0:
-                        QThread.msleep(1) 
+                    for idx in val_indices:
+                        if self.should_stop:
+                            break
+                        
+                        img_obj = self.dataset.images[idx]
+                        flat = img_obj.pixels
+                        image_data = self._convert_mnist_to_image_format(flat, 28, 28)
+                        label = int(img_obj.label)
+                        
+                        # Predict without training
+                        pred = self.model.classify(image_data)
+                        if pred == label:
+                            val_correct += 1
+                        
+                        # Calculate loss
+                        probs = self.model.getProbabilities()
+                        if probs:
+                            val_loss_sum += self._calculate_loss_from_probs(probs, label)
+                            val_samples += 1
+                    
+                    val_acc = val_correct / len(val_indices) if len(val_indices) > 0 else 0.0
+                    val_loss = val_loss_sum / val_samples if val_samples > 0 else 1.0 - val_acc
+                    
+                    # Use validation metrics for display
+                    current_acc = val_acc
+                    current_loss = val_loss
+                    self.logMessage.emit(f"Epoch {epoch+1} - Train: Acc={train_acc*100:.2f}%, Loss={train_loss:.4f} | Val: Acc={val_acc*100:.2f}%, Loss={val_loss:.4f}")
+                else:
+                    # Use training metrics
+                    current_acc = train_acc
+                    current_loss = train_loss
+                    self.logMessage.emit(f"Epoch {epoch+1} - Train: Acc={train_acc*100:.2f}%, Loss={train_loss:.4f}")
                 
-                # Calculate metrics
-                current_acc = correct / num_images if num_images > 0 else 0.0
-                # Proxy loss since C++ doesn't return it
-                current_loss = 1.0 - current_acc 
-                
+                # Emit metrics (use validation if available, otherwise training)
                 self.metricsUpdated.emit(current_loss, current_acc, epoch+1)
                 self.progressUpdated.emit(epoch+1, total_epochs)
                 
@@ -178,7 +320,6 @@ class ModelWorker(QObject):
         self.modelStatusChanged.emit(True)
         try:
             # Convert QImage to 3D vector [1][28][28]
-            # Ensure 28x28 grayscale
             img = qimage_obj.scaled(28, 28).convertToFormat(QImage.Format.Format_Grayscale8)
             
             width = img.width()
@@ -188,12 +329,11 @@ class ModelWorker(QObject):
             for y in range(height):
                 row = []
                 for x in range(width):
-                    # qGray returns 0-255 from QRgb
                     pixel_val = qGray(img.pixel(x, y))
                     row.append(pixel_val)
                 rows.append(row)
             
-            image_data = [rows] # Depth 1
+            image_data = [rows]  # Depth 1
             
             # Run Classification
             self.logMessage.emit("Running inference on image...")
@@ -203,11 +343,12 @@ class ModelWorker(QObject):
             
             # Get probabilities from model
             probs = self.model.getProbabilities()
-            if not probs:
+            if not probs or len(probs) == 0:
                 probs = [0.0] * 10
                 probs[predicted_class] = 1.0
             
-            self.logMessage.emit(f"Inference Confidence: {max(probs):.4f}")
+            confidence = max(probs) if probs else 0.0
+            self.logMessage.emit(f"Inference Confidence: {confidence:.4f}")
             
             self.imagePredicted.emit(predicted_class, qimage_obj, probs)
             

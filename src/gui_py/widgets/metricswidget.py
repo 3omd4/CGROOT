@@ -2,7 +2,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QSplitter, QGroupBox,
                              QGridLayout, QLabel)
 from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPainter, QColor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPainter, QColor, QFont, QPen
 
 class MetricsWidget(QWidget):
     def __init__(self, controller):
@@ -68,22 +69,38 @@ class MetricsWidget(QWidget):
         main_layout.addWidget(splitter)
         
     def setup_charts(self):
+        # Shared Fonts
+        title_font = QFont("Arial", 14, QFont.Weight.Bold)
+        axis_title_font = QFont("Arial", 10, QFont.Weight.Bold)
+        axis_label_font = QFont("Arial", 9)
+
         # Loss Chart
         self.loss_series = QLineSeries()
         self.loss_series.setName("Loss")
-        self.loss_series.setColor(QColor(255, 0, 0))
+        pen = QPen(QColor(255, 0, 0))
+        pen.setWidth(3)
+        self.loss_series.setPen(pen)
+        self.loss_series.setPointsVisible(True)
+        self.loss_series.setPointLabelsVisible(False)
         
         self.loss_chart = QChart()
         self.loss_chart.addSeries(self.loss_series)
         self.loss_chart.setTitle("Training Loss Over Time")
+        self.loss_chart.setTitleFont(title_font)
         self.loss_chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)
+        self.loss_chart.legend().setFont(axis_label_font)
+        self.loss_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
         
         self.loss_axis_x = QValueAxis()
         self.loss_axis_x.setTitleText("Epoch")
+        self.loss_axis_x.setTitleFont(axis_title_font)
+        self.loss_axis_x.setLabelsFont(axis_label_font)
         self.loss_axis_x.setLabelFormat("%d")
         
         self.loss_axis_y = QValueAxis()
         self.loss_axis_y.setTitleText("Loss")
+        self.loss_axis_y.setTitleFont(axis_title_font)
+        self.loss_axis_y.setLabelsFont(axis_label_font)
         self.loss_axis_y.setLabelFormat("%.4f")
         
         self.loss_chart.addAxis(self.loss_axis_x, Qt.AlignmentFlag.AlignBottom)
@@ -96,19 +113,29 @@ class MetricsWidget(QWidget):
         # Accuracy Chart
         self.acc_series = QLineSeries()
         self.acc_series.setName("Accuracy")
-        self.acc_series.setColor(QColor(0, 150, 0))
+        pen_acc = QPen(QColor(0, 150, 0))
+        pen_acc.setWidth(3)
+        self.acc_series.setPen(pen_acc)
+        self.acc_series.setPointsVisible(True)
         
         self.acc_chart = QChart()
         self.acc_chart.addSeries(self.acc_series)
         self.acc_chart.setTitle("Training Accuracy Over Time")
+        self.acc_chart.setTitleFont(title_font)
         self.acc_chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)
+        self.acc_chart.legend().setFont(axis_label_font)
+        self.acc_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
         
         self.acc_axis_x = QValueAxis()
         self.acc_axis_x.setTitleText("Epoch")
+        self.acc_axis_x.setTitleFont(axis_title_font)
+        self.acc_axis_x.setLabelsFont(axis_label_font)
         self.acc_axis_x.setLabelFormat("%d")
         
         self.acc_axis_y = QValueAxis()
         self.acc_axis_y.setTitleText("Accuracy")
+        self.acc_axis_y.setTitleFont(axis_title_font)
+        self.acc_axis_y.setLabelsFont(axis_label_font)
         self.acc_axis_y.setLabelFormat("%.2f")
         self.acc_axis_y.setRange(0.0, 1.0)
         

@@ -47,18 +47,22 @@ class ConfigurationWidget(QWidget):
         self.num_classes = QSpinBox()
         self.num_classes.setRange(2, 1000)
         self.num_classes.setValue(10)
+        self.num_classes.setToolTip("The number of distinct classes/categories in your dataset (e.g. 10 for MNIST).")
         
         self.image_width = QSpinBox()
         self.image_width.setRange(1, 1000)
         self.image_width.setValue(28)
+        self.image_width.setToolTip("Width of the input images in pixels.")
         
         self.image_height = QSpinBox()
         self.image_height.setRange(1, 1000)
         self.image_height.setValue(28)
+        self.image_height.setToolTip("Height of the input images in pixels.")
         
         self.num_layers = QSpinBox()
         self.num_layers.setRange(1, 100)
-        self.num_layers.setValue(3)
+        self.num_layers.setValue(2)
+        self.num_layers.setToolTip("Total number of layers in the custom model.")
         
         layout.addRow("Number of Classes:", self.num_classes)
         layout.addRow("Image Width:", self.image_width)
@@ -80,36 +84,45 @@ class ConfigurationWidget(QWidget):
         
         self.optimizer_combo = QComboBox()
         self.optimizer_combo.addItems(["SGD", "Adam", "RMSprop"])
+        self.optimizer_combo.setCurrentIndex(0) # Default to SGD
+        self.optimizer_combo.setToolTip("The optimization algorithm. 'Adam' is generally a good default choice.")
         
         self.learning_rate = QDoubleSpinBox()
         self.learning_rate.setRange(0.00001, 10.0)
-        self.learning_rate.setValue(0.001)
+        self.learning_rate.setValue(0.05)
         self.learning_rate.setDecimals(5)
+        self.learning_rate.setToolTip("Step size for the optimizer. Too high = divergent, too low = slow.")
         
         self.weight_decay = QDoubleSpinBox()
         self.weight_decay.setRange(0.0, 1.0)
-        self.weight_decay.setValue(0.0001)
+        self.weight_decay.setValue(0.0)
         self.weight_decay.setDecimals(5)
+        self.weight_decay.setToolTip("L2 Regularization term to prevent overfitting.")
         
         self.momentum = QDoubleSpinBox()
         self.momentum.setRange(0.0, 1.0)
         self.momentum.setValue(0.9)
         self.momentum.setDecimals(3)
+        self.momentum.setToolTip("Accelerates SGD in the relevant direction and dampens oscillations.")
         
         self.epochs = QSpinBox()
         self.epochs.setRange(1, 10000)
-        self.epochs.setValue(10)
+        self.epochs.setValue(5)
+        self.epochs.setToolTip("Number of full passes through the training dataset. More epochs = better accuracy but longer training.")
         
         self.batch_size = QSpinBox()
         self.batch_size.setRange(1, 10000)
-        self.batch_size.setValue(32)
+        self.batch_size.setValue(128)
+        self.batch_size.setToolTip("Number of training examples used in one iteration. Larger batches = more stable training.")
         
         self.use_validation = QCheckBox()
-        self.use_validation.setChecked(True)
+        self.use_validation.setChecked(False)
+        self.use_validation.setToolTip("If checked, a portion of training data is set aside to validate model performance.")
         
         self.validation_split = QDoubleSpinBox()
         self.validation_split.setRange(0.0, 0.5)
-        self.validation_split.setValue(0.2)
+        self.validation_split.setValue(0.0)
+        self.validation_split.setToolTip("Percentage of data to use for validation (0.2 = 20%).")
         
         layout.addRow("Optimizer:", self.optimizer_combo)
         layout.addRow("Learning Rate:", self.learning_rate)
@@ -140,6 +153,7 @@ class ConfigurationWidget(QWidget):
         self.num_conv_layers = QSpinBox()
         self.num_conv_layers.setRange(0, 5)
         self.num_conv_layers.setValue(0) # Default to 0
+        self.num_conv_layers.setToolTip("Number of Convolutional layers (if creating a custom CNN).")
         layout.addRow("Number of Conv Layers:", self.num_conv_layers)
         
         # FC Layers Config
@@ -148,8 +162,8 @@ class ConfigurationWidget(QWidget):
         self.num_fc_layers.setValue(2)
         layout.addRow("Number of FC Layers:", self.num_fc_layers)
         
-        self.neurons_fc_input = QLineEdit("128, 10")
-        self.neurons_fc_input.setPlaceholderText("comma separated, e.g. 128, 64, 10")
+        self.neurons_fc_input = QLineEdit("64, 10")
+        self.neurons_fc_input.setPlaceholderText("comma separated, e.g. 256, 128, 10")
         layout.addRow("Neurons per FC Layer:", self.neurons_fc_input)
         
         info_label = QLabel("Note: Ensure the last FC layer size matches the Number of Classes.")
@@ -191,14 +205,18 @@ class ConfigurationWidget(QWidget):
         self.image_height.setValue(28)
         self.num_layers.setValue(3)
         
-        self.optimizer_combo.setCurrentIndex(0) # SGD
-        self.learning_rate.setValue(0.001)
-        self.weight_decay.setValue(0.0001)
+        self.optimizer_combo.setCurrentIndex(1) # Adam
+        self.learning_rate.setValue(0.001)  # Good default for Adam
+        self.weight_decay.setValue(0.0001)  # L2 regularization
         self.momentum.setValue(0.9)
-        self.epochs.setValue(10)
-        self.batch_size.setValue(32)
+        self.epochs.setValue(20)  # More epochs for better convergence
+        self.batch_size.setValue(64)  # Larger batch for stability
         self.use_validation.setChecked(True)
         self.validation_split.setValue(0.2)
+        
+        # Better default architecture for MNIST
+        self.num_fc_layers.setValue(2)
+        self.neurons_fc_input.setText("256, 10")  # Larger first layer
         
         self.on_parameter_changed()
 
@@ -219,5 +237,8 @@ class ConfigurationWidget(QWidget):
             'batch_size': self.batch_size.value(),
             'learning_rate': self.learning_rate.value(),
             'optimizer': self.optimizer_combo.currentText(),
-            'validation_split': self.validation_split.value()
+            'weight_decay': self.weight_decay.value(),
+            'momentum': self.momentum.value(),
+            'validation_split': self.validation_split.value(),
+            'use_validation': self.use_validation.isChecked()
         }

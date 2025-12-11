@@ -31,12 +31,23 @@ if(MSVC)
 
     # For no warnings
     add_compile_options(/w)
+
+    # Release optimizations
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(/O2 /Oi /Ot /GL /fp:fast /DNDEBUG /arch:AVX2)
+        add_link_options(/LTCG)
+    endif()
 else()
     # For full logs
     # add_compile_options(-Wall -Wextra -Wpedantic)
 
     # For no warnings
     add_compile_options(-w)
+
+    # Release optimizations for GCC/Clang
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(-O3 -ffast-math -finline-functions -DNDEBUG)
+    endif()
 endif()
 
 # Include directories
@@ -92,6 +103,44 @@ if(NOT Qt6_FOUND)
 else()
     message(STATUS "Qt6 found: ${Qt6_VERSION}")
 endif()
+
+# ---- Speed up build dramatically ----
+set(CMAKE_UNITY_BUILD ON)                # Combine source files into mega translation units
+set(CMAKE_UNITY_BUILD_BATCH_SIZE 16)
+
+if(MSVC)
+    if(NOT CMAKE_GENERATOR MATCHES "Ninja")
+        add_compile_options(/MP)  # Multi-core compilation (let Ninja handle parallel jobs if using Ninja)
+    endif()
+endif()
+
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    message(STATUS "Using ccache for fast rebuilds")
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
+# Reduce reconfigure time of FetchContent dependencies
+set(FETCHCONTENT_QUIET ON)
+set(FETCHCONTENT_FULLY_DISCONNECTED OFF)  # Set ON after first successful fetch
+
+# Avoid building pybind11 tests/docs/examples
+set(PYBIND11_TEST OFF CACHE BOOL "" FORCE)
+set(PYBIND11_INSTALL OFF CACHE BOOL "" FORCE)
+set(PYBIND11_FINDPYTHON ON CACHE BOOL "" FORCE)
+
+# Speed up Qt discovery
+set(QT_NO_CREATE_VERSIONLESS_FUNCTIONS ON)
+set(QT_NO_CREATE_TARGETS ON)
+set(QT_DEFAULT_MAJOR_VERSION 6)
+
+
+# Prevent CMake scanning .git folders (huge speed win)
+set(CMAKE_SUPPRESS_REGENERATION ON)
+file(GLOB_RECURSE GIT_DIRS "${PROJECT_SOURCE_DIR}/**/.git")
+set_property(SOURCE ${GIT_DIRS} PROPERTY HEADER_FILE_ONLY TRUE)
+
 
 # Add subdirectories
 add_subdirectory(src)
