@@ -34,7 +34,7 @@ if(MSVC)
 
     # Release optimizations
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        add_compile_options(/O2 /Oi /Ot /GL /fp:fast /DNDEBUG /arch:AVX2)
+        add_compile_options(/O2 /Oi /Ot /GL /Qpar-report:2 /fp:fast /DNDEBUG /openmp /arch:AVX2)
         add_link_options(/LTCG)
     endif()
 else()
@@ -46,7 +46,7 @@ else()
 
     # Release optimizations for GCC/Clang
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        add_compile_options(-O3 -ffast-math -finline-functions -DNDEBUG)
+        add_compile_options(-O3 -ffast-math -fopenmp -finline-functions -DNDEBUG)
     endif()
 endif()
 
