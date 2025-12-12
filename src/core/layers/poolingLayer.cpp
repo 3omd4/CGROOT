@@ -120,7 +120,7 @@ void poolingLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
   // Iterate over the Output Gradients (thisLayerGrad)
   // We map from Output -> Input
   #pragma omp parallel for
-  for (size_t d = 0; d < kernel_info.filter_depth; d++) {
+  for (int d = 0; d < kernel_info.filter_depth; d++) {
     
     // Iterators for the input layer (re-calculating position based on stride)
     size_t input_row = 0; 

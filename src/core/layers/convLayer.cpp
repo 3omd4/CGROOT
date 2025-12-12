@@ -134,9 +134,9 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
   // Apply Activation Derivative to incoming gradients
   // Mutates thisLayerGrad in place to become dZ
   #pragma omp parallel for collapse(3)
-  for (size_t d = 0; d < fm.FM_depth; d++) {
-    for (size_t h = 0; h < fm.FM_height; h++) {
-      for (size_t w = 0; w < fm.FM_width; w++) {
+  for (int d = 0; d < fm.FM_depth; d++) {
+    for (int h = 0; h < fm.FM_height; h++) {
+      for (int w = 0; w < fm.FM_width; w++) {
         double derivative = 0.0;
         // Use the output of this layer (featureMaps) to calculate derivative
         switch (act_Funct) {
@@ -206,9 +206,9 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
                                    vector<featureMapType> &thisLayerGrad) {
   // 2Apply Activation Derivative
 #pragma omp parallel for collapse(3)
-  for (size_t d = 0; d < fm.FM_depth; d++) {
-    for (size_t h = 0; h < fm.FM_height; h++) {
-      for (size_t w = 0; w < fm.FM_width; w++) {
+  for (int d = 0; d < fm.FM_depth; d++) {
+    for (int h = 0; h < fm.FM_height; h++) {
+      for (int w = 0; w < fm.FM_width; w++) {
         double derivative = 0.0;
         switch (act_Funct) {
         case RelU:
