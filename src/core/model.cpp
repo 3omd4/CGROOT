@@ -1,24 +1,22 @@
 #include "model.h"
 using namespace std;
 
-// the NNModel constructor
-// input:        -modelArch (contains all the necessary information about the
-// architecture of the model)
-//               -numOfClasses (the number of classes of the data set, used to
-//               construct the output layer) -imageheight -imageWidth
-//               -imageDepth
-// output:       N/A
-// side effect:  the model is constructed
-// Note:         -the constructor makes an array of the layers by making used of
-// class inheretence
-//               -specify the initialization function, type of distribution and
-//               the activation function of each layer (convolution or fully
-//               connected) -the height and width of the image is constant for a
-//               single model(object) and so is the architecture of a single
-//               model (object)
+//the NNModel constructor
+//input:        -modelArch (contains all the necessary information about the architecture of the model)
+//              -numOfClasses (the number of classes of the data set, used to construct the output layer)
+//              -imageheight
+//              -imageWidth
+//              -imageDepth
+//output:       N/A
+//side effect:  the model is constructed
+//Note:         -the constructor makes an array of the layers by making used of class inheretence
+//              -specify the initialization function, type of distribution and the activation function 
+//              of each layer (convolution or fully connected)
+//              -the height and width of the image is constant for a single model(object)
+//              and so is the architecture of a single model (object)
 NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                  size_t imageHeight, size_t imageWidth, size_t imageDepth)
-    : learningRate(modelArch.learningRate) {
+    : optimizer(createOptimizer(modelArch.optConfig)) {
   // construct the input layer
   Layers.emplace_back(new inputLayer(imageHeight, imageWidth, imageDepth));
 
@@ -50,8 +48,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
     // Create convolution layer
     Layers.emplace_back(new convLayer(
         modelArch.kernelsPerconvLayers[i], modelArch.convLayerActivationFunc[i],
-        modelArch.convInitFunctionsType[i], modelArch.distType, fmDim,
-        modelArch.optConfig));
+        modelArch.convInitFunctionsType[i], modelArch.distType, fmDim));
 
     // Update current dimensions
     currentHeight = fmDim.FM_height;
@@ -107,30 +104,27 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   for (size_t i = 0; i < modelArch.numOfFCLayers; i++) {
     Layers.emplace_back(new FullyConnected(
         modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
-        modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize,
-        modelArch.optConfig));
+        modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize));
 
     fcInputSize = modelArch.neuronsPerFCLayer[i];
   }
 
   // Create output layer
-  Layers.emplace_back(new outputLayer(numOfClasses, fcInputSize,
-                                      modelArch.distType, modelArch.optConfig));
+  Layers.emplace_back(new outputLayer(numOfClasses, fcInputSize,modelArch.distType));
+                                      
 }
 
-// NNModel constructor helper function:
-// calculates the dimension of the output feature map of each convolution
-// layer input:        -current layer kernel height (size_t kernelHeight)
-//               -current layer kernel width (size_t kernelWidth)
-//               -the input feature map height (size_t inputHeight)
-//               -the input feature map width (size_t inputWidth)
-// output:       -a featureMapDim struct that carries information about the
-// dimensions of the current
-//               output feature map (featureMapDim)
-// side effect:  N/A
-// Note:         the function also sets the data member featureMapDim.FM_depth
-// to 0, so it must
-//               setted later
+//NNModel constructor helper function:
+//calculates the dimension of the output feature map of each convolution layer
+//input:        -current layer kernel height (size_t kernelHeight)
+//              -current layer kernel width (size_t kernelWidth)
+//              -the input feature map height (size_t inputHeight)
+//              -the input feature map width (size_t inputWidth)
+//output:       -a featureMapDim struct that carries information about the dimensions of the current
+//              output feature map (featureMapDim)
+//side effect:  N/A
+//Note:         the function also sets the data member featureMapDim.FM_depth to 0, so it must 
+//              setted later
 featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight,
                                          size_t kernelWidth, size_t inputHeight,
                                          size_t inputWidth) {
@@ -224,21 +218,21 @@ void NNModel::train(const image &imgData, int trueOutput) {
   for (size_t i = Layers.size() - 1; i > 0; i--) {
     switch (Layers[i]->getLayerType()) {
     case output:
-      static_cast<outputLayer *>(Layers[i])->update();
+      static_cast<outputLayer *>(Layers[i])->update(optimizer);
       break;
     case fullyConnected:
-      static_cast<FullyConnected *>(Layers[i])->update();
+      static_cast<FullyConnected *>(Layers[i])->update(optimizer);
       break;
     }
   }
 }
 
-// train the model with a batch of images
-// input:        -data (a vector of images)
-//               -trueOutput (a vector of the true output values)
-// output:       N/A
-// side effect:  The model is trained by a batch of image and its paramters
-// are updated Note:         N/A
+//train the model with a batch of images
+//input:        -data (a vector of images)
+//              -trueOutput (a vector of the true output values)
+//output:       N/A
+//side effect:  The model is trained by a batch of image and its paramters are updated
+//Note:         N/A
 void NNModel::train_batch(const vector<image> &batchData,
                           const vector<int> &trueOutput) {
   for (size_t sample = 0; sample < batchData.size(); sample++) {
@@ -321,24 +315,23 @@ void NNModel::train_batch(const vector<image> &batchData,
   for (size_t i = Layers.size() - 1; i > 0; i--) {
     switch (Layers[i]->getLayerType()) {
     case output:
-      static_cast<outputLayer *>(Layers[i])->update_batch(
+      static_cast<outputLayer *>(Layers[i])->update_batch(optimizer,
           static_cast<int>(batchData.size()));
       break;
     case fullyConnected:
-      static_cast<FullyConnected *>(Layers[i])->update_batch(
+      static_cast<FullyConnected *>(Layers[i])->update_batch(optimizer,
           static_cast<int>(batchData.size()));
       break;
     }
   }
 }
 
-// classify the image by applying the forward propagation on the image
-// input:        data (the image)
-// output:       int (the class of the image)
-// side effect:  N/A
-// Note:         This function is either called directly to get the image
-// class
-//               or by the train fucntion to train the model
+//classify the image by applying the forward propagation on the image
+//input:        data (the image)
+//output:       int (the class of the image)
+//side effect:  N/A
+//Note:         This function is either called directly to get the image class
+//              or by the train fucntion to train the model 
 int NNModel::classify(const image &imgData) {
   // make the data ready to be processed by different layers
   static_cast<inputLayer *>(Layers[0])->start(imgData);

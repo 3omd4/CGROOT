@@ -46,6 +46,3 @@ vector<double> FlattenLayer::backwardProp(const vector<double> &outputError) {
   return outputError;
 }
 
-void FlattenLayer::applyOptimizer(Optimizer *opt) {
-  // Flatten layer has no weights, so do nothing.
-}

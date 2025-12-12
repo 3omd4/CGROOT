@@ -52,7 +52,7 @@ void test_fc_layer() {
   // 2 Neurons, 2 Inputs
   architecture dummyArch;
   dummyArch.optConfig.learningRate = 0.01;
-  FullyConnected fc(2, RelU, Xavier, normalDistribution, 2, dummyArch.optConfig);
+  FullyConnected fc(2, RelU, Xavier, normalDistribution, 2);
 
   vector<double> input = {1.0, 1.0};
   fc.forwardProp(input);
@@ -68,7 +68,7 @@ void test_fc_layer() {
   const vector<double> &prevGrad = fc.getPrevLayerGrad();
   run_test("FC PrevGrad Size", prevGrad.size() == 2);
 
-  fc.update();
+  fc.update(createOptimizer(dummyArch.optConfig));
   std::cout << "FC Update completed without crash." << std::endl;
 }
 
@@ -77,7 +77,7 @@ void test_output_layer() {
 
   architecture dummyArch;
   dummyArch.optConfig.learningRate = 0.01;
-  outputLayer outL(2, 2, normalDistribution, dummyArch.optConfig);
+  outputLayer outL(2, 2, normalDistribution);
 
   vector<double> input = {1.0, 1.0};
   outL.forwardProp(input);
@@ -89,7 +89,7 @@ void test_output_layer() {
   run_test("Softmax Sum", float_eq(out[0] + out[1], 1.0));
 
   outL.backwardProp(input, static_cast<size_t>(0));
-  outL.update();
+  outL.update(createOptimizer(dummyArch.optConfig));
   std::cout << "Output Layer update completed." << std::endl;
 }
 

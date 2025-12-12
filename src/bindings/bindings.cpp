@@ -14,9 +14,9 @@ namespace py = pybind11;
 
 void bind_definitions(py::module &m) {
   py::enum_<OptimizerType>(m, "OptimizerType")
-      .value("SGD", SGD)
-      .value("Adam", Adam)
-      .value("RMSprop", RMSprop);
+      .value("SGD", opt_SGD)
+      .value("Adam", opt_Adam)
+      .value("RMSprop", opt_RMSprop);
 
   py::enum_<distributionType>(m, "distributionType")
       .value("normalDistribution", normalDistribution)

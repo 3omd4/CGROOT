@@ -26,8 +26,8 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth,
 // the next layers
 // input:        -inputImage (3D unsigned char vector)
 // output:       N/A
-// side effect:  the normalizedImage matrix is initialzied by the image after
-// normalization Note:         N/A
+// side effect:  the normalizedImage matrix is initialzied by the image after normalization 
+// Note:         N/A
 void inputLayer::start(const image &inputImage) {
   // stor the inputImage in the normlized Image matrix
   for (size_t i = 0; i < normalizedImage.size(); i++) {
@@ -41,12 +41,3 @@ void inputLayer::start(const image &inputImage) {
   }
 }
 
-// vector<double> inputLayer::backwardProp(const vector<double>& outputError) {
-//     // Input layer has no preceding layers to propagate gradients to.
-//     // It returns an empty vector.
-//     return {};
-// }
-
-// void inputLayer::applyOptimizer(Optimizer* opt) {
-//     // Input layer has no trainable parameters, so do nothing.
-// }

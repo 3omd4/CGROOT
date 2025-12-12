@@ -1,5 +1,8 @@
+#include <iostream>
+
 #include "core/model.h"
-// #include <iostream>
+#include "core/utils/mnist_loader.h"
+
 
 
 int main() {
@@ -12,11 +15,19 @@ int main() {
   modelArch.FCLayerActivationFunc = {RelU, RelU};
   modelArch.FCInitFunctionsType = {Xavier, Xavier};
   modelArch.distType = normalDistribution;
-  modelArch.learningRate = 0.001;
   size_t numOfClasses = 10;
   size_t imageHeight = 28;
   size_t imageWidth = 28;
   size_t imageDepth = 1;
+
+  OptimizerConfig optConfig;
+
+  optConfig.type = opt_SGD;
+  optConfig.learningRate = 0.01;
+  optConfig.weightDecay = 0.0005;
+
+  Optimizer* opt = createOptimizer(optConfig);
+
   NNModel model(modelArch, numOfClasses, imageHeight, imageWidth, imageDepth);
 
   return 0;
