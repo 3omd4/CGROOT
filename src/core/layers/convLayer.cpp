@@ -193,9 +193,6 @@ void convLayer::forwardProp(vector<featureMapType>& inputFeatureMaps)
     }
 }
 
-convLayer::~convLayer() {
-
-  }
 
 
 void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
