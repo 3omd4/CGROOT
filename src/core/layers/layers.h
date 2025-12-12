@@ -391,7 +391,7 @@ public:
   // update the weights and biases of the output layer after a batch
   void update_batch(int numOfExamples);
 
-  void forwardProp(vector<double> &inputData);
+  void forwardProp(vector<double> &featureMaps);
 
   void backwardProp(vector<double> &inputData, size_t correctClass);
   void backwardProp_batch(vector<double> &inputData, size_t correctClass);
