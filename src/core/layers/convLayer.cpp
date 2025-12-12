@@ -201,6 +201,7 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
     }
 }
 
+
 void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
                                    vector<featureMapType> &thisLayerGrad) {
   // 2Apply Activation Derivative
