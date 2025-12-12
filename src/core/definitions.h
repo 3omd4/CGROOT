@@ -8,11 +8,11 @@ typedef vector<vector<vector<unsigned char>>> image;
 
 // the types of different optimizers
 enum OptimizerType {
-  SGD,
-  Adam,
-  RMSprop,
+  opt_SGD,
+  opt_SGD_Momentum,
+  opt_Adam,
+  opt_RMSprop,
 };
-
 // types of distribution to be used by all layers initializers
 enum distributionType {
   normalDistribution,
@@ -89,12 +89,11 @@ enum poolingLayerType {
 
 // Optimizer Configuration
 struct OptimizerConfig {
-  OptimizerType type = SGD;
+  OptimizerType type = opt_SGD; // Update default value
   double learningRate = 0.01;
-  double momentum = 0.0;    // For SGD
-  double weightDecay = 0.0; // For SGD/AdamW/RMSprop
+  double momentum = 0.0;    
+  double weightDecay = 0.0; 
 
-  // Adam / RMSprop specific
   double beta1 = 0.9;
   double beta2 = 0.999;
   double epsilon = 1e-8;

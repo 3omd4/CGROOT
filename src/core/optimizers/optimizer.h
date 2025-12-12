@@ -16,11 +16,23 @@ public:
 };
 
 class SGD : public Optimizer {
+public:
+    SGD(double lr, double wd = 0.0);
+
+    /** * Updates parameters using gradients.
+     * * NOTE: The behavior depends on the input 'grads':
+     * - If 'grads' is from 1 image -> Acts as SGD.
+     * - If 'grads' is average of all images -> Acts as Batch GD.
+     */
+    void update(std::vector<double>& weights, const std::vector<double>& grads) override;
+};
+
+class SGD_Momentum: public Optimizer {
 private:
   double momentum;
   std::vector<double> v; // Velocity for momentum
 public:
-  SGD(double lr, double mom = 0.0, double wd = 0.0);
+  SGD_Momentum(double lr, double mom = 0.0, double wd = 0.0);
 
   /** * Updates parameters using gradients.
    * * NOTE: The behavior depends on the input 'grads':
