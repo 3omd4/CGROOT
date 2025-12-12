@@ -12,6 +12,14 @@ FlattenLayer::FlattenLayer(size_t imageHeight, size_t imageWidth,
   // make the arrays that carries the flattened data comming from
   // the image or the last convolution layer
   flattened_Arr.assign(imageDepth * imageHeight * imageWidth, 0.0);
+
+  prevLayerGrad.resize(depth);
+  for (size_t i = 0; i < depth; i++) {
+    prevLayerGrad[i].resize(height);
+    for (size_t j = 0; j < height; j++) {
+      prevLayerGrad[i][j].assign(width, 0.0);
+    }
+  }
 }
 
 // flattens the incomming image or feature map
@@ -38,11 +46,27 @@ void FlattenLayer::flat(vector<convLayer::featureMapType> &featureMaps) {
   }
 }
 
-vector<double> FlattenLayer::backwardProp(const vector<double> &outputError) {
-  // For an MLP (Input -> Flatten -> FC), the Flatten layer just passes
-  // the error backwards.
-  // Ideally, this should reshape the 1D error back to 3D for Conv layers,
-  // but for now, passing it through is enough to compile.
-  return outputError;
+void FlattenLayer::forwardProp(vector<convLayer::featureMapType> &featureMaps){
+  flat(featureMaps);
+}
+
+void FlattenLayer::backwardProp(vector<double> &nextLayerGrad) {
+  // Just reshape the 1D gradient vector back to 3D
+  // No math logic (derivative is 1), just data movement.
+  
+  #pragma omp parallel for collapse(3)
+  for (size_t i = 0; i < depth; i++) {
+    for (size_t j = 0; j < height; j++) {
+      for (size_t k = 0; k < width; k++) {
+        // Retrieve from 1D using the same index formula
+        size_t index = i * (height * width) + j * width + k;
+        prevLayerGrad[i][j][k] = nextLayerGrad[index];
+      }
+    }
+  }
+}
+
+void FlattenLayer::backwardProp_batch(vector<double> &nextLayerGrad) {
+    backwardProp(nextLayerGrad);    // Same logic as single backwardProp because there are no weights to accumulate
 }
 
