@@ -93,14 +93,14 @@ public:
   typedef vector<vector<double>> featureMapType;
 
 private:
-  vector<kernelType> kernels; // Array of the layer kernels
+  vector<kernelType> kernels; // 4D: [Kernel][Depth][Row][Col]
+  vector<kernelType> d_kernels; // Gradients for weights
   convKernels kernel_info;    // number and dimensions of each kernel
   LayerType type = conv;      // layer type
 
-  vector<featureMapType>
-      featureMaps;  // array of the different layers of the feature map
+  vector<featureMapType>featureMaps;  // array of the different layers of the feature map
+  vector<featureMapType> prevLayerGrad; // Gradients to pass to previous layer
   featureMapDim fm; // dimesions of the feature map
-
   activationFunction act_Funct; // activation function type
 
 public:
@@ -118,21 +118,18 @@ public:
   // initialize a kernel
   kernelType initKernel(convKernels &kernelConfig, initFunctions initFunc,
                         distributionType distType);
-
+  
   // a set of getters to get the dimensions of the feature maps
   // mostly used in the model construction
-  size_t getFeatureMapHeight() const {
-    return fm.FM_height;
-  } // get the feature map height
-  size_t getFeatureMapWidth() const {
-    return fm.FM_width;
-  } // get the feature map width
-  size_t getFeatureMapDepth() const {
-    return fm.FM_depth;
-  } // get the feature map depth
+  size_t getFeatureMapHeight() const { return fm.FM_height; } 
+  size_t getFeatureMapWidth() const { return fm.FM_width; } 
+  size_t getFeatureMapDepth() const { return fm.FM_depth; }
 
   // get the type of the activation function
   activationFunction getActivationFunctionType() const { return act_Funct; }
+
+
+
 
   // do the convolution operation by sweeping the kernels through
   // the input feature map and putin the result in the (output) feature map
@@ -151,11 +148,23 @@ public:
   // values note:         N/A
   void forwardProp(vector<featureMapType> &inputFeatureMaps);
 
-  // get the output feature map
-  vector<featureMapType> &getFeatureMaps() { return featureMaps; }
+  // backward propagate the error
+  // input:                -inputFeatureMaps -thisLayerGrad
+  // output:               N/A
+  // side effect:          the prevLayerGrad is filled with the error to be propagated
+  // Note:                 This function works with SGD or for updating after a single
+  void backwardProp(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
+  
+  // backward propagate the error after a batch
+  // input:                -inputFeatureMaps -thisLayerGrad
+  // output:               N/A
+  // side effect:          the prevLayerGrad is filled with the error to be propagated
+  // Note:                 This function works with BGD or for updating after a whole batch
+  void backwardProp_batch(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
 
-  // get the layer type
-  LayerType getLayerType() override { return type; }
+  vector<featureMapType> &getFeatureMaps() { return featureMaps; } // get the output feature map
+  vector<featureMapType> &getPrevLayerGrad() { return prevLayerGrad; } // get the previous layer gradient
+  LayerType getLayerType() override { return type; }  // get the layer type
 };
 
 class poolingLayer : public Layer {
@@ -167,8 +176,8 @@ private:
   poolKernel kernel_info;   // dimensions of the kernel and number of strides
   LayerType type = pooling; // layer type
   poolingLayerType poolingType; // max or average
-  vector<featureMapType>
-      featureMaps;  // array of the different layers of the feature map
+  vector<featureMapType> featureMaps;  // array of the different layers of the feature map
+  vector<featureMapType> prevLayerGrad; // Gradients for previous layer
   featureMapDim fm; // dimesions of the feature map
 
 public:
@@ -191,6 +200,10 @@ public:
   // the pooling Note:                 N/A
   void forwardProp(vector<featureMapType> &inputFeatureMaps);
 
+  // Backward Propagation
+  void backwardProp(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
+  void backwardProp_batch(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
+
   // a set of getters to get the dimensions of the feature maps
   // mostly used in the model construction
   size_t getFeatureMapHeight() const {
@@ -205,6 +218,8 @@ public:
 
   // get the output feature map
   vector<featureMapType> &getFeatureMaps() { return featureMaps; }
+  // get the previous layer gradient
+  vector<featureMapType> &getPrevLayerGrad() { return prevLayerGrad; } 
   // get the layer type
   LayerType getLayerType() override { return type; }
 };
@@ -297,6 +312,8 @@ private:
                                 // flattened image or feature maps
   LayerType type = flatten;     // the type of the layer
 
+  size_t height, width, depth;  // dimensions of the input image or feature maps to return                           
+  vector<convLayer::featureMapType> prevLayerGrad; // Gradients for previous layer
 public:
   // the Flatten Layer constructor
   // input:        -imageHeight(or feature map height)
@@ -317,6 +334,9 @@ public:
     flat(featureMaps);
   }
 
+  void backwardProp(vector<double> &nextLayerGrad);
+  void backwardProp_batch(vector<double> &nextLayerGrad);
+
   // flattens the incomming image or feature map
   // input:        -feature map or image
   // output:       N/A
@@ -334,7 +354,8 @@ public:
   // get the layer type
   LayerType getLayerType() override { return type; }
 
-  vector<double> backwardProp(const vector<double> &outputError);
+  vector<convLayer::featureMapType> &getPrevLayerGrad() { return prevLayerGrad; }// get the previous layer gradient
+
   void applyOptimizer(Optimizer *opt);
 };
 

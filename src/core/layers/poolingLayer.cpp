@@ -109,3 +109,80 @@ void poolingLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
     out_FM_height_Iter = 0;
   }
 }
+
+void poolingLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
+                                vector<featureMapType> &thisLayerGrad) {
+  
+  // Reset Gradients to 0 (Critical for accumulation)
+  for(auto& map : prevLayerGrad) 
+      for(auto& row : map) fill(row.begin(), row.end(), 0.0);
+
+  // Iterate over the Output Gradients (thisLayerGrad)
+  // We map from Output -> Input
+  #pragma omp parallel for
+  for (size_t d = 0; d < kernel_info.filter_depth; d++) {
+    
+    // Iterators for the input layer (re-calculating position based on stride)
+    size_t input_row = 0; 
+    
+    for (size_t i = 0; i < thisLayerGrad[d].size(); i++) { // Output Rows
+      size_t input_col = 0;
+      
+      for (size_t j = 0; j < thisLayerGrad[d][i].size(); j++) { // Output Cols
+        
+        // Calculate the starting corner in the INPUT map
+        // This corresponds to the loop logic in forwardProp: i * stride
+        size_t start_r = i * kernel_info.stride;
+        size_t start_c = j * kernel_info.stride;
+
+        double currentGrad = thisLayerGrad[d][i][j];
+
+        if (poolingType == maxPooling) {
+          // MAX POOLING: Find the max index again and pass gradient only to it
+          double maxVal = -1e9; // Start very low
+          size_t max_r = start_r;
+          size_t max_c = start_c;
+          bool found = false;
+
+          for (size_t k1 = start_r; k1 < (start_r + kernel_info.filter_height); k1++) {
+            for (size_t k2 = start_c; k2 < (start_c + kernel_info.filter_width); k2++) {
+              // Boundary check
+              if (k1 < inputFeatureMaps[d].size() && k2 < inputFeatureMaps[d][k1].size()) {
+                if (inputFeatureMaps[d][k1][k2] > maxVal) {
+                  maxVal = inputFeatureMaps[d][k1][k2];
+                  max_r = k1;
+                  max_c = k2;
+                  found = true;
+                }
+              }
+            }
+          }
+          
+          if(found) {
+            #pragma omp atomic
+            prevLayerGrad[d][max_r][max_c] += currentGrad;
+          }
+
+        } else if (poolingType == averagePooling) {
+          // AVERAGE POOLING: Distribute gradient equally
+          double area = static_cast<double>(kernel_info.filter_height * kernel_info.filter_width);
+          double distributedGrad = currentGrad / area;
+
+          for (size_t k1 = start_r; k1 < (start_r + kernel_info.filter_height); k1++) {
+            for (size_t k2 = start_c; k2 < (start_c + kernel_info.filter_width); k2++) {
+               if (k1 < inputFeatureMaps[d].size() && k2 < inputFeatureMaps[d][k1].size()) {
+                  #pragma omp atomic
+                  prevLayerGrad[d][k1][k2] += distributedGrad;
+               }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void poolingLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
+                                      vector<featureMapType> &thisLayerGrad) {
+    backwardProp(inputFeatureMaps, thisLayerGrad);
+}
