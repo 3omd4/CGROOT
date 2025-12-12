@@ -55,9 +55,9 @@ void FlattenLayer::backwardProp(vector<double> &nextLayerGrad) {
   // No math logic (derivative is 1), just data movement.
   
   #pragma omp parallel for collapse(3)
-  for (size_t i = 0; i < depth; i++) {
-    for (size_t j = 0; j < height; j++) {
-      for (size_t k = 0; k < width; k++) {
+  for (int i = 0; i < depth; i++) {
+    for (int j = 0; j < height; j++) {
+      for (int k = 0; k < width; k++) {
         // Retrieve from 1D using the same index formula
         size_t index = i * (height * width) + j * width + k;
         prevLayerGrad[i][j][k] = nextLayerGrad[index];

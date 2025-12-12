@@ -339,9 +339,7 @@ public:
   // side effect:  flat funciton is called so the input layer is flattened
   //               and put inside flattened_Arr
   // Note:         N/A
-  void forwardProp(vector<convLayer::featureMapType> &featureMaps) {
-    flat(featureMaps);
-  }
+  void forwardProp(vector<convLayer::featureMapType> &featureMaps);
 
   void backwardProp(vector<double> &nextLayerGrad);
   void backwardProp_batch(vector<double> &nextLayerGrad);
