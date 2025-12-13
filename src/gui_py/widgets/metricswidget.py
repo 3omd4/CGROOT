@@ -162,10 +162,21 @@ class MetricsWidget(QWidget):
         self.best_loss = float('inf')
         self.best_accuracy = 0.0
         
-        # Reset axes
+        # Reset axes default (will be overridden by set_total_epochs)
         self.loss_axis_x.setRange(0, 10)
         self.loss_axis_y.setRange(0, 1)
         self.acc_axis_x.setRange(0, 10)
+
+    def set_total_epochs(self, total_epochs):
+        """Sets the X-axis range for charts to match the total number of epochs."""
+        # Ensure we have at least a small range so the chart isn't empty/broken
+        if total_epochs < 1:
+            total_epochs = 1
+            
+        self.loss_axis_x.setRange(0, total_epochs)
+        self.acc_axis_x.setRange(0, total_epochs)
+        # Assuming label format is integer, this helps tick count look nice if needed
+        # self.loss_axis_x.setTickCount(min(total_epochs + 1, 11)) 
 
     def updateMetrics(self, loss, accuracy, epoch):
         self.loss_series.append(epoch, loss)
@@ -185,7 +196,7 @@ class MetricsWidget(QWidget):
         self.best_loss_lbl.setText(f"Best Loss: {self.best_loss:.4f}")
         self.best_acc_lbl.setText(f"Best Accuracy: {self.best_accuracy*100:.2f}%")
         
-        # Rescale axes
+        # Rescale X axis if we exceed initial estimate (just in case)
         if epoch > self.loss_axis_x.max():
              self.loss_axis_x.setMax(epoch * 1.2)
              self.acc_axis_x.setMax(epoch * 1.2)

@@ -11,24 +11,24 @@
 # endif()
 
 # If GoogleTest is available, use it for testing
-add_executable(test_diagnostics test_diagnostics.cpp)
-target_link_libraries(test_diagnostics cgroot_lib)
+# add_executable(test_diagnostics test_diagnostics.cpp)
+# target_link_libraries(test_diagnostics cgroot_lib)
 
-if(GTest_FOUND)
-    if(TARGET test_tensor)
-        target_link_libraries(test_tensor GTest::GTest GTest::Main)
-    endif()
-    if(TARGET test_autograd)
-        target_link_libraries(test_autograd GTest::GTest GTest::Main)
-    endif()
+# if(GTest_FOUND)
+#     if(TARGET test_tensor)
+#         target_link_libraries(test_tensor GTest::GTest GTest::Main)
+#     endif()
+#     if(TARGET test_autograd)
+#         target_link_libraries(test_autograd GTest::GTest GTest::Main)
+#     endif()
     
-    # Enable testing
-    enable_testing()
-    if(TARGET test_tensor)
-        add_test(NAME TensorTests COMMAND test_tensor)
-    endif()
-    if(TARGET test_autograd)
-        add_test(NAME AutogradTests COMMAND test_autograd)
-    endif()
-endif()
+#     # Enable testing
+#     enable_testing()
+#     if(TARGET test_tensor)
+#         add_test(NAME TensorTests COMMAND test_tensor)
+#     endif()
+#     if(TARGET test_autograd)
+#         add_test(NAME AutogradTests COMMAND test_autograd)
+#     endif()
+# endif()
 

@@ -313,6 +313,42 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   }
 }
 
+// Helper function to calculate cross-entropy loss from probabilities
+static double calculate_loss_from_probs(const vector<double> &probs,
+                                        int true_label) {
+  if (probs.empty() || true_label >= static_cast<int>(probs.size())) {
+    return 1.0;
+  }
+
+  // Cross-entropy loss: -log(p_true)
+  double true_prob = probs[true_label];
+  // Add small epsilon to avoid log(0)
+  true_prob = std::max(true_prob, 1e-10);
+  double loss = -std::log(true_prob);
+  return loss;
+}
+
+// Helper function to convert MNIST flat pixels to image format
+// [depth][height][width]
+static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
+                                           size_t height = 28,
+                                           size_t width = 28) {
+  image image_data(1); // Single depth channel
+  for (size_t y = 0; y < height; y++) {
+    vector<unsigned char> row;
+    for (size_t x = 0; x < width; x++) {
+      size_t idx = y * width + x;
+      if (idx < flat_pixels.size()) {
+        row.push_back(static_cast<unsigned char>(flat_pixels[idx]));
+      } else {
+        row.push_back(0);
+      }
+    }
+    image_data[0].push_back(row);
+  }
+  return image_data;
+}
+
 // NNModel constructor helper function:
 // calculates the dimension of the output feature map of each convolution layer
 // input:        -current layer kernel height (size_t kernelHeight)
@@ -341,21 +377,25 @@ featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight,
 // output:       N/A
 // side effect:  The model is trained by a single image and its paramters
 // are updated Note:         N/A
-void NNModel::train(const image &imgData, int trueOutput) {
-  // store the last input image so classify() can use it
+// Updated train: Returns {loss, is_correct}
+std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
   this->data = imgData;
 
-  // forward propagation
-  classify(imgData);
+  // 1. Forward Pass
+  int predictedClass = classify(imgData);
 
-  // iterate over each layer to call the backward propagation functions
+  // 2. Calculate Metrics (Zero overhead: uses existing forward pass result)
+  int is_correct = (predictedClass == trueOutput) ? 1 : 0;
+  double loss = 0.0;
+  vector<double> probs = getProbabilities();
+  if (!probs.empty()) {
+    loss = calculate_loss_from_probs(probs, trueOutput);
+  }
+
+  // 3. Backward Prop
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    // see which layer this is
     switch (Layers[i]->getLayerType()) {
     case output:
-      // see which layer is before this layer
-      // for the output layer this can be either a fully connected or the
-      // flatten layer
       switch (Layers[i - 1]->getLayerType()) {
       case fullyConnected:
         static_cast<outputLayer *>(Layers[i])->backwardProp(
@@ -370,14 +410,8 @@ void NNModel::train(const image &imgData, int trueOutput) {
       }
       break;
     case fullyConnected:
-      // see which layer is before this layer
-      // for the fully connected layer this can be either another fully
-      // connected or the flatten layer
       switch (Layers[i - 1]->getLayerType()) {
       case fullyConnected:
-        // also to get the error gradients from the next layer a checking is
-        // needed the next layer for a fully connected layer is either
-        // another fully connected or the output layer
         switch (Layers[i + 1]->getLayerType()) {
         case output:
           static_cast<FullyConnected *>(Layers[i])->backwardProp(
@@ -392,9 +426,6 @@ void NNModel::train(const image &imgData, int trueOutput) {
         }
         break;
       case flatten:
-        // also to get the error gradients from the next layer a checking is
-        // needed the next layer for a fully connected layer is either
-        // another fully connected or the output layer
         switch (Layers[i + 1]->getLayerType()) {
         case output:
           static_cast<FullyConnected *>(Layers[i])->backwardProp(
@@ -413,7 +444,7 @@ void NNModel::train(const image &imgData, int trueOutput) {
     }
   }
 
-  // call the update functions of each layer
+  // 4. Update Weights
   for (size_t i = Layers.size() - 1; i > 0; i--) {
     switch (Layers[i]->getLayerType()) {
     case output:
@@ -424,6 +455,8 @@ void NNModel::train(const image &imgData, int trueOutput) {
       break;
     }
   }
+
+  return {loss, is_correct};
 }
 
 // train the model with a batch of images
@@ -432,29 +465,29 @@ void NNModel::train(const image &imgData, int trueOutput) {
 // output:       N/A
 // side effect:  The model is trained by a batch of image and its paramters are
 // updated Note:         N/A
-void NNModel::train_batch(const vector<image> &batchData,
-                          const vector<int> &trueOutput) {
-  // Parallelize batch processing - each thread processes one sample
-  // Note: REMOVED OpenMP here because classify() and backwardProp() use shared
-  // layer state (inputs/outputs). Parallel execution causes race conditions and
-  // garbage results.
+// Updated train_batch: Returns {total_loss, total_correct}
+std::pair<double, int> NNModel::train_batch(const vector<image> &batchData,
+                                            const vector<int> &trueOutput) {
+  double total_loss = 0.0;
+  int total_correct = 0;
+
   for (size_t sample = 0; sample < batchData.size(); sample++) {
-    // thread-local copy for this sample
-    // Note: forward/backward prop are already thread-safe in layer
-    // implementations
+    // 1. Forward Pass (Classify)
+    int predictedClass = classify(batchData[sample]);
 
-    // forward propagation
-    classify(batchData[sample]);
+    // 2. Accumulate Metrics immediately
+    if (predictedClass == trueOutput[sample]) {
+      total_correct++;
+    }
+    vector<double> probs = getProbabilities();
+    if (!probs.empty()) {
+      total_loss += calculate_loss_from_probs(probs, trueOutput[sample]);
+    }
 
-    // iterate over each layer to call the batch backward propagation
-    // functions
+    // 3. Backward Prop
     for (size_t i = Layers.size() - 1; i > 0; i--) {
-      // see which layer this is
       switch (Layers[i]->getLayerType()) {
       case output:
-        // see which layer is before this layer
-        // for the output layer this can be either a fully connected or the
-        // flatten layer
         switch (Layers[i - 1]->getLayerType()) {
         case fullyConnected:
           static_cast<outputLayer *>(Layers[i])->backwardProp_batch(
@@ -469,14 +502,8 @@ void NNModel::train_batch(const vector<image> &batchData,
         }
         break;
       case fullyConnected:
-        // see which layer is before this layer
-        // for the fully connected layer this can be either another fully
-        // connected or the flatten layer
         switch (Layers[i - 1]->getLayerType()) {
         case fullyConnected:
-          // also to get the error gradients from the next layer a checking
-          // is needed the next layer for a fully connected layer is either
-          // another fully connected or the output layer
           switch (Layers[i + 1]->getLayerType()) {
           case output:
             static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(
@@ -492,9 +519,6 @@ void NNModel::train_batch(const vector<image> &batchData,
           }
           break;
         case flatten:
-          // also to get the error gradients from the next layer a checking
-          // is needed the next layer for a fully connected layer is either
-          // another fully connected or the output layer
           switch (Layers[i + 1]->getLayerType()) {
           case output:
             static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(
@@ -515,7 +539,7 @@ void NNModel::train_batch(const vector<image> &batchData,
     }
   }
 
-  // call the update_batch functions of each layer
+  // 4. Update Weights
   for (size_t i = Layers.size() - 1; i > 0; i--) {
     switch (Layers[i]->getLayerType()) {
     case output:
@@ -528,6 +552,8 @@ void NNModel::train_batch(const vector<image> &batchData,
       break;
     }
   }
+
+  return {total_loss, total_correct};
 }
 
 // classify the image by applying the forward propagation on the image
@@ -634,42 +660,6 @@ vector<double> NNModel::getProbabilities() {
   return static_cast<outputLayer *>(Layers[Layers.size() - 1])->getOutput();
 }
 
-// Helper function to calculate cross-entropy loss from probabilities
-static double calculate_loss_from_probs(const vector<double> &probs,
-                                        int true_label) {
-  if (probs.empty() || true_label >= static_cast<int>(probs.size())) {
-    return 1.0;
-  }
-
-  // Cross-entropy loss: -log(p_true)
-  double true_prob = probs[true_label];
-  // Add small epsilon to avoid log(0)
-  true_prob = std::max(true_prob, 1e-10);
-  double loss = -std::log(true_prob);
-  return loss;
-}
-
-// Helper function to convert MNIST flat pixels to image format
-// [depth][height][width]
-static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
-                                           size_t height = 28,
-                                           size_t width = 28) {
-  image image_data(1); // Single depth channel
-  for (size_t y = 0; y < height; y++) {
-    vector<unsigned char> row;
-    for (size_t x = 0; x < width; x++) {
-      size_t idx = y * width + x;
-      if (idx < flat_pixels.size()) {
-        row.push_back(static_cast<unsigned char>(flat_pixels[idx]));
-      } else {
-        row.push_back(0);
-      }
-    }
-    image_data[0].push_back(row);
-  }
-  return image_data;
-}
-
 // Train the model for multiple epochs with dataset
 vector<TrainingMetrics> NNModel::train_epochs(
     const cgroot::data::MNISTLoader::MNISTDataset &dataset,
@@ -678,316 +668,168 @@ vector<TrainingMetrics> NNModel::train_epochs(
 
   vector<TrainingMetrics> history;
 
-  if (Layers.empty()) {
-    if (log_callback) {
-      log_callback("Error: Model is not initialized");
-    }
+  // ... [Keep your existing validation checks for Layers, output layer, etc.]
+  // ...
+  if (Layers.empty() || Layers.back()->getLayerType() != output)
     return history;
-  }
-
-  if (Layers.back()->getLayerType() != output) {
-    if (log_callback) {
-      log_callback("Error: Last layer is not an output layer");
-    }
-    return history;
-  }
-
-  // std::cout << "Model is initialized - starting training epochs" <<
-  // std::endl;
-
-  if (log_callback) {
-    log_callback("Model is initialized - starting training epochs");
-  }
 
   size_t num_images = dataset.num_images;
-  if (num_images == 0) {
-    if (log_callback) {
-      log_callback("Error: Dataset is empty");
-    }
+  if (num_images == 0)
     return history;
+
+  // =========================================================
+  // OPTIMIZATION 1: Cache Image Conversion
+  // =========================================================
+  if (log_callback)
+    log_callback("Caching " + std::to_string(num_images) + " images...");
+
+  vector<image> cached_images;
+  cached_images.reserve(num_images);
+
+  // Convert all images ONCE
+  for (const auto &img_obj : dataset.images) {
+    cached_images.push_back(
+        convert_mnist_to_image_format(img_obj.pixels, 28, 28));
   }
 
-  // Split dataset if validation is enabled
+  if (log_callback)
+    log_callback("Image caching complete. Starting training...");
+  // =========================================================
+
+  // Split logic
   size_t train_size = num_images;
   size_t val_size = 0;
-
   if (config.use_validation && config.validation_split > 0) {
     val_size = static_cast<size_t>(num_images * config.validation_split);
     train_size = num_images - val_size;
-
-    if (log_callback) {
-      log_callback("Using " + std::to_string(train_size) +
-                   " training samples, " + std::to_string(val_size) +
-                   " validation samples");
-    }
   }
 
-  // Training loop
   std::mt19937 rng(config.random_seed);
 
-  // std::cout << "Starting training epochs - random seed: " <<
-  // config.random_seed << std::endl;
-
-  if (log_callback) {
-    log_callback("Starting training epochs - random seed: " +
-                 std::to_string(config.random_seed));
-  }
-
   for (size_t epoch = 0; epoch < config.epochs; epoch++) {
-    // Check if training should stop before starting new epoch
-    if (stop_requested && stop_requested->load()) {
-      if (log_callback) {
-        log_callback("Training stopped by user request");
-      }
+    if (stop_requested && stop_requested->load())
       break;
-    }
+    if (log_callback)
+      log_callback("Epoch " + std::to_string(epoch + 1));
 
-    if (log_callback) {
-      log_callback("Epoch " + std::to_string(epoch + 1) + "/" +
-                   std::to_string(config.epochs));
-    }
-
-    // std::cout << "Epoch " << epoch + 1 << "/" << config.epochs << std::endl;
-
-    // Create and shuffle indices
+    // Shuffle indices
     vector<size_t> all_indices(num_images);
-    for (size_t i = 0; i < num_images; i++) {
+    for (size_t i = 0; i < num_images; i++)
       all_indices[i] = i;
-    }
-
-    // std::cout << "Shuffling indices" << std::endl;
-
-    if (config.shuffle) {
+    if (config.shuffle)
       std::shuffle(all_indices.begin(), all_indices.end(), rng);
-    }
 
-    // std::cout << "train indices size: " << train_size << std::endl;
-    // std::cout << "val indices size: " << val_size << std::endl;
-
-    // Split into train and validation indices
+    // Split
     vector<size_t> train_indices(all_indices.begin(),
                                  all_indices.begin() + train_size);
-
     vector<size_t> val_indices;
-
     if (config.use_validation && val_size > 0) {
       val_indices.assign(all_indices.begin() + train_size, all_indices.end());
     }
 
-    // std::cout << "train indices size (after split): " << train_indices.size()
-    // << std::endl; std::cout << "val indices size (after split): " <<
-    // val_indices.size() << std::endl;
-
-    // Training phase
+    // =========================================================
+    // OPTIMIZATION 2: Integrated Metrics (No redundant classify)
+    // =========================================================
     size_t train_correct = 0;
     double train_loss_sum = 0.0;
-    size_t train_samples = 0;
-
-    // PERFORMANCE OPTIMIZATION: Calculate metrics every N batches instead of
-    // every sample This reduces expensive classify() calls by ~100x
-    const size_t METRICS_UPDATE_INTERVAL = 100; // batches
-    const size_t PROGRESS_UPDATE_INTERVAL =
-        10; // Progress callback every 10 batches
-    size_t batch_count = 0;
-    size_t total_batches =
-        (train_indices.size() + config.batch_size - 1) / config.batch_size;
+    size_t train_samples = 0; // Tracks actual samples processed
 
     vector<image> batch_images;
     vector<int> batch_labels;
-
-    // std::cout << "start training" << std::endl;
+    batch_images.reserve(config.batch_size);
+    batch_labels.reserve(config.batch_size);
 
     for (size_t i = 0; i < train_indices.size(); i++) {
-      // STOP FLAG: Check periodically (every 100 samples) to allow interruption
-      if (stop_requested && (i % 100 == 0) && stop_requested->load()) {
-        if (log_callback) {
-          log_callback("Training interrupted by user");
-        }
-        goto epoch_end; // Break out of training loop cleanly
-      }
+      if (stop_requested && (i % 100 == 0) && stop_requested->load())
+        goto epoch_end;
 
       size_t idx = train_indices[i];
-      const auto &img_obj = dataset.images[idx];
 
-      // Convert to proper image format
-      image image_data = convert_mnist_to_image_format(img_obj.pixels, 28, 28);
-      int label = static_cast<int>(img_obj.label);
+      // USE CACHED IMAGES
+      batch_images.push_back(cached_images[idx]);
+      batch_labels.push_back(static_cast<int>(dataset.images[idx].label));
 
-      // Add to batch
-      batch_images.push_back(image_data);
-      batch_labels.push_back(label);
-
-      // // std::cout << "batch size: " << batch_images.size() << std::endl;
-
-      // Train if batch full or last element
+      // Train when batch full
       if (batch_images.size() >= config.batch_size ||
           i == train_indices.size() - 1) {
         if (!batch_images.empty()) {
-          // Train the batch
+
+          std::pair<double, int> result;
+
           if (batch_images.size() > 1) {
-            // std::cout << "training batch" << std::endl;
-            train_batch(batch_images, batch_labels);
+            result = train_batch(batch_images, batch_labels);
           } else {
-            // std::cout << "training single image" << std::endl;
-            train(batch_images[0], batch_labels[0]);
+            result = train(batch_images[0], batch_labels[0]);
           }
 
-          batch_count++;
+          // Accumulate metrics DIRECTLY from training step
+          train_loss_sum += result.first;
+          train_correct += result.second;
+          train_samples += batch_images.size();
 
-          // std::cout << "batch count: " << batch_count << std::endl;
-
-          // PERFORMANCE: Only calculate metrics periodically or on last batch
-          bool should_calculate_metrics =
-              (batch_count % METRICS_UPDATE_INTERVAL == 0) ||
-              (i == train_indices.size() - 1);
-
-          if (should_calculate_metrics) {
-            // Calculate metrics on a sample of recent batches (not all
-            // samples!) This gives us approximate accuracy without expensive
-            // per-sample classify()
-            size_t samples_to_check =
-                std::min(static_cast<size_t>(batch_images.size()),
-                         static_cast<size_t>(32) // Check at most 32 samples
-                );
-
-            // Parallelize metrics calculation across samples
-            int local_correct = 0;
-            double local_loss_sum = 0.0;
-
-            // Note: REMOVED OpenMP - classify() is not thread-safe due to
-            // shared layer state
-            for (size_t b = 0; b < samples_to_check; b++) {
-              int pred = classify(batch_images[b]);
-              if (pred == batch_labels[b]) {
-                local_correct++;
-              }
-
-              // Calculate loss from probabilities
-              vector<double> probs = getProbabilities();
-              if (!probs.empty()) {
-                local_loss_sum +=
-                    calculate_loss_from_probs(probs, batch_labels[b]);
-              }
-            }
-
-            // Update shared counters
-            train_correct += local_correct;
-            train_loss_sum += local_loss_sum;
-            train_samples += samples_to_check;
-          }
-
-          // PERFORMANCE: Batch progress callbacks to reduce Qt signal overhead
-          if (progress_callback &&
-              (batch_count % PROGRESS_UPDATE_INTERVAL == 0 ||
-               i == train_indices.size() - 1)) {
-            double current_acc =
-                train_samples > 0
-                    ? static_cast<double>(train_correct) / train_samples
-                    : 0.0;
-            double current_loss =
-                train_samples > 0 ? train_loss_sum / train_samples : 1.0;
-            progress_callback(epoch, config.epochs, current_loss, current_acc);
-          }
-
-          // Clear batch
           batch_images.clear();
           batch_labels.clear();
         }
       }
     }
 
-  epoch_end: // Label for goto when training interrupted
-    // std::cout << "training completed" << std::endl;
-
-    // Calculate training metrics
-    // BUGFIX: Divide by samples actually checked, not total train_size
-    // Since we sample metrics, accuracy is based on checked samples only
-    double train_acc = train_samples > 0
-                           ? static_cast<double>(train_correct) / train_samples
-                           : 0.0;
+  epoch_end:
+    // Calculate final metrics from accumulation
+    double train_acc =
+        train_samples > 0 ? (double)train_correct / train_samples : 0.0;
     double train_loss =
-        train_samples > 0 ? train_loss_sum / train_samples : 1.0;
+        train_samples > 0 ? train_loss_sum / train_samples : 0.0;
 
-    // std::cout << "training accuracy: " << train_acc << " (based on " <<
-    // train_samples << " sampled)" << std::endl; std::cout << "training loss: "
-    // << train_loss << std::endl;
-
-    // Validation phase
+    // Validation (Must still run classify here as this is unseen data)
     double val_acc = 0.0;
     double val_loss = 0.0;
+    size_t val_samples = 0;
 
     if (config.use_validation && !val_indices.empty()) {
       size_t val_correct = 0;
       double val_loss_sum = 0.0;
-      size_t val_samples = 0;
 
-      // std::cout << "validation started" << std::endl;
+      for (size_t idx : val_indices) {
+        // USE CACHED IMAGES
+        const image &image_data = cached_images[idx];
+        int label = static_cast<int>(dataset.images[idx].label);
 
-      // Parallelize validation loop - each thread processes validation samples
-      // independently Note: REMOVED OpenMP - classify() is not thread-safe
-      for (size_t v = 0; v < val_indices.size(); v++) {
-        size_t idx = val_indices[v];
-        const auto &img_obj = dataset.images[idx];
-        image image_data =
-            convert_mnist_to_image_format(img_obj.pixels, 28, 28);
-        int label = static_cast<int>(img_obj.label);
-
-        // Predict without training
         int pred = classify(image_data);
-        if (pred == label) {
+        if (pred == label)
           val_correct++;
-        }
 
-        // Calculate loss
         vector<double> probs = getProbabilities();
         if (!probs.empty()) {
           val_loss_sum += calculate_loss_from_probs(probs, label);
           val_samples++;
         }
       }
-
-      val_acc = !val_indices.empty()
-                    ? static_cast<double>(val_correct) / val_indices.size()
-                    : 0.0;
-      val_loss = val_samples > 0 ? val_loss_sum / val_samples : 1.0 - val_acc;
+      val_acc = (double)val_correct / val_indices.size();
+      val_loss = val_samples > 0 ? val_loss_sum / val_samples : 0.0;
     }
 
-    // std::cout << "validation completed" << std::endl;
-
-    // Store metrics
+    // Store & Log
     TrainingMetrics metrics;
-    metrics.epoch = static_cast<int>(epoch + 1);
+    metrics.epoch = epoch + 1;
     metrics.train_loss = train_loss;
     metrics.train_accuracy = train_acc;
     metrics.val_loss = val_loss;
     metrics.val_accuracy = val_acc;
     history.push_back(metrics);
 
-    // Log metrics
     if (log_callback) {
       std::ostringstream msg;
       msg << "Epoch " << (epoch + 1) << " - Train: Acc=" << std::fixed
-          << std::setprecision(2) << (train_acc * 100)
-          << "%, Loss=" << std::fixed << std::setprecision(4) << train_loss;
-
-      if (config.use_validation && val_size > 0) {
-        msg << " | Val: Acc=" << std::fixed << std::setprecision(2)
-            << (val_acc * 100) << "%, Loss=" << std::fixed
-            << std::setprecision(4) << val_loss;
-      }
-
+          << std::setprecision(2) << (train_acc * 100) << "%" << " | Train: Loss=" << std::fixed << std::setprecision(4) << train_loss;
+      if (config.use_validation)
+        msg << " | Val: Acc=" << (val_acc * 100) << "%" << " | Val: Loss=" << std::fixed << std::setprecision(4) << val_loss;
       log_callback(msg.str());
     }
 
-    // Progress callback
     if (progress_callback) {
-      double current_acc =
-          config.use_validation && val_size > 0 ? val_acc : train_acc;
-      double current_loss =
-          config.use_validation && val_size > 0 ? val_loss : train_loss;
-      progress_callback(static_cast<int>(epoch + 1),
-                        static_cast<int>(config.epochs), current_loss,
-                        current_acc);
+      progress_callback(epoch + 1, config.epochs,
+                        config.use_validation ? val_loss : train_loss,
+                        config.use_validation ? val_acc : train_acc);
     }
   }
 

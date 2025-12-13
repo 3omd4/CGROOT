@@ -144,9 +144,10 @@ public:
   // output:       N/A
   // side effect:  The model is trained by a single image and its paramters are
   // updated Note:         N/A
-  void train(const image &data, int trueOutput);
+  std::pair<double, int> train(const image &data, int trueOutput);
 
-  void train_batch(const vector<image> &data, const vector<int> &trueOutput);
+  std::pair<double, int> train_batch(const vector<image> &data,
+                                     const vector<int> &trueOutput);
 
   // classify the image by applying the forward propagation on the image
   // input:        data (the image)

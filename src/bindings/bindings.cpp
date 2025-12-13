@@ -132,6 +132,49 @@ void bind_mnist_loader(py::module &m) {
       .def_static("load_test_data", &cgroot::data::MNISTLoader::load_test_data);
 }
 
+// void bind_model(py::module &m) {
+//   py::class_<NNModel>(m, "NNModel")
+//       .def(py::init<architecture, size_t, size_t, size_t, size_t>(),
+//            py::arg("modelArch"), py::arg("numOfClasses"),
+//            py::arg("imageVerDim"), py::arg("imageHorDim"),
+//            py::arg("imageDepDim"))
+//       .def("classify", &NNModel::classify)
+//       .def("getProbabilities", &NNModel::getProbabilities)
+//       .def(
+//           "train_epochs",
+//           [](NNModel &self,
+//              const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+//              const TrainingConfig &config, py::object progress_callback,
+//              py::object log_callback, py::object stop_flag) {
+//             // Create atomic bool to track stop state
+//             std::atomic<bool> stop_requested(false);
+//             std::atomic<bool> *stop_ptr = nullptr;
+
+//             // If stop_flag is provided, set up periodic checking
+//             if (!stop_flag.is_none()) {
+//               // Check if it's a callable or has a value
+//               try {
+//                 // Try to get boolean value
+//                 bool initial_value = stop_flag.cast<bool>();
+//                 stop_requested.store(initial_value);
+//                 stop_ptr = &stop_requested;
+//               } catch (...) {
+//                 // If cast failed, ignore and proceed without stop support
+//               }
+//             }
+
+//             // Call C++ train_epochs with stop flag
+//             return self.train_epochs(dataset, config, progress_callback,
+//                                      log_callback, stop_ptr);
+//           },
+//           py::arg("dataset"), py::arg("config"),
+//           py::arg("progress_callback") = py::none(),
+//           py::arg("log_callback") = py::none(),
+//           py::arg("stop_flag") = py::none(),
+//           "Train model for multiple epochs with callbacks and optional stop "
+//           "flag");
+// }
+
 void bind_model(py::module &m) {
   py::class_<NNModel>(m, "NNModel")
       .def(py::init<architecture, size_t, size_t, size_t, size_t>(),
@@ -140,39 +183,58 @@ void bind_model(py::module &m) {
            py::arg("imageDepDim"))
       .def("classify", &NNModel::classify)
       .def("getProbabilities", &NNModel::getProbabilities)
+
+      // --- FIX STARTS HERE ---
       .def(
           "train_epochs",
           [](NNModel &self,
              const cgroot::data::MNISTLoader::MNISTDataset &dataset,
-             const TrainingConfig &config, py::object progress_callback,
-             py::object log_callback, py::object stop_flag) {
-            // Create atomic bool to track stop state
-            std::atomic<bool> stop_requested(false);
-            std::atomic<bool> *stop_ptr = nullptr;
+             const TrainingConfig &config, py::object py_progress_callback,
+             py::object py_log_callback, py::object py_stop_callback) {
+            // 1. WRAP PYTHON CALLBACKS
+            // We must wrap the Python objects in C++ functions that:
+            // a) Acquire GIL before calling Python
+            // b) Release GIL after returning to C++
 
-            // If stop_flag is provided, set up periodic checking
-            if (!stop_flag.is_none()) {
-              // Check if it's a callable or has a value
-              try {
-                // Try to get boolean value
-                bool initial_value = stop_flag.cast<bool>();
-                stop_requested.store(initial_value);
-                stop_ptr = &stop_requested;
-              } catch (...) {
-                // If cast failed, ignore and proceed without stop support
-              }
+            ProgressCallback progress_cpp = nullptr;
+            if (!py_progress_callback.is_none()) {
+              progress_cpp = [py_progress_callback](int epoch, int total,
+                                                    double loss, double acc) {
+                py::gil_scoped_acquire acquire; // Lock Python
+                py_progress_callback(epoch, total, loss, acc);
+              };
             }
 
-            // Call C++ train_epochs with stop flag
-            return self.train_epochs(dataset, config, progress_callback,
-                                     log_callback, stop_ptr);
+            LogCallback log_cpp = nullptr;
+            if (!py_log_callback.is_none()) {
+              log_cpp = [py_log_callback](const std::string &msg) {
+                py::gil_scoped_acquire acquire; // Lock Python
+                py_log_callback(msg);
+              };
+            }
+
+            // Note on Stop Flag:
+            // Your C++ model expects atomic<bool>*, but Python passes a
+            // function. Bridging this strictly requires changing C++
+            // architecture to accept std::function<bool()>. For now, we pass
+            // nullptr to prevent crashes, but this means the 'Stop' button
+            // won't work unless you modify model.h/cpp to accept a
+            // std::function for stopping.
+            std::atomic<bool> *stop_ptr = nullptr;
+
+            // 2. RELEASE GIL AND RUN TRAINING
+            // This allows the GUI thread to run while C++ computes
+            py::gil_scoped_release release;
+
+            return self.train_epochs(dataset, config, progress_cpp, log_cpp,
+                                     stop_ptr);
           },
           py::arg("dataset"), py::arg("config"),
           py::arg("progress_callback") = py::none(),
           py::arg("log_callback") = py::none(),
           py::arg("stop_flag") = py::none(),
-          "Train model for multiple epochs with callbacks and optional stop "
-          "flag");
+          "Train model for multiple epochs with callbacks (GIL Released)");
+  // --- FIX ENDS HERE ---
 }
 
 PYBIND11_MODULE(cgroot_core, m) {

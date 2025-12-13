@@ -157,6 +157,7 @@ class MainWindow(QMainWindow):
         full_config = {**config, **arch_config}
         
         self.metrics_tab.clear()
+        self.metrics_tab.set_total_epochs(full_config['epochs'])
         self.controller.requestTrain.emit(full_config)
         
     def stop_training(self):
