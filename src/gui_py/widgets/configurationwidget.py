@@ -296,7 +296,8 @@ class ConfigurationWidget(QWidget):
 
     # Getters for controller use
     def get_training_parameters(self):
-        return {
+        # Get base training params
+        params = {
             'epochs': self.epochs.value(),
             'batch_size': self.batch_size.value(),
             'learning_rate': self.learning_rate.value(),
@@ -305,14 +306,7 @@ class ConfigurationWidget(QWidget):
             'momentum': self.momentum.value(),
             'validation_split': self.validation_split.value(),
             'use_validation': self.use_validation.isChecked(),
-            'num_conv_layers': self.num_conv_layers.value(),
-            'kernels_per_layer': self.kernels_per_layer.text(),
-            'kernel_dims': self.kernel_dims.text(),
-            'pooling_type': self.pooling_type.currentText(),
-            'pooling_intervals': self.pooling_intervals.text(),
-            'num_fc_layers': self.num_fc_layers.value(),
-            'neurons_per_fc_layer': self.neurons_fc_input.text(),
-            'num_classes': self.num_classes.value(),
-            'image_width': self.image_width.value(),
-            'image_height': self.image_height.value(),
         }
+        # Merge with architecture params (which are correctly parsed)
+        params.update(self.get_architecture_parameters())
+        return params

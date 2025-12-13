@@ -2,7 +2,7 @@ import sys
 import unittest
 # Add build output to path or ensure bindings are available
 # Assuming running from d:\CGROOT
-sys.path.append('build/lib/Release') 
+sys.path.append('build/lib') 
 # Also try site-packages or wherever it builds
 sys.path.append('src/gui_py')
 
@@ -41,21 +41,26 @@ class TestBindingsRefactor(unittest.TestCase):
             cgroot_core.create_model(config)
 
     def test_create_model_cnn(self):
-        # Test complex CNN config
+        # Crash reproduction config
         config = {
             'num_conv_layers': 2,
             'kernels_per_layer': [6, 16],
-            'kernel_dims': [(5, 5), (3, 3)],
-            'pooling_intervals': [1, 1], # Pool after 1st (0+1=1st) and 2nd (1+1=2nd)? logic check needed
+            'kernel_dims': [(5, 5), (5, 5)],
+            'pooling_intervals': [2, 2], 
             'pooling_type': 'Max',
             'num_fc_layers': 2,
-            'neurons_per_fc_layer': [120, 84], # LeNet-ish
+            'neurons_per_fc_layer': [64, 10],
             'num_classes': 10,
-            'image_height': 32,
-            'image_width': 32
+            'image_height': 28,
+            'image_width': 28,
+            'optimizer': 'Adam',
+            'learning_rate': 0.001
         }
+        print(f"Testing config: {config}")
         model = cgroot_core.create_model(config)
         self.assertIsNotNone(model)
+        print("Model created successfully")
+
         
     def test_classify_pixels(self):
         # Create a dummy model
