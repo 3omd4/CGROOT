@@ -145,7 +145,7 @@ public:
   // updated Note:         N/A
   std::pair<double, int> train(const image &data, int trueOutput);
 
-  std::pair<double, int> train_batch(const vector<image> &data,
+  std::pair<double, int> train_batch(const vector<const image*> &data,
                                      const vector<int> &trueOutput);
 
   // classify the image by applying the forward propagation on the image

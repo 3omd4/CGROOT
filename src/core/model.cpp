@@ -595,14 +595,14 @@ std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
 // side effect:  The model is trained by a batch of image and its paramters are
 // updated Note:         N/A
 // Updated train_batch: Returns {total_loss, total_correct}
-std::pair<double, int> NNModel::train_batch(const vector<image> &batchData,
+std::pair<double, int> NNModel::train_batch(const vector<const image*> &batchData,
                                             const vector<int> &trueOutput) {
   double total_loss = 0.0;
   int total_correct = 0;
 
   for (size_t sample = 0; sample < batchData.size(); sample++) {
     // 1. Forward Pass (Classify)
-    int predictedClass = classify(batchData[sample]);
+    int predictedClass = classify(*batchData[sample]);
 
     // 2. Accumulate Metrics immediately
     if (predictedClass == trueOutput[sample]) {
@@ -1006,7 +1006,7 @@ vector<TrainingMetrics> NNModel::train_epochs(
     double train_loss_sum = 0.0;
     size_t train_samples = 0; // Tracks actual samples processed
 
-    vector<image> batch_images;
+    vector<const image*> batch_images;
     vector<int> batch_labels;
     batch_images.reserve(config.batch_size);
     batch_labels.reserve(config.batch_size);
@@ -1017,8 +1017,8 @@ vector<TrainingMetrics> NNModel::train_epochs(
 
       size_t idx = train_indices[i];
 
-      // USE CACHED IMAGES
-      batch_images.push_back(cached_images[idx]);
+      // USE CACHED IMAGES - Store pointer to avoid copy
+      batch_images.push_back(&cached_images[idx]);
       batch_labels.push_back(static_cast<int>(dataset.images[idx].label));
 
       // Train when batch full
@@ -1031,7 +1031,7 @@ vector<TrainingMetrics> NNModel::train_epochs(
           if (batch_images.size() > 1) {
             result = train_batch(batch_images, batch_labels);
           } else {
-            result = train(batch_images[0], batch_labels[0]);
+            result = train(*batch_images[0], batch_labels[0]);
           }
 
           // Accumulate metrics DIRECTLY from training step

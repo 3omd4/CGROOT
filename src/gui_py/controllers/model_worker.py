@@ -157,6 +157,7 @@ class ModelWorker(QObject):
         self._train_thread.progress.connect(self._internal_progress.emit)
         self._train_thread.log.connect(self._internal_log.emit)
         self._train_thread.finished.connect(self._on_training_finished)
+        self._train_thread.finished.connect(self._train_thread.deleteLater) # Ensures thread object is safely deleted
         self._training_active = True
         self.should_stop = False
         self.modelStatusChanged.emit(True)
