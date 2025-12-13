@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QThread, QMetaObject, Qt
 from PyQt6.QtGui import QImage, qGray, qRgb
 import sys
 import time
@@ -10,6 +10,71 @@ try:
 except ImportError:
     cgroot_core = None
 
+# ========================== Training Thread ==========================
+class TrainingThread(QThread):
+    progress = pyqtSignal(int, int, float, float)  # epoch, total, loss, acc
+    log = pyqtSignal(str)
+    finished = pyqtSignal(list)  # history
+
+    def __init__(self, model, dataset, config):
+        super().__init__()
+        self.model = model
+        self.dataset = dataset
+        self.config = config
+        self._stop_requested = False
+
+    def run(self):
+        # Thread-safe callbacks for C++ training
+        def progress_callback(epoch, total, loss, acc):
+            if not self._stop_requested:
+                self.progress.emit(epoch, total, loss, acc)
+
+        def log_callback(msg):
+            if not self._stop_requested:
+                self.log.emit(msg)
+
+        def stop_check():
+            return self._stop_requested
+
+        try:
+            history = self.model.train_epochs(
+                self.dataset,
+                self.config,
+                progress_callback,
+                log_callback,
+                stop_check
+            )
+            if not self._stop_requested:
+                self.finished.emit(history)
+        except Exception as e:
+            self.log.emit(f"Training error: {e}")
+
+    def stop(self):
+        self._stop_requested = True
+
+# ========================== Loader Thread ==========================
+class LoaderThread(QThread):
+    loaded = pyqtSignal(object)  # dataset object
+    log = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, images_path, labels_path):
+        super().__init__()
+        self.images_path = images_path
+        self.labels_path = labels_path
+
+    def run(self):
+        try:
+            self.log.emit(f"Loading dataset from: {self.images_path}")
+            if not cgroot_core:
+                self.error.emit("Core library not loaded")
+                return
+
+            dataset = cgroot_core.MNISTLoader.load_training_data(self.images_path, self.labels_path)
+            self.loaded.emit(dataset)
+        except Exception as e:
+            self.error.emit(f"Exception loading dataset: {e}")
+
 class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
     metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
@@ -19,291 +84,124 @@ class ModelWorker(QObject):
     inferenceFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool)
     
+    # Internal signals for thread-safe callback emissions
+    _internal_log = pyqtSignal(str)
+    _internal_progress = pyqtSignal(int, int, float, float)
+    
     def __init__(self):
         super().__init__()
         self.model = None
         self.dataset = None
         self.should_stop = False
+        self._training_active = False
+        self._train_thread = None
+        self._loader_thread = None
         
+        # Connect internal signals (these are thread-safe automatically)
+        self._internal_log.connect(self._emit_log_from_thread)
+        self._internal_progress.connect(self._emit_progress_from_thread)
+        
+    
     @pyqtSlot(str, str)
     def loadDataset(self, images_path, labels_path):
+        """Load dataset asynchronously in a background thread."""
         if not cgroot_core:
             self.logMessage.emit("Error: Core library not loaded")
             return
             
-        self.logMessage.emit(f"Loading dataset from: {images_path}")
-        try:
-            self.dataset = cgroot_core.MNISTLoader.load_training_data(images_path, labels_path)
-            
-            if self.dataset:
-                self.logMessage.emit(f"Loaded {self.dataset.num_images} images")
-            else:
-                self.logMessage.emit("Failed to load dataset")
-        except Exception as e:
-            self.logMessage.emit(f"Exception loading dataset: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def _convert_mnist_to_image_format(self, flat_pixels, height=28, width=28):
-        """Convert flat MNIST pixel array to [depth][height][width] format"""
-        image_data = [[]]  # Single depth channel
-        for y in range(height):
-            row = []
-            for x in range(width):
-                idx = y * width + x
-                if idx < len(flat_pixels):
-                    row.append(int(flat_pixels[idx]))
-                else:
-                    row.append(0)
-            image_data[0].append(row)
-        return image_data
-
-    def _calculate_loss_from_probs(self, probs, true_label):
-        """Calculate cross-entropy loss from probabilities"""
-        if not probs or len(probs) == 0:
-            return 1.0
+        self.logMessage.emit(f"Starting async dataset load...")
         
-        # Cross-entropy loss: -log(p_true)
-        true_prob = probs[true_label] if true_label < len(probs) else 0.0
-        # Add small epsilon to avoid log(0)
-        true_prob = max(true_prob, 1e-10)
-        loss = -math.log(true_prob)
-        return loss
+        # Create and start loader thread
+        self._loader_thread = LoaderThread(images_path, labels_path)
+        self._loader_thread.log.connect(self.logMessage.emit)
+        self._loader_thread.error.connect(self._on_loader_error)
+        self._loader_thread.loaded.connect(self._on_dataset_loaded)
+        self._loader_thread.start()
+    
+    @pyqtSlot(object)
+    def _on_dataset_loaded(self, dataset):
+        """Handle successful dataset loading."""
+        self.dataset = dataset
+        if self.dataset:
+            self.logMessage.emit(f"Dataset loaded successfully: {self.dataset.num_images} images")
+        else:
+            self.logMessage.emit("Failed to load dataset (returned None)")
+        
+        # Clean up thread
+        self._loader_thread = None
+
+    @pyqtSlot(str)
+    def _on_loader_error(self, error_msg):
+        """Handle dataset loading error."""
+        self.logMessage.emit(error_msg)
+        self._loader_thread = None
+
+
 
     @pyqtSlot(dict)
     def trainModel(self, config):
-        epochs = config.get('epochs', 10)
-        
+        """Train the model asynchronously using a separate thread."""
         if not self.dataset:
             self.logMessage.emit("No dataset loaded")
             self.trainingFinished.emit()
             return
 
+        if not self.model:
+            self._initialize_model(config)
+
+        # Create training configuration
+        train_config = self._create_training_config(config)
+
+        # Start training in separate thread
+        self._train_thread = TrainingThread(self.model, self.dataset, train_config)
+        self._train_thread.progress.connect(self._internal_progress.emit)
+        self._train_thread.log.connect(self._internal_log.emit)
+        self._train_thread.finished.connect(self._on_training_finished)
+        self._training_active = True
         self.should_stop = False
         self.modelStatusChanged.emit(True)
-        
-        try:
-            # Initialize model if not exists
-            if not self.model:
-                self.logMessage.emit("Initializing NNModel with Config...")
-                arch = cgroot_core.architecture()
-                
-                # Clear vectors to ensure clean state
-                arch.kernelsPerconvLayers = []
-                arch.neuronsPerFCLayer = []
-                arch.convLayerActivationFunc = []
-                arch.FCLayerActivationFunc = []
-                arch.convInitFunctionsType = []
-                arch.FCInitFunctionsType = []
-                arch.poolingLayersInterval = []
-                arch.poolingtype = []
-                arch.kernelsPerPoolingLayer = []
-                
-                # Dynamic Config
-                arch.numOfConvLayers = config.get('num_conv_layers', 0)
-                
-                num_fc_layers = config.get('num_fc_layers', 2)
-                neurons_list = config.get('neurons_per_fc_layer', [128, 10])
-                
-                # Sanity check: Ensure neurons list length matches num_fc_layers
-                if len(neurons_list) != num_fc_layers:
-                    self.logMessage.emit(f"Warning: Neurons list length ({len(neurons_list)}) does not match FC Layers count ({num_fc_layers}). Using list length.")
-                    num_fc_layers = len(neurons_list)
-                    
-                arch.numOfFCLayers = num_fc_layers
-                arch.neuronsPerFCLayer = neurons_list
-                
-                # Default activations and init functions
-                # All FC layers use ReLU except output uses Softmax (handled by output layer)
-                arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * num_fc_layers
-                arch.FCInitFunctionsType = [cgroot_core.initFunctions.Xavier] * num_fc_layers
-                
-                arch.distType = cgroot_core.distributionType.normalDistribution
-                
-                num_classes = config.get('num_classes', 10)
-                img_h = config.get('image_height', 28)
-                img_w = config.get('image_width', 28)
-                
-                # Optimizer Config
-                opt_type_str = config.get('optimizer', 'Adam')
-                lr = config.get('learning_rate', 0.001)
-                wd = config.get('weight_decay', 0.0001)
-                mom = config.get('momentum', 0.9)
-                
-                # Setup OptimizerConfig
-                arch.optConfig.learningRate = lr
-                arch.optConfig.weightDecay = wd
-                arch.optConfig.momentum = mom
-                arch.optConfig.beta1 = 0.9
-                arch.optConfig.beta2 = 0.999
-                arch.optConfig.epsilon = 1e-8
-                
-                if opt_type_str == "Adam":
-                    arch.optConfig.type = cgroot_core.OptimizerType.Adam
-                elif opt_type_str == "RMSprop" or opt_type_str == "RMSProp":
-                    arch.optConfig.type = cgroot_core.OptimizerType.RMSprop
-                else:
-                    arch.optConfig.type = cgroot_core.OptimizerType.SGD
-
-                # Set legacy learningRate for compatibility
-                arch.learningRate = lr
-
-                self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
-                self.logMessage.emit(f"Model initialized (MLP: Input->{neurons_list}) with {opt_type_str}, LR={lr}")
-
-            # Training Loop
-            num_images = self.dataset.num_images
-            total_epochs = epochs
-            batch_size = config.get('batch_size', 32)
-            validation_split = config.get('validation_split', 0.2)
-            use_validation = config.get('use_validation', True)
-            
-            # Split dataset if validation is enabled
-            if use_validation and validation_split > 0:
-                val_size = int(num_images * validation_split)
-                train_size = num_images - val_size
-                self.logMessage.emit(f"Using {train_size} training samples, {val_size} validation samples")
-            else:
-                train_size = num_images
-                val_size = 0
-            
-            for epoch in range(total_epochs):
-                if self.should_stop: 
-                    break
-                
-                self.logMessage.emit(f"Epoch {epoch+1}/{total_epochs}")
-                
-                # Training phase
-                train_correct = 0
-                train_loss_sum = 0.0
-                train_samples = 0
-                
-                # Create indices and shuffle them
-                all_indices = list(range(num_images))
-                random.shuffle(all_indices)
-                
-                train_indices = all_indices[:train_size]
-                val_indices = all_indices[train_size:] if use_validation else []
-                
-                # Training loop
-                batch_images = []
-                batch_labels = []
-                
-                for i, idx in enumerate(train_indices):
-                    if self.should_stop: 
-                        break
-                    
-                    img_obj = self.dataset.images[idx]
-                    flat = img_obj.pixels
-                    
-                    # Convert to proper image format [depth][height][width]
-                    image_data = self._convert_mnist_to_image_format(flat, 28, 28)
-                    label = int(img_obj.label)
-                    
-                    # Add to batch
-                    batch_images.append(image_data)
-                    batch_labels.append(label)
-                    
-                    # Train if batch full or last element
-                    if len(batch_images) >= batch_size or i == len(train_indices) - 1:
-                        if len(batch_images) > 0:
-                            if len(batch_images) > 1:
-                                self.model.train_batch(batch_images, batch_labels)
-                            else:
-                                self.model.train(batch_images[0], batch_labels[0])
-                            
-                            # Calculate accuracy and loss on this batch AFTER training
-                            for img, lbl in zip(batch_images, batch_labels):
-                                pred = self.model.classify(img)
-                                if pred == lbl:
-                                    train_correct += 1
-                                
-                                # Calculate loss from probabilities
-                                probs = self.model.getProbabilities()
-                                if probs:
-                                    train_loss_sum += self._calculate_loss_from_probs(probs, lbl)
-                                    train_samples += 1
-                            
-                            batch_images = []
-                            batch_labels = []
-                        
-                    # Progress update every 1000 samples
-                    if (i + 1) % 1000 == 0:
-                        QThread.msleep(1)  # Allow GUI to update
-                        progress = int((i + 1) / len(train_indices) * 100)
-                        self.progressUpdated.emit(progress, 100)
-                        
-                        # Visualization
-                        try:
-                            q_img = QImage(28, 28, QImage.Format.Format_Grayscale8)
-                            for y in range(28):
-                                for x in range(28):
-                                    val = flat[y*28 + x] if y*28 + x < len(flat) else 0
-                                    q_img.setPixel(x, y, qRgb(val, val, val))
-                            self.imagePredicted.emit(label, q_img, [])
-                        except Exception as e:
-                            pass  # Silently ignore visualization errors
-                
-                # Calculate training metrics
-                train_acc = train_correct / train_size if train_size > 0 else 0.0
-                train_loss = train_loss_sum / train_samples if train_samples > 0 else 1.0 - train_acc
-                
-                # Validation phase
-                val_acc = 0.0
-                val_loss = 0.0
-                if use_validation and len(val_indices) > 0:
-                    val_correct = 0
-                    val_loss_sum = 0.0
-                    val_samples = 0
-                    
-                    for idx in val_indices:
-                        if self.should_stop:
-                            break
-                        
-                        img_obj = self.dataset.images[idx]
-                        flat = img_obj.pixels
-                        image_data = self._convert_mnist_to_image_format(flat, 28, 28)
-                        label = int(img_obj.label)
-                        
-                        # Predict without training
-                        pred = self.model.classify(image_data)
-                        if pred == label:
-                            val_correct += 1
-                        
-                        # Calculate loss
-                        probs = self.model.getProbabilities()
-                        if probs:
-                            val_loss_sum += self._calculate_loss_from_probs(probs, label)
-                            val_samples += 1
-                    
-                    val_acc = val_correct / len(val_indices) if len(val_indices) > 0 else 0.0
-                    val_loss = val_loss_sum / val_samples if val_samples > 0 else 1.0 - val_acc
-                    
-                    # Use validation metrics for display
-                    current_acc = val_acc
-                    current_loss = val_loss
-                    self.logMessage.emit(f"Epoch {epoch+1} - Train: Acc={train_acc*100:.2f}%, Loss={train_loss:.4f} | Val: Acc={val_acc*100:.2f}%, Loss={val_loss:.4f}")
-                else:
-                    # Use training metrics
-                    current_acc = train_acc
-                    current_loss = train_loss
-                    self.logMessage.emit(f"Epoch {epoch+1} - Train: Acc={train_acc*100:.2f}%, Loss={train_loss:.4f}")
-                
-                # Emit metrics (use validation if available, otherwise training)
-                self.metricsUpdated.emit(current_loss, current_acc, epoch+1)
-                self.progressUpdated.emit(epoch+1, total_epochs)
-                
-        except Exception as e:
-            self.logMessage.emit(f"Training error: {e}")
-            import traceback
-            traceback.print_exc()
-            
+        self.logMessage.emit("=== Training Session Start ===")
+        self._train_thread.start()
+    
+    def _on_training_finished(self, history):
+        """Handle training completion."""
+        self._training_active = False
         self.modelStatusChanged.emit(False)
+        self.logMessage.emit("=== Training Session End ===")
+        self.logMessage.emit(f"Training completed! Total epochs: {len(history)}")
         self.trainingFinished.emit()
+        self._train_thread = None
+    
+    
+    def _initialize_model(self, config):
+        """Initialize the neural network model with the given configuration using C++ factory."""
+        self.logMessage.emit("Initializing NNModel with Config (via C++ Factory)...")
+        try:
+            self.model = cgroot_core.create_model(config)
+            self.logMessage.emit("Model initialized successfully")
+        except Exception as e:
+            self.logMessage.emit(f"Error initializing model: {e}")
+            raise e
+
+    
+    def _create_training_config(self, config):
+        """Create a TrainingConfig object from the provided configuration dict."""
+        train_config = cgroot_core.TrainingConfig()
+        train_config.epochs = config.get('epochs', 10)
+        train_config.batch_size = config.get('batch_size', 32)
+        train_config.validation_split = config.get('validation_split', 0.2)
+        train_config.use_validation = config.get('use_validation', True)
+        train_config.shuffle = True
+        train_config.random_seed = 42
+        return train_config
 
     @pyqtSlot()
     def stopTraining(self):
+        """Stop the training thread."""
         self.should_stop = True
+        if hasattr(self, "_train_thread") and self._train_thread:
+            self._train_thread.stop()
+            self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
 
     @pyqtSlot(object)
     def runInference(self, qimage_obj):
@@ -319,25 +217,20 @@ class ModelWorker(QObject):
             
         self.modelStatusChanged.emit(True)
         try:
-            # Convert QImage to 3D vector [1][28][28]
+            # Convert QImage to 8-bit grayscale
             img = qimage_obj.scaled(28, 28).convertToFormat(QImage.Format.Format_Grayscale8)
             
             width = img.width()
             height = img.height()
+            stride = img.bytesPerLine()
             
-            rows = []
-            for y in range(height):
-                row = []
-                for x in range(width):
-                    pixel_val = qGray(img.pixel(x, y))
-                    row.append(pixel_val)
-                rows.append(row)
+            # fast access to bytes
+            bits = img.bits()
+            bits.setsize(img.sizeInBytes())
             
-            image_data = [rows]  # Depth 1
-            
-            # Run Classification
-            self.logMessage.emit("Running inference on image...")
-            predicted_class = self.model.classify(image_data)
+            # Run Classification using C++ helper
+            self.logMessage.emit("Running inference on image (C++ optimized)...")
+            predicted_class = cgroot_core.classify_pixels(self.model, bits, width, height, stride)
             
             self.logMessage.emit(f"Inference Result: {predicted_class}")
             
@@ -359,3 +252,83 @@ class ModelWorker(QObject):
 
         self.modelStatusChanged.emit(False)
         self.inferenceFinished.emit()
+    
+    # ========================================================================
+    # Thread-Safe Signal Emission Helpers
+    # ========================================================================
+    
+    @pyqtSlot(str)
+    def _emit_log_from_thread(self, message):
+        """
+        Thread-safe log emission helper.
+        Called via QMetaObject.invokeMethod from C++ callback thread.
+        Only emits if training is still active to prevent post-finish emissions.
+        """
+        if self._training_active:
+            self.logMessage.emit(message)
+    
+    @pyqtSlot(int, int, float, float)
+    def _emit_progress_from_thread(self, epoch, total_epochs, loss, accuracy):
+        """
+        Thread-safe progress/metrics emission helper.
+        Called via QMetaObject.invokeMethod from C++ callback thread.
+        Only emits if training is still active to prevent post-finish emissions.
+        """
+        if self._training_active:
+            self.metricsUpdated.emit(loss, accuracy, epoch)
+            self.progressUpdated.emit(epoch, total_epochs)
+    
+    # ========================================================================
+    # Lifecycle Management
+    # ========================================================================
+    
+    def cleanup(self):
+        """
+        Explicit cleanup method for safe resource deallocation.
+        Call this before destroying the worker object.
+        
+        Destruction order:
+        1. Stop training flag
+        2. Clear callback references
+        3. Destroy model
+        4. Clear dataset
+        """
+        self.logMessage.emit("=== ModelWorker Cleanup Start ===")
+        
+        # 1. Stop any ongoing training
+        self.should_stop = True
+        self._training_active = False
+        
+        #2. Clear callback references to allow Python GC
+        self._progress_callback_ref = None
+        self._log_callback_ref = None
+        
+        # 3. Destroy C++ model object
+        if self.model:
+            self.logMessage.emit("Destroying C++ model...")
+            try:
+                del self.model
+                self.model = None
+            except Exception as e:
+                self.logMessage.emit(f"Error destroying model: {e}")
+        
+        # 4. Clear dataset
+        if self.dataset:
+            try:
+                del self.dataset
+                self.dataset = None
+            except Exception as e:
+                self.logMessage.emit(f"Error clearing dataset: {e}")
+        
+        self.logMessage.emit("=== ModelWorker Cleanup Complete ===")
+    
+    def __del__(self):
+        """
+        Destructor safety net - ensures cleanup on object destruction.
+        Not guaranteed to be called, so explicit cleanup() is preferred.
+        """
+        try:
+            if hasattr(self, 'model') and self.model:
+                self.cleanup()
+        except:
+            pass  # Avoid exceptions in destructor

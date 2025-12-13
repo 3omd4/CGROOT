@@ -1,4 +1,11 @@
 #include "model.h"
+#include <algorithm>
+#include <iomanip>
+#include <omp.h>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+
 using namespace std;
 
 // the NNModel constructor
@@ -18,9 +25,127 @@ using namespace std;
 //               model (object)
 NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                  size_t imageHeight, size_t imageWidth, size_t imageDepth)
-    : learningRate(modelArch.learningRate) {
-  // construct the input layer
-  Layers.emplace_back(new inputLayer(imageHeight, imageWidth, imageDepth));
+  {
+
+  // ========== PARAMETER VALIDATION ==========
+  // Validate basic parameters
+  if (imageHeight == 0 || imageWidth == 0 || imageDepth == 0) {
+    throw std::invalid_argument(
+        "Image dimensions must be greater than 0. Got: " +
+        std::to_string(imageHeight) + "x" + std::to_string(imageWidth) + "x" +
+        std::to_string(imageDepth));
+  }
+
+  if (numOfClasses == 0) {
+    throw std::invalid_argument("Number of classes must be greater than 0");
+  }
+
+  // Validate FC layer configuration
+  if (modelArch.numOfFCLayers > 0) {
+    if (modelArch.neuronsPerFCLayer.size() != modelArch.numOfFCLayers) {
+      throw std::invalid_argument(
+          "FC layer count mismatch: numOfFCLayers=" +
+          std::to_string(modelArch.numOfFCLayers) +
+          " but neuronsPerFCLayer.size()=" +
+          std::to_string(modelArch.neuronsPerFCLayer.size()));
+    }
+
+    if (modelArch.FCLayerActivationFunc.size() != modelArch.numOfFCLayers) {
+      throw std::invalid_argument(
+          "FC activation function count mismatch: numOfFCLayers=" +
+          std::to_string(modelArch.numOfFCLayers) +
+          " but FCLayerActivationFunc.size()=" +
+          std::to_string(modelArch.FCLayerActivationFunc.size()));
+    }
+
+    if (modelArch.FCInitFunctionsType.size() != modelArch.numOfFCLayers) {
+      throw std::invalid_argument(
+          "FC init function count mismatch: numOfFCLayers=" +
+          std::to_string(modelArch.numOfFCLayers) +
+          " but FCInitFunctionsType.size()=" +
+          std::to_string(modelArch.FCInitFunctionsType.size()));
+    }
+
+    // Validate neuron counts are positive
+    for (size_t i = 0; i < modelArch.neuronsPerFCLayer.size(); i++) {
+      if (modelArch.neuronsPerFCLayer[i] == 0) {
+        throw std::invalid_argument("FC layer " + std::to_string(i) +
+                                    " has 0 neurons");
+      }
+    }
+  }
+
+  // Validate Conv layer configuration if present
+  if (modelArch.numOfConvLayers > 0) {
+    if (modelArch.kernelsPerconvLayers.size() != modelArch.numOfConvLayers) {
+      throw std::invalid_argument(
+          "Conv layer count mismatch: numOfConvLayers=" +
+          std::to_string(modelArch.numOfConvLayers) +
+          " but kernelsPerconvLayers.size()=" +
+          std::to_string(modelArch.kernelsPerconvLayers.size()));
+    }
+  }
+  // ========== END VALIDATION ==========
+
+  // Debug logging to understand the architecture before model creation
+  // // std::cout << "================ Architecture Debug Info ================"
+  //           << std::endl;
+  // // std::cout << "Number of Conv Layers: " << modelArch.numOfConvLayers
+  //           << std::endl;
+  // // std::cout << "Number of FC Layers: " << modelArch.numOfFCLayers <<
+  // std::endl; // std::cout << "Neurons per FC Layer: " <<
+  // modelArch.neuronsPerFCLayer.size()
+  //           << std::endl;
+  // // std::cout << "Convolutional layers kernels: "
+  //           << modelArch.kernelsPerconvLayers.size() << std::endl;
+  // // std::cout << "Fully connected layers neurons: "
+  //           << modelArch.neuronsPerFCLayer.size() << std::endl;
+  // // std::cout << "Convolutional layers activation functions: "
+  //           << modelArch.convLayerActivationFunc.size() << std::endl;
+  // // std::cout << "Fully connected layers activation functions: "
+  //           << modelArch.FCLayerActivationFunc.size() << std::endl;
+  // // std::cout << "Convolutional layers init functions: "
+  //           << modelArch.convInitFunctionsType.size() << std::endl;
+  // // std::cout << "Fully connected layers init functions: "
+  //           << modelArch.FCInitFunctionsType.size() << std::endl;
+  // // std::cout << "Pooling layers interval: "
+  //           << modelArch.poolingLayersInterval.size() << std::endl;
+  // // std::cout << "Pooling layers type: ";
+  // for (size_t i = 0; i < modelArch.poolingtype.size(); i++) {
+  //   // std::cout << static_cast<int>(modelArch.poolingtype[i]);
+  //   if (i < modelArch.poolingtype.size() - 1)
+  //     // std::cout << ", ";
+  // }
+  // // std::cout << std::endl;
+  // // std::cout << "Pooling layers kernels: " << std::endl;
+  // for (size_t i = 0; i < modelArch.kernelsPerPoolingLayer.size(); i++) {
+  //   // std::cout << "depth X height X width: ";
+  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_depth;
+  //   // std::cout << "x";
+  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_height;
+  //   // std::cout << "x";
+  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_width;
+  //   if (i < modelArch.kernelsPerPoolingLayer.size() - 1)
+  //     // std::cout << ",\n";
+  // }
+  // // std::cout << std::endl;
+  // // std::cout << "Optimizer epsilon: " << modelArch.optConfig.epsilon
+  //           << std::endl;
+  // // std::cout <<
+  // "============================================================="
+  //           << std::endl;
+
+  // // std::cout << "zxsaceq  wq wq q 123" << std::endl;
+
+  try {
+    // construct the input layer
+    Layers.emplace_back(new inputLayer(imageHeight, imageWidth, imageDepth));
+  } catch (const std::exception &e) {
+    std::cerr << "ERROR creating input layer: " << e.what() << std::endl;
+    throw;
+  }
+
+  // // std::cout << "cascasccs123" << std::endl;
 
   // Track current feature map dimensions
   size_t currentHeight = imageHeight;
@@ -34,58 +159,85 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   // an iterator that is used to iterate the pooling layers information vectors
   size_t poolIter = 0;
 
-  // start initializing the convolution and pooling layers
-  // a pooling layer is inserted after a number of convolution layers
-  for (size_t i = 0; i < modelArch.numOfConvLayers; i++) {
-    // Calculate feature map dimensions for this conv layer
-    featureMapDim fmDim =
-        calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
-                          modelArch.kernelsPerconvLayers[i].kernel_width,
-                          currentHeight, currentWidth);
+  // // std::cout << "cascasccs456" << std::endl;
 
-    // Set kernel depth to match input depth
-    modelArch.kernelsPerconvLayers[i].kernel_depth = currentDepth;
-    fmDim.FM_depth = modelArch.kernelsPerconvLayers[i].numOfKerenels;
+  try {
+    // start initializing the convolution and pooling layers
+    // a pooling layer is inserted after a number of convolution layers
+    for (size_t i = 0; i < modelArch.numOfConvLayers; i++) {
+      // Calculate feature map dimensions for this conv layer
 
-    // Create convolution layer
-    Layers.emplace_back(new convLayer(
-        modelArch.kernelsPerconvLayers[i], modelArch.convLayerActivationFunc[i],
-        modelArch.convInitFunctionsType[i], modelArch.distType, fmDim,
-        modelArch.optConfig));
+      // // std::cout << "cascasccs789" << std::endl;
 
-    // Update current dimensions
-    currentHeight = fmDim.FM_height;
-    currentWidth = fmDim.FM_width;
-    currentDepth = fmDim.FM_depth;
+      featureMapDim fmDim =
+          calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
+                            modelArch.kernelsPerconvLayers[i].kernel_width,
+                            currentHeight, currentWidth);
 
-    poolCount++;
+      // Set kernel depth to match input depth
+      modelArch.kernelsPerconvLayers[i].kernel_depth = currentDepth;
+      fmDim.FM_depth = modelArch.kernelsPerconvLayers[i].numOfKerenels;
 
-    // Check if we need to insert a pooling layer
-    if (poolIter < modelArch.poolingLayersInterval.size() &&
-        poolCount >= modelArch.poolingLayersInterval[poolIter]) {
-      // Calculate pooling output dimensions
-      poolKernel &poolKern = modelArch.kernelsPerPoolingLayer[poolIter];
-      poolKern.filter_depth = currentDepth;
+      // // std::cout << "cascasccs980" << std::endl;
 
-      size_t poolOutHeight =
-          (currentHeight - poolKern.filter_height) / poolKern.stride + 1;
-      size_t poolOutWidth =
-          (currentWidth - poolKern.filter_width) / poolKern.stride + 1;
+      try {
+        // Create convolution layer
+        Layers.emplace_back(new convLayer(modelArch.kernelsPerconvLayers[i],
+                                          modelArch.convLayerActivationFunc[i],
+                                          modelArch.convInitFunctionsType[i],
+                                          modelArch.distType, fmDim, modelArch.optConfig));
+      } catch (const std::exception &e) {
+        std::cerr << "ERROR creating convolution layer " << (i + 1) << ": "
+                  << e.what() << std::endl;
+        throw;
+      }
 
-      featureMapDim poolFMDim{poolOutHeight, poolOutWidth, currentDepth};
-
-      // Create pooling layer
-      Layers.emplace_back(new poolingLayer(poolKern, poolFMDim,
-                                           modelArch.poolingtype[poolIter]));
+      // // std::cout << "cascasccs981" << std::endl;
 
       // Update current dimensions
-      currentHeight = poolOutHeight;
-      currentWidth = poolOutWidth;
-      // Depth remains the same
+      currentHeight = fmDim.FM_height;
+      currentWidth = fmDim.FM_width;
+      currentDepth = fmDim.FM_depth;
 
-      poolCount = 0;
-      poolIter++;
+      poolCount++;
+
+      // Check if we need to insert a pooling layer
+      if (poolIter < modelArch.poolingLayersInterval.size() &&
+          poolCount >= modelArch.poolingLayersInterval[poolIter]) {
+        // Calculate pooling output dimensions
+        poolKernel &poolKern = modelArch.kernelsPerPoolingLayer[poolIter];
+        poolKern.filter_depth = currentDepth;
+
+        size_t poolOutHeight =
+            (currentHeight - poolKern.filter_height) / poolKern.stride + 1;
+        size_t poolOutWidth =
+            (currentWidth - poolKern.filter_width) / poolKern.stride + 1;
+
+        featureMapDim poolFMDim{poolOutHeight, poolOutWidth, currentDepth};
+
+        try {
+          // Create pooling layer
+          Layers.emplace_back(new poolingLayer(
+              poolKern, poolFMDim, modelArch.poolingtype[poolIter]));
+        } catch (const std::exception &e) {
+          std::cerr << "ERROR creating pooling layer " << (poolIter + 1) << ": "
+                    << e.what() << std::endl;
+          throw;
+        }
+
+        // Update current dimensions
+        currentHeight = poolOutHeight;
+        currentWidth = poolOutWidth;
+        // Depth remains the same
+
+        poolCount = 0;
+        poolIter++;
+      }
     }
+  } catch (const std::exception &e) {
+    std::cerr << "ERROR creating convolution and pooling layers: " << e.what()
+              << std::endl;
+    throw;
   }
 
   // Determine if we need a flatten layer
@@ -95,8 +247,13 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
        (imageHeight != 1 || imageWidth != 1 || imageDepth != 1));
 
   if (needsFlatten) {
-    Layers.emplace_back(
-        new FlattenLayer(currentHeight, currentWidth, currentDepth));
+    try {
+      Layers.emplace_back(
+          new FlattenLayer(currentHeight, currentWidth, currentDepth));
+    } catch (const std::exception &e) {
+      std::cerr << "ERROR creating flatten layer: " << e.what() << std::endl;
+      throw;
+    }
   }
 
   // Build fully connected layers
@@ -104,23 +261,97 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                            ? currentHeight * currentWidth * currentDepth
                            : imageHeight * imageWidth * imageDepth;
 
-  for (size_t i = 0; i < modelArch.numOfFCLayers; i++) {
-    Layers.emplace_back(new FullyConnected(
-        modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
-        modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize,
-        modelArch.optConfig));
+  // // std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
+  //           << std::endl;
+  // // std::cout << "Number of FC layers to create: " <<
+  // modelArch.numOfFCLayers
+  //           << std::endl;
 
-    fcInputSize = modelArch.neuronsPerFCLayer[i];
+  for (size_t i = 0; i < modelArch.numOfFCLayers; i++) {
+    try {
+      // // std::cout << "Creating FC layer " << (i + 1) << "/"
+      //           << modelArch.numOfFCLayers << std::endl;
+      // // std::cout << "  Input size: " << fcInputSize << std::endl;
+      // // std::cout << "  Output size (neurons): " <<
+      // modelArch.neuronsPerFCLayer[i]
+      //           << std::endl;
+      // // std::cout << "  Activation: " << modelArch.FCLayerActivationFunc[i]
+      //           << std::endl;
+      // // std::cout << "  Init function: " << modelArch.FCInitFunctionsType[i]
+      //           << std::endl;
+
+      Layers.emplace_back(new FullyConnected(
+          modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
+          modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize, modelArch.optConfig));
+
+      // // std::cout << "  FC layer " << (i + 1) << " created successfully"
+      //           << std::endl;
+      fcInputSize = modelArch.neuronsPerFCLayer[i];
+    } catch (const std::exception &e) {
+      std::cerr << "ERROR creating FC layer " << (i + 1) << ": " << e.what()
+                << std::endl;
+      throw;
+    }
   }
 
   // Create output layer
-  Layers.emplace_back(new outputLayer(numOfClasses, fcInputSize,
-                                      modelArch.distType, modelArch.optConfig));
+  try {
+    // // std::cout << "Creating output layer" << std::endl;
+    // // std::cout << "  Output layer input size: " << fcInputSize <<
+    // std::endl;
+    // // std::cout << "  Number of classes: " << numOfClasses << std::endl;
+
+    Layers.emplace_back(
+        new outputLayer(numOfClasses, fcInputSize, modelArch.distType, modelArch.optConfig));
+
+    // // std::cout << "  Output layer created successfully" << std::endl;
+  } catch (const std::exception &e) {
+    std::cerr << "ERROR creating output layer: " << e.what() << std::endl;
+    std::cerr << "  fcInputSize was: " << fcInputSize << std::endl;
+    std::cerr << "  numOfClasses was: " << numOfClasses << std::endl;
+    throw;
+  }
+}
+
+// Helper function to calculate cross-entropy loss from probabilities
+static double calculate_loss_from_probs(const vector<double> &probs,
+                                        int true_label) {
+  if (probs.empty() || true_label >= static_cast<int>(probs.size())) {
+    return 1.0;
+  }
+
+  // Cross-entropy loss: -log(p_true)
+  double true_prob = probs[true_label];
+  // Add small epsilon to avoid log(0)
+  true_prob = std::max(true_prob, 1e-10);
+  double loss = -std::log(true_prob);
+  return loss;
+}
+
+// Helper function to convert MNIST flat pixels to image format
+// [depth][height][width]
+static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
+                                           size_t height = 28,
+                                           size_t width = 28) {
+  image image_data(1); // Single depth channel
+  for (size_t y = 0; y < height; y++) {
+    vector<unsigned char> row;
+    for (size_t x = 0; x < width; x++) {
+      size_t idx = y * width + x;
+      if (idx < flat_pixels.size()) {
+        row.push_back(static_cast<unsigned char>(flat_pixels[idx]));
+      } else {
+        row.push_back(0);
+      }
+    }
+    image_data[0].push_back(row);
+  }
+  return image_data;
 }
 
 // NNModel constructor helper function:
-// calculates the dimension of the output feature map of each convolution
-// layer input:        -current layer kernel height (size_t kernelHeight)
+// calculates the dimension of the output feature map of each convolution layer
+// input:        -current layer kernel height (size_t kernelHeight)
 //               -current layer kernel width (size_t kernelWidth)
 //               -the input feature map height (size_t inputHeight)
 //               -the input feature map width (size_t inputWidth)
@@ -146,21 +377,150 @@ featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight,
 // output:       N/A
 // side effect:  The model is trained by a single image and its paramters
 // are updated Note:         N/A
-void NNModel::train(const image &imgData, int trueOutput) {
-  // store the last input image so classify() can use it
+// Updated train: Returns {loss, is_correct}
+std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
   this->data = imgData;
 
-  // forward propagation
-  classify(imgData);
+  // 1. Forward Pass
+  int predictedClass = classify(imgData);
 
-  // iterate over each layer to call the backward propagation functions
+  // 2. Calculate Metrics (Zero overhead: uses existing forward pass result)
+  int is_correct = (predictedClass == trueOutput) ? 1 : 0;
+  double loss = 0.0;
+  vector<double> probs = getProbabilities();
+  if (!probs.empty()) {
+    loss = calculate_loss_from_probs(probs, trueOutput);
+  }
+
+  // 3. Backward Prop
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    // see which layer this is
-    switch (Layers[i]->getLayerType()) {
+    switch (Layers[i]->getLayerType()) 
+    {
+    case conv:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      }
+      break;
+
+    case pooling:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      }
+      break;
+    case flatten:
+      switch(Layers[i+1]->getLayerType())
+      {
+      case output:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp(static_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      case fullyConnected:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp(static_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      }
+      break;
     case output:
-      // see which layer is before this layer
-      // for the output layer this can be either a fully connected or the
-      // flatten layer
       switch (Layers[i - 1]->getLayerType()) {
       case fullyConnected:
         static_cast<outputLayer *>(Layers[i])->backwardProp(
@@ -175,14 +535,8 @@ void NNModel::train(const image &imgData, int trueOutput) {
       }
       break;
     case fullyConnected:
-      // see which layer is before this layer
-      // for the fully connected layer this can be either another fully
-      // connected or the flatten layer
       switch (Layers[i - 1]->getLayerType()) {
       case fullyConnected:
-        // also to get the error gradients from the next layer a checking is
-        // needed the next layer for a fully connected layer is either
-        // another fully connected or the output layer
         switch (Layers[i + 1]->getLayerType()) {
         case output:
           static_cast<FullyConnected *>(Layers[i])->backwardProp(
@@ -192,15 +546,11 @@ void NNModel::train(const image &imgData, int trueOutput) {
         case fullyConnected:
           static_cast<FullyConnected *>(Layers[i])->backwardProp(
               static_cast<FullyConnected *>(Layers[i - 1])->getOutput(),
-              static_cast<FullyConnected *>(Layers[i + 1])
-                  ->getPrevLayerGrad());
+              static_cast<FullyConnected *>(Layers[i + 1])->getPrevLayerGrad());
           break;
         }
         break;
       case flatten:
-        // also to get the error gradients from the next layer a checking is
-        // needed the next layer for a fully connected layer is either
-        // another fully connected or the output layer
         switch (Layers[i + 1]->getLayerType()) {
         case output:
           static_cast<FullyConnected *>(Layers[i])->backwardProp(
@@ -210,8 +560,7 @@ void NNModel::train(const image &imgData, int trueOutput) {
         case fullyConnected:
           static_cast<FullyConnected *>(Layers[i])->backwardProp(
               static_cast<FlattenLayer *>(Layers[i - 1])->getFlattenedArr(),
-              static_cast<FullyConnected *>(Layers[i + 1])
-                  ->getPrevLayerGrad());
+              static_cast<FullyConnected *>(Layers[i + 1])->getPrevLayerGrad());
           break;
         }
         break;
@@ -220,9 +569,13 @@ void NNModel::train(const image &imgData, int trueOutput) {
     }
   }
 
-  // call the update functions of each layer
+  // 4. Update Weights
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    switch (Layers[i]->getLayerType()) {
+    switch (Layers[i]->getLayerType()) 
+    {
+    case conv:
+      static_cast<convLayer*>(Layers[i])->update();
+      break;
     case output:
       static_cast<outputLayer *>(Layers[i])->update();
       break;
@@ -231,32 +584,163 @@ void NNModel::train(const image &imgData, int trueOutput) {
       break;
     }
   }
+
+  return {loss, is_correct};
 }
 
 // train the model with a batch of images
 // input:        -data (a vector of images)
 //               -trueOutput (a vector of the true output values)
 // output:       N/A
-// side effect:  The model is trained by a batch of image and its paramters
-// are updated Note:         N/A
-void NNModel::train_batch(const vector<image> &batchData,
-                          const vector<int> &trueOutput) {
+// side effect:  The model is trained by a batch of image and its paramters are
+// updated Note:         N/A
+// Updated train_batch: Returns {total_loss, total_correct}
+std::pair<double, int> NNModel::train_batch(const vector<image> &batchData,
+                                            const vector<int> &trueOutput) {
+  double total_loss = 0.0;
+  int total_correct = 0;
+
   for (size_t sample = 0; sample < batchData.size(); sample++) {
-    // store the last input image so classify() can use it
-    this->data = batchData[sample];
+    // 1. Forward Pass (Classify)
+    int predictedClass = classify(batchData[sample]);
 
-    // forward propagation
-    classify(batchData[sample]);
+    // 2. Accumulate Metrics immediately
+    if (predictedClass == trueOutput[sample]) {
+      total_correct++;
+    }
+    vector<double> probs = getProbabilities();
+    if (!probs.empty()) {
+      total_loss += calculate_loss_from_probs(probs, trueOutput[sample]);
+    }
 
-    // iterate over each layer to call the batch backward propagation
-    // functions
+    // 3. Backward Prop
     for (size_t i = Layers.size() - 1; i > 0; i--) {
-      // see which layer this is
       switch (Layers[i]->getLayerType()) {
+      case conv:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      }
+      break;
+
+    case pooling:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      }
+      break;
+    case flatten:
+      switch(Layers[i+1]->getLayerType())
+      {
       case output:
-        // see which layer is before this layer
-        // for the output layer this can be either a fully connected or the
-        // flatten layer
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp_batch(static_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      case fullyConnected:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp_batch(static_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      }
+      break;
+      case output:
         switch (Layers[i - 1]->getLayerType()) {
         case fullyConnected:
           static_cast<outputLayer *>(Layers[i])->backwardProp_batch(
@@ -271,14 +755,8 @@ void NNModel::train_batch(const vector<image> &batchData,
         }
         break;
       case fullyConnected:
-        // see which layer is before this layer
-        // for the fully connected layer this can be either another fully
-        // connected or the flatten layer
         switch (Layers[i - 1]->getLayerType()) {
         case fullyConnected:
-          // also to get the error gradients from the next layer a checking
-          // is needed the next layer for a fully connected layer is either
-          // another fully connected or the output layer
           switch (Layers[i + 1]->getLayerType()) {
           case output:
             static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(
@@ -294,9 +772,6 @@ void NNModel::train_batch(const vector<image> &batchData,
           }
           break;
         case flatten:
-          // also to get the error gradients from the next layer a checking
-          // is needed the next layer for a fully connected layer is either
-          // another fully connected or the output layer
           switch (Layers[i + 1]->getLayerType()) {
           case output:
             static_cast<FullyConnected *>(Layers[i])->backwardProp_batch(
@@ -317,27 +792,30 @@ void NNModel::train_batch(const vector<image> &batchData,
     }
   }
 
-  // call the update_batch functions of each layer
+  // 4. Update Weights
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    switch (Layers[i]->getLayerType()) {
+    switch (Layers[i]->getLayerType())
+    {
+    case conv:
+      static_cast<convLayer*>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
+      break;
     case output:
-      static_cast<outputLayer *>(Layers[i])->update_batch(
-          static_cast<int>(batchData.size()));
+      static_cast<outputLayer *>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
       break;
     case fullyConnected:
-      static_cast<FullyConnected *>(Layers[i])->update_batch(
-          static_cast<int>(batchData.size()));
+      static_cast<FullyConnected *>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
       break;
     }
   }
+
+  return {total_loss, total_correct};
 }
 
 // classify the image by applying the forward propagation on the image
 // input:        data (the image)
 // output:       int (the class of the image)
 // side effect:  N/A
-// Note:         This function is either called directly to get the image
-// class
+// Note:         This function is either called directly to get the image class
 //               or by the train fucntion to train the model
 int NNModel::classify(const image &imgData) {
   // make the data ready to be processed by different layers
@@ -435,4 +913,180 @@ vector<double> NNModel::getProbabilities() {
 
   // The last layer is the output layer
   return static_cast<outputLayer *>(Layers[Layers.size() - 1])->getOutput();
+}
+
+// Train the model for multiple epochs with dataset
+vector<TrainingMetrics> NNModel::train_epochs(
+    const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+    const TrainingConfig &config, ProgressCallback progress_callback,
+    LogCallback log_callback, std::atomic<bool> *stop_requested) {
+
+  vector<TrainingMetrics> history;
+
+  // ... [Keep your existing validation checks for Layers, output layer, etc.]
+  // ...
+  if (Layers.empty() || Layers.back()->getLayerType() != output)
+    return history;
+
+  size_t num_images = dataset.num_images;
+  if (num_images == 0)
+    return history;
+
+  // =========================================================
+  // OPTIMIZATION 1: Cache Image Conversion
+  // =========================================================
+  if (log_callback)
+    log_callback("Caching " + std::to_string(num_images) + " images...");
+
+  vector<image> cached_images;
+  cached_images.reserve(num_images);
+
+  // Convert all images ONCE
+  for (const auto &img_obj : dataset.images) {
+    cached_images.push_back(
+        convert_mnist_to_image_format(img_obj.pixels, 28, 28));
+  }
+
+  if (log_callback)
+    log_callback("Image caching complete. Starting training...");
+  // =========================================================
+
+  // Split logic
+  size_t train_size = num_images;
+  size_t val_size = 0;
+  if (config.use_validation && config.validation_split > 0) {
+    val_size = static_cast<size_t>(num_images * config.validation_split);
+    train_size = num_images - val_size;
+  }
+
+  std::mt19937 rng(config.random_seed);
+
+  for (size_t epoch = 0; epoch < config.epochs; epoch++) {
+    if (stop_requested && stop_requested->load())
+      break;
+    if (log_callback)
+      log_callback("Epoch " + std::to_string(epoch + 1));
+
+    // Shuffle indices
+    vector<size_t> all_indices(num_images);
+    for (size_t i = 0; i < num_images; i++)
+      all_indices[i] = i;
+    if (config.shuffle)
+      std::shuffle(all_indices.begin(), all_indices.end(), rng);
+
+    // Split
+    vector<size_t> train_indices(all_indices.begin(),
+                                 all_indices.begin() + train_size);
+    vector<size_t> val_indices;
+    if (config.use_validation && val_size > 0) {
+      val_indices.assign(all_indices.begin() + train_size, all_indices.end());
+    }
+
+    // =========================================================
+    // OPTIMIZATION 2: Integrated Metrics (No redundant classify)
+    // =========================================================
+    size_t train_correct = 0;
+    double train_loss_sum = 0.0;
+    size_t train_samples = 0; // Tracks actual samples processed
+
+    vector<image> batch_images;
+    vector<int> batch_labels;
+    batch_images.reserve(config.batch_size);
+    batch_labels.reserve(config.batch_size);
+
+    for (size_t i = 0; i < train_indices.size(); i++) {
+      if (stop_requested && (i % 100 == 0) && stop_requested->load())
+        goto epoch_end;
+
+      size_t idx = train_indices[i];
+
+      // USE CACHED IMAGES
+      batch_images.push_back(cached_images[idx]);
+      batch_labels.push_back(static_cast<int>(dataset.images[idx].label));
+
+      // Train when batch full
+      if (batch_images.size() >= config.batch_size ||
+          i == train_indices.size() - 1) {
+        if (!batch_images.empty()) {
+
+          std::pair<double, int> result;
+
+          if (batch_images.size() > 1) {
+            result = train_batch(batch_images, batch_labels);
+          } else {
+            result = train(batch_images[0], batch_labels[0]);
+          }
+
+          // Accumulate metrics DIRECTLY from training step
+          train_loss_sum += result.first;
+          train_correct += result.second;
+          train_samples += batch_images.size();
+
+          batch_images.clear();
+          batch_labels.clear();
+        }
+      }
+    }
+
+  epoch_end:
+    // Calculate final metrics from accumulation
+    double train_acc =
+        train_samples > 0 ? (double)train_correct / train_samples : 0.0;
+    double train_loss =
+        train_samples > 0 ? train_loss_sum / train_samples : 0.0;
+
+    // Validation (Must still run classify here as this is unseen data)
+    double val_acc = 0.0;
+    double val_loss = 0.0;
+    size_t val_samples = 0;
+
+    if (config.use_validation && !val_indices.empty()) {
+      size_t val_correct = 0;
+      double val_loss_sum = 0.0;
+
+      for (size_t idx : val_indices) {
+        // USE CACHED IMAGES
+        const image &image_data = cached_images[idx];
+        int label = static_cast<int>(dataset.images[idx].label);
+
+        int pred = classify(image_data);
+        if (pred == label)
+          val_correct++;
+
+        vector<double> probs = getProbabilities();
+        if (!probs.empty()) {
+          val_loss_sum += calculate_loss_from_probs(probs, label);
+          val_samples++;
+        }
+      }
+      val_acc = (double)val_correct / val_indices.size();
+      val_loss = val_samples > 0 ? val_loss_sum / val_samples : 0.0;
+    }
+
+    // Store & Log
+    TrainingMetrics metrics;
+    metrics.epoch = epoch + 1;
+    metrics.train_loss = train_loss;
+    metrics.train_accuracy = train_acc;
+    metrics.val_loss = val_loss;
+    metrics.val_accuracy = val_acc;
+    history.push_back(metrics);
+
+    if (log_callback) {
+      std::ostringstream msg;
+      msg << "Epoch " << (epoch + 1) << " - Train: Acc=" << std::fixed
+          << std::setprecision(2) << (train_acc * 100) << "%" << " | Train: Loss=" << std::fixed << std::setprecision(4) << train_loss;
+      if (config.use_validation)
+        msg << " | Val: Acc=" << (val_acc * 100) << "%" << " | Val: Loss=" << std::fixed << std::setprecision(4) << val_loss;
+      log_callback(msg.str());
+    }
+
+    if (progress_callback) {
+      progress_callback(epoch + 1, config.epochs,
+                        config.use_validation ? val_loss : train_loss,
+                        config.use_validation ? val_acc : train_acc);
+    }
+  }
+
+  return history;
 }

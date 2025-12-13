@@ -15,7 +15,7 @@
 #include "../activation/activation.h"
 #include "../definitions.h"
 #include "../optimizers/optimizer.h"
-
+#include <iostream>
 #include <vector>
 using namespace std;
 
@@ -40,14 +40,6 @@ public:
   // classes
   virtual LayerType getLayerType() = 0;
 
-  // these fucntions do forward and backward propagation
-  // and must be implemented differently at every layer
-  //(the declaration probably isn't correct)
-  // virtual void forwardProp() = 0;
-  // virtual void backwardProp() = 0;
-
-  // get the layer output data(neurons output)
-  // outType& getLayerOutput();
 
   virtual ~Layer() = default;
 };
@@ -76,8 +68,8 @@ public:
   // the next layers
   // input:        -inputImage (3D unsigned char vector)
   // output:       N/A
-  // side effect:  the normalizedImage matrix is initialzied by the image after
-  // normalization Note:         N/A
+  // side effect:  the normalizedImage matrix is initialzied by the image after normalization 
+  // Note:         N/A
   void start(const image &data);
 
   // get the layer type
@@ -103,68 +95,98 @@ private:
   featureMapDim fm; // dimesions of the feature map
   activationFunction act_Funct; // activation function type
 
-public:
   vector<vector<vector<Optimizer *>>> kernelOptimizers;
-  // Optimizer *biasOpt; // Conv layer has no bias in this implementation
 
-  // Destructor to clean up optimizers
-  ~convLayer();
+public:
+    //the convolution layer constructor
+    //input:        -kernelConfig (contains all the information about the kernel)
+    //              -actFunc (activation function)
+    //              -initFunc (initialization function)
+    //              -distType (distribution type)
+    //              -FM_Dim (the dimension of the output feature map)
+    //ouput:        N/A
+    //side effect:  the convolution layer is constructed
+    //Note:         N/A
+    convLayer(convKernels& kernelConfig, activationFunction actFunc,
+                initFunctions initFunc, distributionType distType
+                , featureMapDim& FM_Dim, OptimizerConfig optConfig);
 
-  // the convolution layer constructor
-  convLayer(convKernels &kernelConfig, activationFunction actFunc,
-            initFunctions initFunc, distributionType distType,
-            featureMapDim &FM_Dim, OptimizerConfig optConfig);
 
-  // initialize a kernel
-  kernelType initKernel(convKernels &kernelConfig, initFunctions initFunc,
-                        distributionType distType);
-  
-  // a set of getters to get the dimensions of the feature maps
-  // mostly used in the model construction
-  size_t getFeatureMapHeight() const { return fm.FM_height; } 
-  size_t getFeatureMapWidth() const { return fm.FM_width; } 
-  size_t getFeatureMapDepth() const { return fm.FM_depth; }
+    //initialize a kernel
+    //input:        -kernelConfig (contains all the information about the kernel)
+    //              -initFunc (the initialization function)
+    //              -distType (the type of the distribution)
+    //output:       kernelType (the initialized kernel)
+    //side effect:  N/A
+    //Note:         N/A
+    kernelType initKernel(convKernels& kernelConfig, initFunctions initFunc,
+                 distributionType distType);
+
+    //a set of getters to get the dimensions of the feature maps
+    //mostly used in the model construction
+    size_t getFeatureMapHeight() const {return fm.FM_height;}   //get the feature map height
+    size_t getFeatureMapWidth() const {return fm.FM_width;}     //get the feature map width
+    size_t getFeatureMapDepth() const {return fm.FM_depth;}     //get the feature map depth
+
 
   // get the type of the activation function
   activationFunction getActivationFunctionType() const { return act_Funct; }
 
+    //do the convolution operation by sweeping the kernels through
+    //the input feature map and putin the result in the (output) feature map
+    //essentially doing the forward propagation
+    //input:        inputFeatureMaps (previous layer output feature maps)
+    //output:       N/A
+    //side effect:  this layer (output) feature maps is filled
+    //Note:         N/A
+    void convolute(vector<featureMapType>& inputFeatureMaps);
 
-
-
-  // do the convolution operation by sweeping the kernels through
-  // the input feature map and putin the result in the (output) feature map
-  // essentially doing the forward propagation
-  // input:        inputFeatureMaps (previous layer output feature maps)
-  // output:       N/A
-  // side effect:  this layer (output) feature maps is filled
-  // Note:         N/A
-  void convolute(vector<featureMapType> &inputFeatureMaps);
-
-  // do the forward propagation of the convolution layer
-  // by first applying the convolution and then the activation functions
-  // input:        inputFeatureMaps
-  // output:       N/A
-  // side effect:  the feature maps are filled with the forward propagation
-  // values note:         N/A
-  void forwardProp(vector<featureMapType> &inputFeatureMaps);
+    //do the forward propagation of the convolution layer
+    //by first applying the convolution and then the activation functions
+    //input:        inputFeatureMaps
+    //output:       N/A
+    //side effect:  the feature maps are filled with the forward propagation values
+    //note:         N/A
+    void forwardProp(vector<featureMapType>& inputFeatureMaps);
 
   // backward propagate the error
-  // input:                -inputFeatureMaps -thisLayerGrad
+  // input:                -inputFeatureMaps 
+  //                       -thisLayerGrad
   // output:               N/A
   // side effect:          the prevLayerGrad is filled with the error to be propagated
   // Note:                 This function works with SGD or for updating after a single
   void backwardProp(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
   
   // backward propagate the error after a batch
-  // input:                -inputFeatureMaps -thisLayerGrad
+  // input:                -inputFeatureMaps 
+  //                       -thisLayerGrad
   // output:               N/A
   // side effect:          the prevLayerGrad is filled with the error to be propagated
   // Note:                 This function works with BGD or for updating after a whole batch
   void backwardProp_batch(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
 
+
+  //update the kernels
+  //input:          N/A
+  //ouput:          N/A
+  //side effect:    the kernel is updated with new values and the kernel gradients are reseted
+  //Note:           This function works for single samples, for a batch, use upadate_batch()
+  void update();
+
+  //update the kernels
+  //input:          numOfExamples
+  //ouput:          N/A
+  //side effect:    the kernel is updated with new values and the kernel gradients are reseted
+  //Note:           This function works for a batch of samples, for a single sample, use upadate()
+  void update_batch(int numOfExamples);
+
+
   vector<featureMapType> &getFeatureMaps() { return featureMaps; } // get the output feature map
   vector<featureMapType> &getPrevLayerGrad() { return prevLayerGrad; } // get the previous layer gradient
   LayerType getLayerType() override { return type; }  // get the layer type
+
+
+  ~convLayer();
 };
 
 class poolingLayer : public Layer {
@@ -181,40 +203,35 @@ private:
   featureMapDim fm; // dimesions of the feature map
 
 public:
-  // pooling layer constructor
-  // input:                -kernelConfig (dimensions of the filter and number of
-  // strides)
-  //                       -FM_Dim (dimensions of the output feature map)
-  //                       -poolType (max or average)
-  // output:               N/A
-  // side effect:          the pooling layer is constructed
-  // Note:                 N/A
-  poolingLayer(poolKernel &kernelConfig, featureMapDim &FM_Dim,
-               poolingLayerType &poolType);
+    //pooling layer constructor
+    //input:                -kernelConfig (dimensions of the filter and number of strides)
+    //                      -FM_Dim (dimensions of the output feature map)
+    //                      -poolType (max or average)
+    //output:               N/A
+    //side effect:          the pooling layer is constructed
+    //Note:                 N/A
+    poolingLayer(poolKernel& kernelConfig, featureMapDim& FM_Dim, poolingLayerType& poolType);
 
-  // forward propagation of the pooling layer
-  // done by applying max or average pooling to the feature maps
-  // input:                inputFeatureMaps
-  // output:               N/A
-  // side effect:          the output feature map is filled with the result of
-  // the pooling Note:                 N/A
-  void forwardProp(vector<featureMapType> &inputFeatureMaps);
+    //forward propagation of the pooling layer
+    //done by applying max or average pooling to the feature maps
+    //input:                inputFeatureMaps
+    //output:               N/A
+    //side effect:          the output feature map is filled with the result of the pooling
+    //Note:                 N/A
+    void forwardProp(vector<featureMapType>& inputFeatureMaps);
 
-  // Backward Propagation
-  void backwardProp(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
-  void backwardProp_batch(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
+    //a set of getters to get the dimensions of the feature maps
+    //mostly used in the model construction
+    size_t getFeatureMapHeight() const {return fm.FM_height;}   //get the feature map height
+    size_t getFeatureMapWidth() const {return fm.FM_width;}     //get the feature map width
+    size_t getFeatureMapDepth() const {return fm.FM_depth;}     //get the feature map depth
 
-  // a set of getters to get the dimensions of the feature maps
-  // mostly used in the model construction
-  size_t getFeatureMapHeight() const {
-    return fm.FM_height;
-  } // get the feature map height
-  size_t getFeatureMapWidth() const {
-    return fm.FM_width;
-  } // get the feature map width
-  size_t getFeatureMapDepth() const {
-    return fm.FM_depth;
-  } // get the feature map depth
+
+  void backwardProp(vector<featureMapType> &inputFeatureMaps,
+                                vector<featureMapType> &thisLayerGrad) ;
+
+  void backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
+                                      vector<featureMapType> &thisLayerGrad);                              
 
   // get the output feature map
   vector<featureMapType> &getFeatureMaps() { return featureMaps; }
@@ -241,57 +258,74 @@ private:
   vector<double> prevLayerGrad; // gradients to be used by the previous layer in
                                 // backward propagation
 
+  vector<Optimizer*> neuronOptimizers; // One optimizer per neuron (weight vector)  
+  Optimizer* biasOptimizer;
+
   activationFunction act_Funct;    // the type of the activation function
   LayerType type = fullyConnected; // the type of the layer
 
+
+
 public:
-  vector<Optimizer *>
-      neuronOptimizers; // One optimizer per neuron (weight vector)
-  Optimizer *biasOptimizer;
+    //the fully connected layer constructor
+    //input:        -numOfNeurons
+    //              -actFunc (the layer activation function)
+    //              -initFuc (the layer initializaiton function)
+    //              -distType (the layer distribution used to initializet its weights)
+    //              -numOfWeigths (the number of weights per layer)
+    //output:       N/A
+    //side effect:  a Fully connected layer is constructed
+    //Note:         N/A
+    FullyConnected(size_t numOfNeurons, activationFunction actFunc,
+                initFunctions initFunc, distributionType distType,
+                        size_t numOfWeight, OptimizerConfig optConfig);
 
-  // Destructor to clean up optimizers
-  ~FullyConnected();
+    //forward propagate the input data to the output
+    //input:        inputData
+    //output:       N/A
+    //side effects: the outputData vector is filled with the dot product
+    //              of the input data and each neuron weights
+    //Note:         N/A
+    void forwardProp(vector<double>& inputData);
 
-  // the fully connected layer constructor
-  FullyConnected(size_t numOfNeurons, activationFunction actFunc,
-                 initFunctions initFunc, distributionType distType,
-                 size_t numOfWeights, OptimizerConfig optConfig);
 
-  // update the weights and biases of this fully connected layer
-  void update();
 
-  // update the weights and biases of this fully connected layer after a batch
-  void update_batch(int numOfExamples);
-  void forwardProp(vector<double> &inputData);
+    //backward propagate the error
+    //input:                -inputData
+    //                      -thisLayerGrad
+    //output:               N/A
+    //side effect:          the d_bias and d_weights are filled with the gradients
+    //                      and prevLayerGrad is filled with the error to be propagated
+    //Note:                 This function works with SGD or for updating after a single
+    //                      example, if the update should happen after multiple examples,
+    //                      then use bacwardProp_batch() instead
+    void backwardProp(vector<double>& inputData, vector<double>& thisLayerGrad);
 
-  // backward propagate the error
-  // input:                -inputData
-  //                       -thisLayerGrad
-  // output:               N/A
-  // side effect:          the d_bias and d_weights are filled with the
-  // gradients
-  //                       and prevLayerGrad is filled with the error to be
-  //                       propagated
-  // Note:                 This function works with SGD or for updating after a
-  // single
-  //                       example, if the update should happen after multiple
-  //                       examples, then use bacwardProp_batch() instead
-  void backwardProp(vector<double> &inputData, vector<double> &thisLayerGrad);
+    // backward propagate the error
+    // input:                -inputData
+    //                       -thisLayerGrad
+    // output:               N/A
+    // side effect:          the d_bias and D_weights are filled with the accumlated gradients
+    //                       and prevLayerGrad is filled with the error to be propagated
+    // Note:                 This function works with BGD or for updating after a whole batch
+    //                       of examples, if the update should happen after a single example,
+    //                       then use bacwardProp() instead
+    void backwardProp_batch(vector<double>& inputData, vector<double>& thisLayerGrad);
 
-  // backward propagate the error
-  // input:                -inputData
-  //                       -thisLayerGrad
-  // output:               N/A
-  // side effect:          the d_bias and D_weights are filled with the
-  // accumlated gradients
-  //                       and prevLayerGrad is filled with the error to be
-  //                       propagated
-  // Note:                 This function works with BGD or for updating after a
-  // whole batch
-  //                       of examples, if the update should happen after a
-  //                       single example, then use bacwardProp() instead
-  void backwardProp_batch(vector<double> &inputData,
-                          vector<double> &thisLayerGrad);
+    // update the weights and biases of this fully connected layer
+    // input:                learningRate
+    // output:               N/A
+    // side effect:          the weights and biases are updated
+    // Note:                 N/A
+    void update();
+
+    // update the weights and biases of this fully connected layer after a batch
+    // input:                -learningRate
+    //                       -numOfExamples
+    // output:               N/A
+    // side effect:          the weights and biases are updated
+    // Note:                 N/A
+    void update_batch(int numOfExamples);
 
   // get the ouput data size (used by the constructor)
   size_t getOutputSize() { return neurons.size(); }
@@ -304,6 +338,9 @@ public:
 
   // get the layer type
   LayerType getLayerType() override { return type; }
+
+  ~FullyConnected();
+
 };
 
 class FlattenLayer : public Layer {
@@ -369,47 +406,88 @@ private:
   vector<double> d_bias;        // store the gradients for biases
   vector<double> prevLayerGrad; // gradients to be used by the previous layer in
                                 // backward propagation
+  vector<Optimizer *> neuronOptimizers;
+  Optimizer* biasOptimizer;
 
   LayerType type = output;
 
 public:
-  vector<Optimizer *> neuronOptimizers;
-  Optimizer *biasOptimizer;
+    //the output layer constructor
+    //input:                -numOfClasses
+    //                      -numOfWeights
+    //                      -distType
+    //                      -optConfig
+    //output:               N/A
+    //side effect:          the output layer is constructed
+    //Note:                 N/A
+    outputLayer(size_t numOfClasses,  size_t numOfWeights, distributionType distType, OptimizerConfig optConfig);
 
-  // Destructor to clean up optimizers
-  ~outputLayer();
+    //forward propagate the input into the corrisponding classes
+    //input:                inputData
+    //output:               N/A
+    //side effects:         the outputData vector is filled with the output of
+    //                      the activation function (softmax) of the dot product
+    //                      of the input data and each neuron weights
+    //Note:                 N/A
+    void forwardProp(vector<double>& inputData);
 
-  // the output layer constructor
-  outputLayer(size_t numOfClasses, size_t numOfWeights,
-              distributionType distType, OptimizerConfig optConfig);
+    //backward propagate the error
+    //input:                -inputData
+    //                      -correctClass
+    //output:               N/A
+    //side effect:          the d_bias and D_weights are filled with the gradients
+    //                      and prevLayerGrad is filled with the error to be propagated
+    //Note:                 This function works with SGD or for updating after a single
+    //                      example, if the update should happen after multiple examples,
+    //                      then use bacwardProp_batch() instead
+    void backwardProp(vector<double>& inputData, size_t correctClass);
 
-  // update the weights and biases of the output layer
-  void update();
+    //backward propagate the error
+    //input:                -inputData
+    //                      -correctClass
+    //output:               N/A
+    //side effect:          the d_bias and D_weights are filled with the accumlated gradients
+    //                      and prevLayerGrad is filled with the error to be propagated
+    //Note:                 This function works with BGD or for updating after a whole batch
+    //                      of examples, if the update should happen after a single example,
+    //                      then use bacwardProp() instead
+    void backwardProp_batch(vector<double>& inputData, size_t correctClass);
 
-  // update the weights and biases of the output layer after a batch
-  void update_batch(int numOfExamples);
+    //update the weights and biases of the output layer
+    //input:                learningRate
+    //output:               N/A
+    //side effect:          the weights and biases are updated
+    //Note:                 N/A
+    void update();
 
-  void forwardProp(vector<double> &featureMaps);
+    //update the weights and biases of the output layer after a batch
+    //input:                -learningRate
+    //                      -numOfExamples
+    //output:               N/A
+    //side effect:          the weights and biases are updated
+    //Note:                 N/A
+    void update_batch(int numOfExamples);
 
-  void backwardProp(vector<double> &inputData, size_t correctClass);
-  void backwardProp_batch(vector<double> &inputData, size_t correctClass);
+    //get the layer type
+    LayerType getLayerType() override {return type;}
 
-  // get the layer type
-  LayerType getLayerType() override { return type; }
 
-  // get the previous layer gradient
-  vector<double> &getPrevLayerGrad() { return prevLayerGrad; }
+    //get the previous layer gradient
+    vector<double>& getPrevLayerGrad() {return prevLayerGrad;}
 
-  // get the class num of the image
-  // input:                N/A
-  // output:               int value(the number/index of the class)
-  // side effect:          N/A
-  // note:                 the num of the class is in the same order
-  //                       that is given to the backwardProp() function
-  int getClass();
+
+    // get the class num of the image
+    // input:                N/A
+    // output:               int value(the number/index of the class)
+    // side effect:          N/A
+    // note:                 the num of the class is in the same order
+    //                       that is given to the backwardProp() function
+    int getClass();
 
   // get the output probability vector
-  vector<double> &getOutput() { return outputData; }
+  vector<double>& getOutput() { return outputData; }
+
+  ~outputLayer();
 };
 
 #endif

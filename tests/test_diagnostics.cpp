@@ -103,7 +103,6 @@ void test_model_integration() {
   arch.FCLayerActivationFunc = {RelU};
   arch.FCInitFunctionsType = {Xavier};
   arch.distType = normalDistribution;
-  arch.learningRate = 0.01;
 
   NNModel model(arch, 2, 2, 2, 1); // 2 Classes, 2x2 image, 1 depth
 
@@ -150,7 +149,6 @@ void test_feature_map_calculation() {
   architecture arch;
   arch.numOfConvLayers = 0;
   arch.numOfFCLayers = 0; // minimal
-  arch.learningRate = 0.01;
 
   NNModel model(arch, 2, 28, 28, 1);
 
@@ -209,7 +207,6 @@ void test_cnn_integration() {
   arch.FCLayerActivationFunc = {RelU};
   arch.FCInitFunctionsType = {Xavier};
   arch.distType = normalDistribution;
-  arch.learningRate = 0.01;
 
   // Input 10x10, 1 depth
   NNModel model(arch, 2, 10, 10, 1);
@@ -240,7 +237,6 @@ void test_batch_training() {
   arch.FCLayerActivationFunc = {RelU};
   arch.FCInitFunctionsType = {Xavier};
   arch.distType = normalDistribution;
-  arch.learningRate = 0.01;
 
   NNModel model(arch, 2, 2, 2, 1);
 
@@ -298,7 +294,6 @@ void test_cnn_crash() {
   arch.FCLayerActivationFunc = {RelU};
   arch.FCInitFunctionsType = {Xavier};
   arch.distType = normalDistribution;
-  arch.learningRate = 0.001;
 
   // Use 28x28 input (MNIST size)
   NNModel model(arch, 2, 28, 28, 1);
