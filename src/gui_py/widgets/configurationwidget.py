@@ -2,6 +2,10 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
                              QTabWidget, QSpinBox, QDoubleSpinBox, QComboBox, 
                              QCheckBox, QPushButton, QScrollArea, QLabel, QMessageBox, QGroupBox, QFileDialog, QLineEdit)
 from PyQt6.QtCore import Qt, pyqtSignal
+import logging
+import os
+import json
+import datetime
 
 class ConfigurationWidget(QWidget):
     parametersChanged = pyqtSignal()
@@ -88,14 +92,14 @@ class ConfigurationWidget(QWidget):
         self.optimizer_combo.setToolTip("The optimization algorithm. 'Adam' is generally a good default choice.")
         
         self.learning_rate = QDoubleSpinBox()
-        self.learning_rate.setRange(0.00001, 10.0)
-        self.learning_rate.setValue(0.001)
+        self.learning_rate.setRange(0.0, 10.0)
+        self.learning_rate.setValue(0.01)
         self.learning_rate.setDecimals(5)
         self.learning_rate.setToolTip("Step size for the optimizer. Too high = divergent, too low = slow.")
         
         self.weight_decay = QDoubleSpinBox()
         self.weight_decay.setRange(0.0, 1.0)
-        self.weight_decay.setValue(0.0001)
+        self.weight_decay.setValue(0.01)
         self.weight_decay.setDecimals(5)
         self.weight_decay.setToolTip("L2 Regularization term to prevent overfitting.")
         
@@ -112,7 +116,7 @@ class ConfigurationWidget(QWidget):
         
         self.batch_size = QSpinBox()
         self.batch_size.setRange(1, 10000)
-        self.batch_size.setValue(32)
+        self.batch_size.setValue(64)
         self.batch_size.setToolTip("Number of training examples used in one iteration. Larger batches = more stable training.")
         
         self.use_validation = QCheckBox()
@@ -156,13 +160,13 @@ class ConfigurationWidget(QWidget):
         self.num_conv_layers.setToolTip("Number of Convolutional layers.")
         layout.addRow("Number of Conv Layers:", self.num_conv_layers)
 
-        self.kernels_per_layer = QLineEdit("6, 16")
-        self.kernels_per_layer.setPlaceholderText("e.g. 6, 16")
+        self.kernels_per_layer = QLineEdit("3, 3")
+        self.kernels_per_layer.setPlaceholderText("e.g. 3, 3")
         self.kernels_per_layer.setToolTip("Comma separated number of kernels for each Conv layer.")
         layout.addRow("Kernels per Layer:", self.kernels_per_layer)
 
-        self.kernel_dims = QLineEdit("5x5, 5x5")
-        self.kernel_dims.setPlaceholderText("e.g. 5x5, 5x5")
+        self.kernel_dims = QLineEdit("3x3, 3x3")
+        self.kernel_dims.setPlaceholderText("e.g. 3x3, 3x3")
         self.kernel_dims.setToolTip("Comma separated dimensions (HxW) for each Conv layer. e.g. '5x5', or '5x5, 3x3'.")
         layout.addRow("Kernel Dimensions:", self.kernel_dims)
 
@@ -262,11 +266,11 @@ class ConfigurationWidget(QWidget):
         self.num_layers.setValue(3)
         
         self.optimizer_combo.setCurrentIndex(1) # Adam
-        self.learning_rate.setValue(0.001)  # Good default for Adam
-        self.weight_decay.setValue(0.0001)  # L2 regularization
+        self.learning_rate.setValue(0.01)  # Good default for Adam
+        self.weight_decay.setValue(0.01)  # L2 regularization
         self.momentum.setValue(0.9)
         self.epochs.setValue(10)  # More epochs for better convergence
-        self.batch_size.setValue(32)  # Larger batch for stability
+        self.batch_size.setValue(64)  # Larger batch for stability
         self.use_validation.setChecked(False)
         self.validation_split.setValue(0.0)
         
@@ -275,8 +279,8 @@ class ConfigurationWidget(QWidget):
         self.neurons_fc_input.setText("64, 10")  # Larger first layer
 
         self.num_conv_layers.setValue(2)
-        self.kernels_per_layer.setText("6, 16")
-        self.kernel_dims.setText("5x5, 5x5")
+        self.kernels_per_layer.setText("3, 3")
+        self.kernel_dims.setText("3x3, 3x3")
         self.pooling_type.setCurrentIndex(0) # Max
         self.pooling_intervals.setText("2, 2")
 
@@ -285,14 +289,93 @@ class ConfigurationWidget(QWidget):
         self.on_parameter_changed()
 
     def on_load_config(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Load Configuration", "", "Config Files (*.json *.cfg);;All Files (*.*)")
+        # Ensure config directory exists
+        config_dir = os.path.join(os.getcwd(), "src", "data", "configurations")
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+            
+        path, _ = QFileDialog.getOpenFileName(self, "Load Configuration", config_dir, "Config Files (*.json);;All Files (*.*)")
         if path:
-            QMessageBox.information(self, "Load Config", "Configuration loading will be implemented with JSON parsing.")
+            try:
+                with open(path, 'r') as f:
+                    config = json.load(f)
+                
+                # Apply configuration to UI elements
+                # Block signals to prevent multiple updates
+                self.blockSignals(True)
+                
+                if 'num_classes' in config: self.num_classes.setValue(config['num_classes'])
+                if 'image_width' in config: self.image_width.setValue(config['image_width'])
+                if 'image_height' in config: self.image_height.setValue(config['image_height'])
+                
+                if 'num_conv_layers' in config: self.num_conv_layers.setValue(config['num_conv_layers'])
+                if 'kernels_per_layer' in config: 
+                    val = config['kernels_per_layer']
+                    if isinstance(val, list): val = ", ".join(map(str, val))
+                    self.kernels_per_layer.setText(str(val))
+                if 'kernel_dims' in config:
+                    # Convert list of lists/tuples back to string "HxW, HxW"
+                    val = config['kernel_dims']
+                    if isinstance(val, list):
+                        strs = []
+                        for item in val:
+                            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                                strs.append(f"{item[0]}x{item[1]}")
+                        self.kernel_dims.setText(", ".join(strs))
+                    else:
+                        self.kernel_dims.setText(str(val))
+                        
+                if 'pooling_type' in config: self.pooling_type.setCurrentText(config['pooling_type'])
+                if 'pooling_intervals' in config:
+                    val = config['pooling_intervals']
+                    if isinstance(val, list): val = ", ".join(map(str, val))
+                    self.pooling_intervals.setText(str(val))
+
+                if 'num_fc_layers' in config: self.num_fc_layers.setValue(config['num_fc_layers'])
+                if 'neurons_per_fc_layer' in config:
+                    val = config['neurons_per_fc_layer']
+                    if isinstance(val, list): val = ", ".join(map(str, val))
+                    self.neurons_fc_input.setText(str(val))
+
+                if 'optimizer' in config: self.optimizer_combo.setCurrentText(config['optimizer'])
+                if 'learning_rate' in config: self.learning_rate.setValue(config['learning_rate'])
+                if 'weight_decay' in config: self.weight_decay.setValue(config['weight_decay'])
+                if 'momentum' in config: self.momentum.setValue(config['momentum'])
+                if 'epochs' in config: self.epochs.setValue(config['epochs'])
+                if 'batch_size' in config: self.batch_size.setValue(config['batch_size'])
+                if 'validation_split' in config: self.validation_split.setValue(config['validation_split'])
+                if 'use_validation' in config: self.use_validation.setChecked(config['use_validation'])
+                
+                self.blockSignals(False)
+                self.on_parameter_changed()
+                QMessageBox.information(self, "Config Loaded", f"Configuration loaded from:\n{path}")
+                
+            except Exception as e:
+                self.blockSignals(False)
+                QMessageBox.critical(self, "Load Error", f"Failed to load config: {e}")
 
     def on_save_config(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save Configuration", "", "Config Files (*.json);;All Files (*.*)")
-        if path:
-            QMessageBox.information(self, "Save Config", "Configuration saving will be implemented with JSON serialization.")
+        # Ensure config directory exists
+        config_dir = os.path.join(os.getcwd(), "src", "data", "configurations")
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+            
+        # Generate filename with timestamp
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"config_{timestamp}.json"
+        full_path = os.path.join(config_dir, filename)
+        
+        try:
+            # Get current parameters (parsed)
+            params = self.get_training_parameters()
+            
+            with open(full_path, 'w') as f:
+                json.dump(params, f, indent=4)
+                
+            QMessageBox.information(self, "Config Saved", f"Configuration saved to:\n{full_path}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save config: {e}")
 
     # Getters for controller use
     def get_training_parameters(self):

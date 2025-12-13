@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         import os
         
         # Default path
-        start_dir = "src/data"
+        start_dir = "src/data/datasets"
         if not os.path.exists(start_dir):
             start_dir = "."
             
@@ -103,15 +103,55 @@ class MainWindow(QMainWindow):
             self, "Select MNIST Images File", start_dir,
             "MNIST Images (*.idx3-ubyte);;All Files (*.*)"
         )
+        
         if not images_path:
             return
+
+        # Attempt to auto-discover labels file
+        dir_name = os.path.dirname(images_path)
+        base_name = os.path.basename(images_path)
+        
+        # Common naming convention: swap 'images' with 'labels'
+        # e.g. train-images.idx3-ubyte -> train-labels.idx1-ubyte
+        #      train-images-idx3-ubyte -> train-labels-idx1-ubyte
+        if 'images' in base_name:
+            labels_name = base_name.replace('images', 'labels')
+            # Fix: Also replace idx3 with idx1 to handle standard MNIST extensions
+            labels_name = labels_name.replace('idx3', 'idx1')
+        else:
+            # Fallback check for common patterns if 'images' string not explicit or different case
+            labels_name = base_name.replace('idx3', 'idx1') 
+
+        guess_labels_path = os.path.join(dir_name, labels_name)
+        
+        if os.path.exists(guess_labels_path):
+            labels_path = guess_labels_path
+            self.log_message(f"Auto-detected labels file: {labels_name}")
+        else:
+            # Fallback to manual selection if auto-discovery fails
+            labels_path, _ = QFileDialog.getOpenFileName(
+                self, "Select MNIST Labels File", dir_name,
+                "MNIST Labels (*.idx1-ubyte);;All Files (*.*)"
+            )
+            if not labels_path:
+                return
+
+        # Determine Dataset Type
+        dataset_type = "MNIST"
+        lower_path = images_path.lower()
+        if "fashion" in lower_path:
+            dataset_type = "Fashion-MNIST"
+        elif "emnist" in lower_path:
+            dataset_type = "EMNIST"
+        elif "kmnist" in lower_path:
+            dataset_type = "KMNIST"
+        elif "mnist" in lower_path:
+            dataset_type = "MNIST"
             
-        labels_path, _ = QFileDialog.getOpenFileName(
-            self, "Select MNIST Labels File", os.path.dirname(images_path),
-            "MNIST Labels (*.idx1-ubyte);;All Files (*.*)"
-        )
-        if not labels_path:
-            return
+        # Log details
+        self.log_message(f"Selected Dataset Type: {dataset_type}")
+        self.log_message(f"Images File: {os.path.basename(images_path)}")
+        self.log_message(f"Labels File: {os.path.basename(labels_path)}")
             
         self.controller.requestLoadDataset.emit(images_path, labels_path)
 
