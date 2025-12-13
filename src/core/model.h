@@ -8,6 +8,7 @@
 #include <functional>
 #include <random>
 #include <vector>
+#include <atomic>
 
 using cgroot::data::MNISTLoader;
 using std::vector;
