@@ -40,6 +40,23 @@ class TestBindingsRefactor(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             cgroot_core.create_model(config)
 
+    def test_create_model_cnn(self):
+        # Test complex CNN config
+        config = {
+            'num_conv_layers': 2,
+            'kernels_per_layer': [6, 16],
+            'kernel_dims': [(5, 5), (3, 3)],
+            'pooling_intervals': [1, 1], # Pool after 1st (0+1=1st) and 2nd (1+1=2nd)? logic check needed
+            'pooling_type': 'Max',
+            'num_fc_layers': 2,
+            'neurons_per_fc_layer': [120, 84], # LeNet-ish
+            'num_classes': 10,
+            'image_height': 32,
+            'image_width': 32
+        }
+        model = cgroot_core.create_model(config)
+        self.assertIsNotNone(model)
+        
     def test_classify_pixels(self):
         # Create a dummy model
         config = {'num_classes': 10, 'neurons_per_fc_layer': [64, 10]}

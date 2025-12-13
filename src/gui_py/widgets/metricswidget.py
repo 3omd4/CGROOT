@@ -173,10 +173,11 @@ class MetricsWidget(QWidget):
         if total_epochs < 1:
             total_epochs = 1
             
-        self.loss_axis_x.setRange(0, total_epochs)
-        self.acc_axis_x.setRange(0, total_epochs)
+        self.loss_axis_x.setRange(0, total_epochs + 1)
+        self.acc_axis_x.setRange(0, total_epochs + 1)
         # Assuming label format is integer, this helps tick count look nice if needed
-        # self.loss_axis_x.setTickCount(min(total_epochs + 1, 11)) 
+        self.loss_axis_x.setTickCount(min(total_epochs + 1, 6)) 
+        self.acc_axis_x.setTickCount(min(total_epochs + 1, 6)) 
 
     def updateMetrics(self, loss, accuracy, epoch):
         self.loss_series.append(epoch, loss)

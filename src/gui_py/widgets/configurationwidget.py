@@ -84,18 +84,18 @@ class ConfigurationWidget(QWidget):
         
         self.optimizer_combo = QComboBox()
         self.optimizer_combo.addItems(["SGD", "Adam", "RMSprop"])
-        self.optimizer_combo.setCurrentIndex(0) # Default to SGD
+        self.optimizer_combo.setCurrentIndex(1) # Default to Adam
         self.optimizer_combo.setToolTip("The optimization algorithm. 'Adam' is generally a good default choice.")
         
         self.learning_rate = QDoubleSpinBox()
         self.learning_rate.setRange(0.00001, 10.0)
-        self.learning_rate.setValue(0.05)
+        self.learning_rate.setValue(0.001)
         self.learning_rate.setDecimals(5)
         self.learning_rate.setToolTip("Step size for the optimizer. Too high = divergent, too low = slow.")
         
         self.weight_decay = QDoubleSpinBox()
         self.weight_decay.setRange(0.0, 1.0)
-        self.weight_decay.setValue(0.0)
+        self.weight_decay.setValue(0.0001)
         self.weight_decay.setDecimals(5)
         self.weight_decay.setToolTip("L2 Regularization term to prevent overfitting.")
         
@@ -107,12 +107,12 @@ class ConfigurationWidget(QWidget):
         
         self.epochs = QSpinBox()
         self.epochs.setRange(1, 10000)
-        self.epochs.setValue(5)
+        self.epochs.setValue(10)
         self.epochs.setToolTip("Number of full passes through the training dataset. More epochs = better accuracy but longer training.")
         
         self.batch_size = QSpinBox()
         self.batch_size.setRange(1, 10000)
-        self.batch_size.setValue(128)
+        self.batch_size.setValue(32)
         self.batch_size.setToolTip("Number of training examples used in one iteration. Larger batches = more stable training.")
         
         self.use_validation = QCheckBox()
@@ -149,12 +149,33 @@ class ConfigurationWidget(QWidget):
         widget = QWidget()
         layout = QFormLayout(widget)
         
-        # Conv Layers Config (Currently limited/disabled as per user request/core limit)
+        # Conv Layers Config
         self.num_conv_layers = QSpinBox()
-        self.num_conv_layers.setRange(0, 5)
-        self.num_conv_layers.setValue(0) # Default to 0
-        self.num_conv_layers.setToolTip("Number of Convolutional layers (if creating a custom CNN).")
+        self.num_conv_layers.setRange(0, 10)
+        self.num_conv_layers.setValue(2) # Default to 2
+        self.num_conv_layers.setToolTip("Number of Convolutional layers.")
         layout.addRow("Number of Conv Layers:", self.num_conv_layers)
+
+        self.kernels_per_layer = QLineEdit("6, 16")
+        self.kernels_per_layer.setPlaceholderText("e.g. 6, 16")
+        self.kernels_per_layer.setToolTip("Comma separated number of kernels for each Conv layer.")
+        layout.addRow("Kernels per Layer:", self.kernels_per_layer)
+
+        self.kernel_dims = QLineEdit("5x5, 5x5")
+        self.kernel_dims.setPlaceholderText("e.g. 5x5, 5x5")
+        self.kernel_dims.setToolTip("Comma separated dimensions (HxW) for each Conv layer. e.g. '5x5', or '5x5, 3x3'.")
+        layout.addRow("Kernel Dimensions:", self.kernel_dims)
+
+        # Pooling Config
+        self.pooling_type = QComboBox()
+        self.pooling_type.addItems(["Max", "Average"])
+        self.pooling_type.setCurrentIndex(0) # Default to Max
+        layout.addRow("Pooling Type:", self.pooling_type)
+
+        self.pooling_intervals = QLineEdit("2, 2")
+        self.pooling_intervals.setPlaceholderText("e.g. 2, 2")
+        self.pooling_intervals.setToolTip("Number of Conv layers before each Pooling layer. e.g. '2' means every 2 convs.")
+        layout.addRow("Pooling Intervals:", self.pooling_intervals)
         
         # FC Layers Config
         self.num_fc_layers = QSpinBox()
@@ -174,6 +195,10 @@ class ConfigurationWidget(QWidget):
         self.num_conv_layers.valueChanged.connect(self.on_parameter_changed)
         self.num_fc_layers.valueChanged.connect(self.on_parameter_changed)
         self.neurons_fc_input.textChanged.connect(self.on_parameter_changed)
+        self.kernels_per_layer.textChanged.connect(self.on_parameter_changed)
+        self.kernel_dims.textChanged.connect(self.on_parameter_changed)
+        self.pooling_type.currentIndexChanged.connect(self.on_parameter_changed)
+        self.pooling_intervals.textChanged.connect(self.on_parameter_changed)
         
         scroll.setWidget(widget)
         scroll.setWidgetResizable(True)
@@ -187,6 +212,32 @@ class ConfigurationWidget(QWidget):
         except ValueError:
             neurons = [128, 10]
             logging.warning("Invalid neurons per FC layer. Using default: 128, 10")
+        
+        # Parse CNN params
+        try:
+            kernels_str = self.kernels_per_layer.text()
+            kernels_list = [int(x.strip()) for x in kernels_str.split(',') if x.strip()]
+        except ValueError:
+            kernels_list = []
+
+        # Parse Kernel Dims (e.g. "5x5, 3x3")
+        kernel_dims_list = []
+        dims_str = self.kernel_dims.text()
+        parts = [p.strip() for p in dims_str.split(',') if p.strip()]
+        for p in parts:
+            if 'x' in p:
+                d = p.split('x')
+                if len(d) == 2:
+                    try:
+                        kernel_dims_list.append((int(d[0]), int(d[1])))
+                    except: pass
+            
+        # Parse Pooling Intervals
+        try:
+            intervals_str = self.pooling_intervals.text()
+            intervals_list = [int(x.strip()) for x in intervals_str.split(',') if x.strip()]
+        except ValueError:
+            intervals_list = []
             
         return {
             'num_classes': self.num_classes.value(),
@@ -194,7 +245,11 @@ class ConfigurationWidget(QWidget):
             'image_height': self.image_height.value(),
             'num_conv_layers': self.num_conv_layers.value(),
             'num_fc_layers': self.num_fc_layers.value(),
-            'neurons_per_fc_layer': neurons
+            'neurons_per_fc_layer': neurons,
+            'kernels_per_layer': kernels_list,
+            'kernel_dims': kernel_dims_list,
+            'pooling_type': self.pooling_type.currentText(),
+            'pooling_intervals': intervals_list
         }
 
     def on_parameter_changed(self):
@@ -210,14 +265,22 @@ class ConfigurationWidget(QWidget):
         self.learning_rate.setValue(0.001)  # Good default for Adam
         self.weight_decay.setValue(0.0001)  # L2 regularization
         self.momentum.setValue(0.9)
-        self.epochs.setValue(20)  # More epochs for better convergence
-        self.batch_size.setValue(64)  # Larger batch for stability
-        self.use_validation.setChecked(True)
-        self.validation_split.setValue(0.2)
+        self.epochs.setValue(10)  # More epochs for better convergence
+        self.batch_size.setValue(32)  # Larger batch for stability
+        self.use_validation.setChecked(False)
+        self.validation_split.setValue(0.0)
         
         # Better default architecture for MNIST
         self.num_fc_layers.setValue(2)
-        self.neurons_fc_input.setText("256, 10")  # Larger first layer
+        self.neurons_fc_input.setText("64, 10")  # Larger first layer
+
+        self.num_conv_layers.setValue(2)
+        self.kernels_per_layer.setText("6, 16")
+        self.kernel_dims.setText("5x5, 5x5")
+        self.pooling_type.setCurrentIndex(0) # Max
+        self.pooling_intervals.setText("2, 2")
+
+
         
         self.on_parameter_changed()
 
@@ -241,5 +304,15 @@ class ConfigurationWidget(QWidget):
             'weight_decay': self.weight_decay.value(),
             'momentum': self.momentum.value(),
             'validation_split': self.validation_split.value(),
-            'use_validation': self.use_validation.isChecked()
+            'use_validation': self.use_validation.isChecked(),
+            'num_conv_layers': self.num_conv_layers.value(),
+            'kernels_per_layer': self.kernels_per_layer.text(),
+            'kernel_dims': self.kernel_dims.text(),
+            'pooling_type': self.pooling_type.currentText(),
+            'pooling_intervals': self.pooling_intervals.text(),
+            'num_fc_layers': self.num_fc_layers.value(),
+            'neurons_per_fc_layer': self.neurons_fc_input.text(),
+            'num_classes': self.num_classes.value(),
+            'image_width': self.image_width.value(),
+            'image_height': self.image_height.value(),
         }

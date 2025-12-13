@@ -229,86 +229,190 @@ void validate_config_cpp(int num_fc_layers,
 
 // Factory function to create NNModel from config dict
 NNModel *create_model(py::dict config) {
-  architecture arch;
+  try {
+    architecture arch;
 
-  // Defaults
-  int num_conv_layers = 0;
-  if (config.contains("num_conv_layers"))
-    num_conv_layers = config["num_conv_layers"].cast<int>();
+    // Defaults
+    int num_conv_layers = 0;
+    if (config.contains("num_conv_layers"))
+      num_conv_layers = config["num_conv_layers"].cast<int>();
 
-  int num_fc_layers = 2;
-  if (config.contains("num_fc_layers"))
-    num_fc_layers = config["num_fc_layers"].cast<int>();
+    int num_fc_layers = 2;
+    if (config.contains("num_fc_layers"))
+      num_fc_layers = config["num_fc_layers"].cast<int>();
 
-  std::vector<int> neurons_list = {128, 10};
-  if (config.contains("neurons_per_fc_layer"))
-    neurons_list = config["neurons_per_fc_layer"].cast<std::vector<int>>();
+    std::vector<int> neurons_list = {128, 10};
+    if (config.contains("neurons_per_fc_layer"))
+      neurons_list = config["neurons_per_fc_layer"].cast<std::vector<int>>();
 
-  int num_classes = 10;
-  if (config.contains("num_classes"))
-    num_classes = config["num_classes"].cast<int>();
+    int num_classes = 10;
+    if (config.contains("num_classes"))
+      num_classes = config["num_classes"].cast<int>();
 
-  int img_h = 28;
-  if (config.contains("image_height"))
-    img_h = config["image_height"].cast<int>();
+    int img_h = 28;
+    if (config.contains("image_height"))
+      img_h = config["image_height"].cast<int>();
 
-  int img_w = 28;
-  if (config.contains("image_width"))
-    img_w = config["image_width"].cast<int>();
+    int img_w = 28;
+    if (config.contains("image_width"))
+      img_w = config["image_width"].cast<int>();
 
-  // Use std::vector<size_t> for internal storage as per struct definition
-  std::vector<size_t> neurons_list_sz;
-  for (int n : neurons_list)
-    neurons_list_sz.push_back((size_t)n);
+    // Use std::vector<size_t> for internal storage as per struct definition
+    std::vector<size_t> neurons_list_sz;
+    for (int n : neurons_list)
+      neurons_list_sz.push_back((size_t)n);
 
-  arch.numOfConvLayers = num_conv_layers;
-  arch.numOfFCLayers = num_fc_layers;
-  arch.neuronsPerFCLayer = neurons_list_sz;
+    arch.numOfConvLayers = num_conv_layers;
+    arch.numOfFCLayers = num_fc_layers;
+    arch.neuronsPerFCLayer = neurons_list_sz;
 
-  // Defaults for FC layers
-  for (int i = 0; i < num_fc_layers; ++i) {
-    arch.FCLayerActivationFunc.push_back(activationFunction::RelU);
-    arch.FCInitFunctionsType.push_back(initFunctions::Xavier);
+    // --- NEW: CNN Configuration Parsing ---
+
+    // 1. Kernels per layer
+    std::vector<int> kernels_list;
+    if (config.contains("kernels_per_layer")) {
+      try {
+        kernels_list = config["kernels_per_layer"].cast<std::vector<int>>();
+      } catch (...) {
+      }
+    }
+
+    // 2. Kernel Dimensions (list of tuples (h, w))
+    std::vector<std::pair<int, int>> kernel_dims_list;
+    if (config.contains("kernel_dims")) {
+      try {
+        kernel_dims_list =
+            config["kernel_dims"].cast<std::vector<std::pair<int, int>>>();
+      } catch (...) {
+      }
+    }
+
+    // 3. Pooling Intervals
+    std::vector<int> loop_intervals_list;
+    if (config.contains("pooling_intervals")) {
+      try {
+        loop_intervals_list =
+            config["pooling_intervals"].cast<std::vector<int>>();
+      } catch (...) {
+      }
+    }
+
+    // 4. Pooling Type
+    std::string pooling_type_str = "Max";
+    if (config.contains("pooling_type")) {
+      pooling_type_str = config["pooling_type"].cast<std::string>();
+    }
+    poolingLayerType pool_type = (pooling_type_str == "Average")
+                                     ? poolingLayerType::averagePooling
+                                     : poolingLayerType::maxPooling;
+
+    // Populate Architecture with parsed CNN data
+
+    // A. Conv Kernels
+
+    size_t current_depth = 1; // Start with image depth (grayscale)
+
+    for (int i = 0; i < num_conv_layers; ++i) {
+      convKernels ck;
+
+      // Kernel Count
+      if (i < kernels_list.size()) {
+        ck.numOfKerenels = kernels_list[i];
+      } else {
+        ck.numOfKerenels = 6; // Default
+      }
+
+      // Kernel Dims
+      if (i < kernel_dims_list.size()) {
+        ck.kernel_height = kernel_dims_list[i].first;
+        ck.kernel_width = kernel_dims_list[i].second;
+      } else {
+        ck.kernel_height = 5; // Default
+        ck.kernel_width = 5;
+      }
+
+      // CRITICAL FIX: Set kernel depth to match input depth (previous layer
+      // output)
+      ck.kernel_depth = current_depth;
+
+      // Update current depth for NEXT layer
+      current_depth = ck.numOfKerenels;
+
+      arch.kernelsPerconvLayers.push_back(ck);
+
+      // Activation & Init (defaults)
+      arch.convLayerActivationFunc.push_back(activationFunction::RelU);
+      arch.convInitFunctionsType.push_back(initFunctions::Xavier);
+    }
+
+    // B. Pooling Layers
+
+    for (size_t interval : loop_intervals_list) {
+      arch.poolingLayersInterval.push_back(interval);
+      arch.poolingtype.push_back(pool_type);
+
+      // Default pooling kernel
+      poolKernel pk;
+      pk.filter_height = 2;
+      pk.filter_width = 2;
+      pk.stride = 2;
+      pk.filter_depth = 1;
+      arch.kernelsPerPoolingLayer.push_back(pk);
+    }
+
+    // --- END CNN Configuration Parsing ---
+
+    // Defaults for FC layers
+    for (int i = 0; i < num_fc_layers; ++i) {
+      arch.FCLayerActivationFunc.push_back(activationFunction::RelU);
+      arch.FCInitFunctionsType.push_back(initFunctions::Xavier);
+    }
+
+    arch.distType = distributionType::normalDistribution;
+
+    // Optimizer Config
+    std::string opt_type = "Adam";
+    if (config.contains("optimizer"))
+      opt_type = config["optimizer"].cast<std::string>();
+
+    float lr = 0.001f;
+    if (config.contains("learning_rate"))
+      lr = config["learning_rate"].cast<float>();
+
+    float decay = 0.0001f;
+    if (config.contains("weight_decay"))
+      decay = config["weight_decay"].cast<float>();
+
+    float momentum = 0.9f;
+    if (config.contains("momentum"))
+      momentum = config["momentum"].cast<float>();
+
+    arch.optConfig.learningRate = lr;
+    arch.optConfig.weightDecay = decay;
+    arch.optConfig.momentum = momentum;
+    arch.optConfig.beta1 = 0.9;
+    arch.optConfig.beta2 = 0.999;
+    arch.optConfig.epsilon = 1e-8;
+
+    if (opt_type == "Adam")
+      arch.optConfig.type = OptimizerType::opt_Adam;
+    else if (opt_type == "RMSprop" || opt_type == "RMSProp")
+      arch.optConfig.type = OptimizerType::opt_RMSprop;
+    else
+      arch.optConfig.type = OptimizerType::opt_SGD;
+
+    validate_config_cpp(num_fc_layers, neurons_list, arch, img_h, img_w,
+                        num_classes);
+
+    // Note: hardcoded depth 1 for now as per Python code
+    return new NNModel(arch, num_classes, img_h, img_w, 1);
+
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("C++ create_model failed: ") +
+                             e.what());
+  } catch (...) {
+    throw std::runtime_error("C++ create_model failed with unknown error");
   }
-
-  arch.distType = distributionType::normalDistribution;
-
-  // Optimizer Config
-  std::string opt_type = "Adam";
-  if (config.contains("optimizer"))
-    opt_type = config["optimizer"].cast<std::string>();
-
-  float lr = 0.001f;
-  if (config.contains("learning_rate"))
-    lr = config["learning_rate"].cast<float>();
-
-  float decay = 0.0001f;
-  if (config.contains("weight_decay"))
-    decay = config["weight_decay"].cast<float>();
-
-  float momentum = 0.9f;
-  if (config.contains("momentum"))
-    momentum = config["momentum"].cast<float>();
-
-  arch.optConfig.learningRate = lr;
-  arch.optConfig.weightDecay = decay;
-  arch.optConfig.momentum = momentum;
-  arch.optConfig.beta1 = 0.9;
-  arch.optConfig.beta2 = 0.999;
-  arch.optConfig.epsilon = 1e-8;
-
-  if (opt_type == "Adam")
-    arch.optConfig.type = OptimizerType::opt_Adam;
-  else if (opt_type == "RMSprop" || opt_type == "RMSProp")
-    arch.optConfig.type = OptimizerType::opt_RMSprop;
-  else
-    arch.optConfig.type = OptimizerType::opt_SGD;
-
-  validate_config_cpp(num_fc_layers, neurons_list, arch, img_h, img_w,
-                      num_classes);
-
-  // Note: hardcoded depth 1 for now as per Python code
-  return new NNModel(arch, num_classes, img_h, img_w, 1);
 }
 
 // Helper to classify raw pixel data
