@@ -58,6 +58,7 @@ cmake_paths = {
     "Visual Studio 17 2022 (Community)": Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"),
     "MinGW (CMake)": Path(r"C:\mingw64\bin\cmake.exe"),
     "MSYS2 (CMake)": Path(r"C:\msys64\mingw64\bin\cmake.exe"),
+        "MSYS2 (CMake)": Path(r"C:\msys64\ucrt64\bin\cmake.exe"), #added ucrt64 path by 3omd4 no impact on others isa
     "Android SDK CMake": Path(f"C:\\Users\\{username}\\AppData\\Local\\Android\\Sdk\\cmake\\3.31.6\\bin\\cmake.exe"),
     "Standalone CMake": Path(r"C:\Program Files\CMake\bin\cmake.exe"),
 }
