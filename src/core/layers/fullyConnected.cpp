@@ -21,7 +21,7 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
     //resize the neurons and weights gradient vectors to the number of neurons
     neurons.resize(numOfNeurons);
     d_weights.resize(numOfNeurons);
-    neuronOptimizers.assign(numOfNeurons, createOptimizer(optConfig));
+    neuronOptimizers.resize(numOfNeurons);
 
     //initialize the weigths of each neuron
     for(size_t i = 0; i < numOfNeurons; i++)
@@ -42,6 +42,9 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
         //resize the 2nd Dimension of the weights gradient vector
         //which corrisponds to the weights of each neuron
         d_weights[i].assign(numOfWeights, 0.0);
+
+        // Initialize Optimizer for this neuron
+        neuronOptimizers[i] = createOptimizer(optConfig);
     }
 
 
@@ -63,8 +66,11 @@ FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
   // Resize outputData to expected size
   outputData.resize(numOfNeurons, 0.0);
 
+  biasOptimizer = createOptimizer(optConfig);
 
   prevLayerGrad.assign(numOfWeights, 0.0);
+
+
 }
 
 

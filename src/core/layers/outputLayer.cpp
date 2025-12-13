@@ -19,7 +19,7 @@ outputLayer::outputLayer(size_t numOfClasses,  size_t numOfWeights, distribution
         //to the number of neurons
         neurons.resize(numOfClasses);
         d_weights.resize(numOfClasses);
-        neuronOptimizers.assign(numOfClasses, createOptimizer(optConfig));
+        neuronOptimizers.resize(numOfClasses);
 
         //initialize the weights of each neuron
         for(size_t i = 0; i < numOfClasses; i++)
@@ -35,6 +35,9 @@ outputLayer::outputLayer(size_t numOfClasses,  size_t numOfWeights, distribution
                 //resize the 2nd Dimension of the weights gradient vector
                 //which corrisponds to the weights of each neuron
                 d_weights[i].assign(numOfWeights, 0.0);
+
+                // Initialize Optimizer for this neuron
+                neuronOptimizers[i] = createOptimizer(optConfig);
         }
 
         //resize bias and biase gradient vectors

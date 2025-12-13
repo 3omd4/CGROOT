@@ -31,11 +31,11 @@ convLayer::convLayer(convKernels& kernelConfig, activationFunction actFunc,
     for (size_t d = 0; d < kernelConfig.kernel_depth; d++)
     {
 
-      kernelOptimizers[i][d].assign(kernelConfig.kernel_height, createOptimizer(optConfig));
+      kernelOptimizers[i][d].resize(kernelConfig.kernel_height);
       d_kernels[i][d].resize(kernelConfig.kernel_height); // Resize gradient depth
       for (size_t h = 0; h < kernelConfig.kernel_height; h++)
       {
-
+        kernelOptimizers[i][d][h] = createOptimizer(optConfig);
         d_kernels[i][d][h].assign(kernelConfig.kernel_width, 0.0); // Init gradients to 0.0
       }
     }
