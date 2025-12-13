@@ -25,7 +25,7 @@ using namespace std;
 //               model (object)
 NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                  size_t imageHeight, size_t imageWidth, size_t imageDepth)
-    : optimizer(createOptimizer(modelArch.optConfig)) {
+  {
 
   // ========== PARAMETER VALIDATION ==========
   // Validate basic parameters
@@ -185,7 +185,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
         Layers.emplace_back(new convLayer(modelArch.kernelsPerconvLayers[i],
                                           modelArch.convLayerActivationFunc[i],
                                           modelArch.convInitFunctionsType[i],
-                                          modelArch.distType, fmDim));
+                                          modelArch.distType, fmDim, modelArch.optConfig));
       } catch (const std::exception &e) {
         std::cerr << "ERROR creating convolution layer " << (i + 1) << ": "
                   << e.what() << std::endl;
@@ -282,7 +282,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
 
       Layers.emplace_back(new FullyConnected(
           modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
-          modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize));
+          modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize, modelArch.optConfig));
 
       // // std::cout << "  FC layer " << (i + 1) << " created successfully"
       //           << std::endl;
@@ -302,7 +302,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
     // // std::cout << "  Number of classes: " << numOfClasses << std::endl;
 
     Layers.emplace_back(
-        new outputLayer(numOfClasses, fcInputSize, modelArch.distType));
+        new outputLayer(numOfClasses, fcInputSize, modelArch.distType, modelArch.optConfig));
 
     // // std::cout << "  Output layer created successfully" << std::endl;
   } catch (const std::exception &e) {
@@ -448,10 +448,10 @@ std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
   for (size_t i = Layers.size() - 1; i > 0; i--) {
     switch (Layers[i]->getLayerType()) {
     case output:
-      static_cast<outputLayer *>(Layers[i])->update(optimizer);
+      static_cast<outputLayer *>(Layers[i])->update();
       break;
     case fullyConnected:
-      static_cast<FullyConnected *>(Layers[i])->update(optimizer);
+      static_cast<FullyConnected *>(Layers[i])->update();
       break;
     }
   }
@@ -543,12 +543,10 @@ std::pair<double, int> NNModel::train_batch(const vector<image> &batchData,
   for (size_t i = Layers.size() - 1; i > 0; i--) {
     switch (Layers[i]->getLayerType()) {
     case output:
-      static_cast<outputLayer *>(Layers[i])->update_batch(
-          optimizer, static_cast<int>(batchData.size()));
+      static_cast<outputLayer *>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
       break;
     case fullyConnected:
-      static_cast<FullyConnected *>(Layers[i])->update_batch(
-          optimizer, static_cast<int>(batchData.size()));
+      static_cast<FullyConnected *>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
       break;
     }
   }

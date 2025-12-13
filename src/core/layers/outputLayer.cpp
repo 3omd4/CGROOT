@@ -12,13 +12,14 @@
 //output:               N/A
 //side effect:          the output layer is constructed
 //Note:                 N/A
-outputLayer::outputLayer(size_t numOfClasses,  size_t numOfWeights, distributionType distType)
+outputLayer::outputLayer(size_t numOfClasses,  size_t numOfWeights, distributionType distType, OptimizerConfig optConfig)
 {
 
         //resize the neurons and weights gradients vectors
         //to the number of neurons
         neurons.resize(numOfClasses);
         d_weights.resize(numOfClasses);
+        neuronOptimizers.assign(numOfClasses, createOptimizer(optConfig));
 
         //initialize the weights of each neuron
         for(size_t i = 0; i < numOfClasses; i++)
@@ -39,7 +40,7 @@ outputLayer::outputLayer(size_t numOfClasses,  size_t numOfWeights, distribution
         //resize bias and biase gradient vectors
         bias.assign(numOfClasses, 0.0);  //the initializtion is to zero since softmax will always be used
         d_bias.assign(numOfClasses, 0.0);
-
+        biasOptimizer = createOptimizer(optConfig);
         //resize the gradient vector which will be used by the previous layer
         prevLayerGrad.assign(numOfWeights, 0.0);
 }
@@ -189,20 +190,20 @@ void outputLayer::backwardProp_batch(vector<double> &inputData,
 //output:               N/A
 //side effect:          the weights and biases are updated
 //Note:                 N/A
-void outputLayer::update(Optimizer* opt) {
+void outputLayer::update() {
   // iterate over each neuron and update its bias and weights
 
   #pragma omp parallel for
   for (int i = 0; i < static_cast<int>(neurons.size()); i++) 
   {
-    opt->update(neurons[i], d_weights[i]);
+    neuronOptimizers[i]->update(neurons[i], d_weights[i]);
     
     //clear gradients
     fill(d_weights[i].begin(), d_weights[i].end(), 0.0);
   }
 
   // Update biases
-  opt->update(bias, d_bias);
+  biasOptimizer->update(bias, d_bias);
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
@@ -212,7 +213,7 @@ void outputLayer::update(Optimizer* opt) {
 //output:               N/A
 //side effect:          the weights and biases are updated
 //Note:                 N/A
-void outputLayer::update_batch(Optimizer* opt, int numOfExamples) 
+void outputLayer::update_batch(int numOfExamples) 
 {
    //calculate the value to average the gradients
   double scale = 1.0 / static_cast<double>(numOfExamples);
@@ -231,7 +232,7 @@ void outputLayer::update_batch(Optimizer* opt, int numOfExamples)
     d_bias[i] *= scale;
 
     //update weights
-    opt->update(neurons[i], d_weights[i]);
+    neuronOptimizers[i]->update(neurons[i], d_weights[i]);
 
     //reset gradients
     fill(d_weights[i].begin(), d_weights[i].end(), 0.0);
@@ -239,7 +240,7 @@ void outputLayer::update_batch(Optimizer* opt, int numOfExamples)
 
 
   //updates biases
-  opt->update(bias, d_bias);
+  biasOptimizer->update(bias, d_bias);
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
@@ -264,5 +265,10 @@ int outputLayer::getClass() {
 
 
 outputLayer::~outputLayer() {
-
+for (Optimizer *opt : neuronOptimizers) {
+    delete opt;
+  }
+  neuronOptimizers.clear();
+  delete biasOptimizer;
+  biasOptimizer = nullptr;
 }

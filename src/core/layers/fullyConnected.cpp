@@ -16,11 +16,12 @@
 //Note:         N/A
 FullyConnected::FullyConnected(size_t numOfNeurons, activationFunction actFunc,
                 initFunctions initFunc, distributionType distType,
-                        size_t numOfWeights) : act_Funct(actFunc)
+                        size_t numOfWeights, OptimizerConfig optConfig) : act_Funct(actFunc)
 {
     //resize the neurons and weights gradient vectors to the number of neurons
     neurons.resize(numOfNeurons);
     d_weights.resize(numOfNeurons);
+    neuronOptimizers.assign(numOfNeurons, createOptimizer(optConfig));
 
     //initialize the weigths of each neuron
     for(size_t i = 0; i < numOfNeurons; i++)
@@ -265,7 +266,7 @@ void FullyConnected::backwardProp_batch(vector<double>& inputData, vector<double
 //output:               N/A
 //side effect:          the weights and biases are updated
 //Note:                 N/A
-void FullyConnected::update(Optimizer* opt) {
+void FullyConnected::update() {
 
    // iterate over each weight and update it
 
@@ -274,14 +275,14 @@ void FullyConnected::update(Optimizer* opt) {
 
   for (int i = 0; i < static_cast<int>(neurons.size()); i++) 
   {
-    opt->update(neurons[i], d_weights[i]);
+    neuronOptimizers[i]->update(neurons[i], d_weights[i]);
 
     // Clear gradients
     fill(d_weights[i].begin(), d_weights[i].end(), 0.0);
   }
 
   // Update Biases (All at once)
-  opt->update(bias, d_bias);
+  biasOptimizer->update(bias, d_bias);
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
@@ -291,7 +292,7 @@ void FullyConnected::update(Optimizer* opt) {
 //output:               N/A
 //side effect:          the weights and biases are updated
 //Note:                 N/A
-void FullyConnected::update_batch(Optimizer* opt, int numOfExamples) {
+void FullyConnected::update_batch(int numOfExamples) {
 
   //calculate the value to average the gradients
   double scale = 1.0 / static_cast<double>(numOfExamples);
@@ -311,7 +312,7 @@ void FullyConnected::update_batch(Optimizer* opt, int numOfExamples) {
     d_bias[i] *= scale;
 
     // Update weights
-    opt->update(neurons[i], d_weights[i]);
+    neuronOptimizers[i]->update(neurons[i], d_weights[i]);
 
     // Reset gradients
     fill(d_weights[i].begin(), d_weights[i].end(), 0.0);
@@ -319,7 +320,7 @@ void FullyConnected::update_batch(Optimizer* opt, int numOfExamples) {
 
  
   // Update biases
-  opt->update(bias, d_bias);
+  biasOptimizer->update(bias, d_bias);
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
@@ -327,5 +328,10 @@ void FullyConnected::update_batch(Optimizer* opt, int numOfExamples) {
 
 
 FullyConnected::~FullyConnected() {
-
+  for (Optimizer *opt : neuronOptimizers) {
+    delete opt;
+  }
+  neuronOptimizers.clear();
+  delete biasOptimizer;
+  biasOptimizer = nullptr;
 }

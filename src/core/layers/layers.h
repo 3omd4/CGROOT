@@ -95,6 +95,8 @@ private:
   featureMapDim fm; // dimesions of the feature map
   activationFunction act_Funct; // activation function type
 
+  vector<vector<vector<Optimizer *>>> kernelOptimizers;
+
 public:
     //the convolution layer constructor
     //input:        -kernelConfig (contains all the information about the kernel)
@@ -107,7 +109,7 @@ public:
     //Note:         N/A
     convLayer(convKernels& kernelConfig, activationFunction actFunc,
                 initFunctions initFunc, distributionType distType
-                , featureMapDim& FM_Dim);
+                , featureMapDim& FM_Dim, OptimizerConfig optConfig);
 
 
     //initialize a kernel
@@ -148,22 +150,43 @@ public:
     void forwardProp(vector<featureMapType>& inputFeatureMaps);
 
   // backward propagate the error
-  // input:                -inputFeatureMaps -thisLayerGrad
+  // input:                -inputFeatureMaps 
+  //                       -thisLayerGrad
   // output:               N/A
   // side effect:          the prevLayerGrad is filled with the error to be propagated
   // Note:                 This function works with SGD or for updating after a single
   void backwardProp(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
   
   // backward propagate the error after a batch
-  // input:                -inputFeatureMaps -thisLayerGrad
+  // input:                -inputFeatureMaps 
+  //                       -thisLayerGrad
   // output:               N/A
   // side effect:          the prevLayerGrad is filled with the error to be propagated
   // Note:                 This function works with BGD or for updating after a whole batch
   void backwardProp_batch(vector<featureMapType> &inputFeatureMaps, vector<featureMapType> &thisLayerGrad);
 
+
+  //update the kernels
+  //input:          N/A
+  //ouput:          N/A
+  //side effect:    the kernel is updated with new values and the kernel gradients are reseted
+  //Note:           This function works for single samples, for a batch, use upadate_batch()
+  void update();
+
+  //update the kernels
+  //input:          numOfExamples
+  //ouput:          N/A
+  //side effect:    the kernel is updated with new values and the kernel gradients are reseted
+  //Note:           This function works for a batch of samples, for a single sample, use upadate()
+  void update_batch(int numOfExamples);
+
+
   vector<featureMapType> &getFeatureMaps() { return featureMaps; } // get the output feature map
   vector<featureMapType> &getPrevLayerGrad() { return prevLayerGrad; } // get the previous layer gradient
   LayerType getLayerType() override { return type; }  // get the layer type
+
+
+  ~convLayer();
 };
 
 class poolingLayer : public Layer {
@@ -235,8 +258,13 @@ private:
   vector<double> prevLayerGrad; // gradients to be used by the previous layer in
                                 // backward propagation
 
+  vector<Optimizer*> neuronOptimizers; // One optimizer per neuron (weight vector)  
+  Optimizer* biasOptimizer;
+
   activationFunction act_Funct;    // the type of the activation function
   LayerType type = fullyConnected; // the type of the layer
+
+
 
 public:
     //the fully connected layer constructor
@@ -250,7 +278,7 @@ public:
     //Note:         N/A
     FullyConnected(size_t numOfNeurons, activationFunction actFunc,
                 initFunctions initFunc, distributionType distType,
-                        size_t numOfWeights);
+                        size_t numOfWeight, OptimizerConfig optConfig);
 
     //forward propagate the input data to the output
     //input:        inputData
@@ -289,7 +317,7 @@ public:
     // output:               N/A
     // side effect:          the weights and biases are updated
     // Note:                 N/A
-    void update(Optimizer* opt);
+    void update();
 
     // update the weights and biases of this fully connected layer after a batch
     // input:                -learningRate
@@ -297,7 +325,7 @@ public:
     // output:               N/A
     // side effect:          the weights and biases are updated
     // Note:                 N/A
-    void update_batch(Optimizer* opt, int numOfExamples);
+    void update_batch(int numOfExamples);
 
   // get the ouput data size (used by the constructor)
   size_t getOutputSize() { return neurons.size(); }
@@ -378,6 +406,8 @@ private:
   vector<double> d_bias;        // store the gradients for biases
   vector<double> prevLayerGrad; // gradients to be used by the previous layer in
                                 // backward propagation
+  vector<Optimizer *> neuronOptimizers;
+  Optimizer* biasOptimizer;
 
   LayerType type = output;
 
@@ -386,10 +416,11 @@ public:
     //input:                -numOfClasses
     //                      -numOfWeights
     //                      -distType
+    //                      -optConfig
     //output:               N/A
     //side effect:          the output layer is constructed
     //Note:                 N/A
-    outputLayer(size_t numOfClasses,  size_t numOfWeights, distributionType distType);
+    outputLayer(size_t numOfClasses,  size_t numOfWeights, distributionType distType, OptimizerConfig optConfig);
 
     //forward propagate the input into the corrisponding classes
     //input:                inputData
@@ -427,7 +458,7 @@ public:
     //output:               N/A
     //side effect:          the weights and biases are updated
     //Note:                 N/A
-    void update(Optimizer* opt);
+    void update();
 
     //update the weights and biases of the output layer after a batch
     //input:                -learningRate
@@ -435,7 +466,7 @@ public:
     //output:               N/A
     //side effect:          the weights and biases are updated
     //Note:                 N/A
-    void update_batch(Optimizer* opt, int numOfExamples);
+    void update_batch(int numOfExamples);
 
     //get the layer type
     LayerType getLayerType() override {return type;}

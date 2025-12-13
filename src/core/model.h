@@ -98,8 +98,6 @@ private:
   vector<Layer *> Layers;
   image data;
 
-  Optimizer *optimizer;
-
 public:
   // the NNModel constructor
   // input:        -modelArch (contains all the necessary information about the

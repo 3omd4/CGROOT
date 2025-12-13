@@ -14,20 +14,24 @@
 //Note:         N/A
 convLayer::convLayer(convKernels& kernelConfig, activationFunction actFunc, 
                 initFunctions initFunc, distributionType distType
-                , featureMapDim& FM_Dim)
+                , featureMapDim& FM_Dim, OptimizerConfig optConfig)
     : kernel_info(kernelConfig), fm(FM_Dim), act_Funct(actFunc)
 {
 
   d_kernels.resize(kernelConfig.numOfKerenels); // Resize gradients vector
+  kernelOptimizers.resize(kernelConfig.numOfKerenels);
   // make and initialize each kernel and store them in kernels vector
   for (size_t i = 0; i < kernelConfig.numOfKerenels; i++)
   {
     kernels.emplace_back(initKernel(kernelConfig, initFunc, distType));
 
     d_kernels[i].resize(kernelConfig.kernel_depth); // Resize gradient structure for this kernel
+
+    kernelOptimizers[i].resize(kernelConfig.kernel_depth);
     for (size_t d = 0; d < kernelConfig.kernel_depth; d++)
     {
 
+      kernelOptimizers[i][d].assign(kernelConfig.kernel_height, createOptimizer(optConfig));
       d_kernels[i][d].resize(kernelConfig.kernel_height); // Resize gradient depth
       for (size_t h = 0; h < kernelConfig.kernel_height; h++)
       {
@@ -194,7 +198,12 @@ void convLayer::forwardProp(vector<featureMapType>& inputFeatureMaps)
 }
 
 
-
+// backward propagate the error
+  // input:                -inputFeatureMaps 
+  //                       -thisLayerGrad
+  // output:               N/A
+  // side effect:          the prevLayerGrad is filled with the error to be propagated
+  // Note:                 This function works with SGD or for updating after a single
 void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
                              vector<featureMapType> &thisLayerGrad){
   // Apply Activation Derivative to incoming gradients
@@ -268,6 +277,13 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
 }
 
 
+
+  // backward propagate the error after a batch
+  // input:                -inputFeatureMaps 
+  //                       -thisLayerGrad
+  // output:               N/A
+  // side effect:          the prevLayerGrad is filled with the error to be propagated
+  // Note:                 This function works with BGD or for updating after a whole batch
 void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
                                    vector<featureMapType> &thisLayerGrad) {
   // 2Apply Activation Derivative
@@ -335,4 +351,74 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
       }
     }
   }
+}
+
+
+  //update the kernels
+  //input:          N/A
+  //ouput:          N/A
+  //side effect:    the kernel is updated with new values and the kernel gradients are reseted
+  //Note:           This function works for single samples, for a batch, use upadate_batch()
+ void convLayer::update()
+ {
+    #pragma omp parallel for
+    for(int krnl = 0; krnl < static_cast<int>(kernels.size()); krnl++)
+    {
+      for(int d = 0; d < static_cast<int>(kernels[krnl].size()); d++)
+      {
+        for(int i = 0; i < static_cast<int>(kernels[krnl][d].size()); i++)
+        {
+          //update kernels
+          kernelOptimizers[krnl][d][i]->update(kernels[krnl][d][i], d_kernels[krnl][d][i]);
+
+          //reset gradients
+          fill(d_kernels[krnl][d][i].begin(), d_kernels[krnl][d][i].end(), 0.0);
+        }
+      }
+    }
+ }
+
+  //update the kernels
+  //input:          numOfExamples
+  //ouput:          N/A
+  //side effect:    the kernel is updated with new values and the kernel gradients are reseted
+  //Note:           This function works for a batch of samples, for a single sample, use upadate()
+void convLayer::update_batch(int numOfExamples)
+ {
+    double scale = 1.0/static_cast<double>(numOfExamples);
+
+    #pragma omp parallel for
+    for(int krnl = 0; krnl < static_cast<int>(kernels.size()); krnl++)
+    {
+      for(int d = 0; d < static_cast<int>(kernels[krnl].size()); d++)
+      {
+        for(int i = 0; i < static_cast<int>(kernels[krnl][d].size()); i++)
+        {
+
+          //average the gradients
+          for(int j = 0; j < static_cast<int>(kernels[krnl][d][i].size()); j++)
+          {
+            d_kernels[krnl][d][i][j] *= scale;
+          }
+
+          //update kernels
+          kernelOptimizers[krnl][d][i]->update(kernels[krnl][d][i], d_kernels[krnl][d][i]);
+          //reset gradients
+          fill(d_kernels[krnl][d][i].begin(), d_kernels[krnl][d][i].end(), 0.0);
+        }
+      }
+    }
+ }
+
+
+
+convLayer::~convLayer() {
+  for (auto &kernel_opt : kernelOptimizers) {
+    for (auto &depth_opt : kernel_opt) {
+      for (auto &row_opt : depth_opt) {
+        delete row_opt;
+      }
+    }
+  }
+  kernelOptimizers.clear();
 }
