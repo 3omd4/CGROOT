@@ -128,19 +128,6 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   //     std::cout << ",\n";
   // }
   // std::cout << std::endl;
-  // std::cout << "Distribution type: " << modelArch.distType << std::endl;
-  // std::cout << "Learning rate: " << modelArch.learningRate << std::endl;
-  // std::cout << "Batch size: " << modelArch.batch_size << std::endl;
-  // std::cout << "Optimizer type: " << modelArch.optConfig.type << std::endl;
-  // std::cout << "Optimizer learning rate: " <<
-  // modelArch.optConfig.learningRate
-  //           << std::endl;
-  // std::cout << "Optimizer weight decay: " << modelArch.optConfig.weightDecay
-  //           << std::endl;
-  // std::cout << "Optimizer momentum: " << modelArch.optConfig.momentum
-  //           << std::endl;
-  // std::cout << "Optimizer beta1: " << modelArch.optConfig.beta1 << std::endl;
-  // std::cout << "Optimizer beta2: " << modelArch.optConfig.beta2 << std::endl;
   // std::cout << "Optimizer epsilon: " << modelArch.optConfig.epsilon
   //           << std::endl;
   // std::cout <<
@@ -273,29 +260,30 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                            ? currentHeight * currentWidth * currentDepth
                            : imageHeight * imageWidth * imageDepth;
 
-  std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
-            << std::endl;
-  std::cout << "Number of FC layers to create: " << modelArch.numOfFCLayers
-            << std::endl;
+  // std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
+  //           << std::endl;
+  // std::cout << "Number of FC layers to create: " << modelArch.numOfFCLayers
+  //           << std::endl;
 
   for (size_t i = 0; i < modelArch.numOfFCLayers; i++) {
     try {
-      std::cout << "Creating FC layer " << (i + 1) << "/"
-                << modelArch.numOfFCLayers << std::endl;
-      std::cout << "  Input size: " << fcInputSize << std::endl;
-      std::cout << "  Output size (neurons): " << modelArch.neuronsPerFCLayer[i]
-                << std::endl;
-      std::cout << "  Activation: " << modelArch.FCLayerActivationFunc[i]
-                << std::endl;
-      std::cout << "  Init function: " << modelArch.FCInitFunctionsType[i]
-                << std::endl;
+      // std::cout << "Creating FC layer " << (i + 1) << "/"
+      //           << modelArch.numOfFCLayers << std::endl;
+      // std::cout << "  Input size: " << fcInputSize << std::endl;
+      // std::cout << "  Output size (neurons): " <<
+      // modelArch.neuronsPerFCLayer[i]
+      //           << std::endl;
+      // std::cout << "  Activation: " << modelArch.FCLayerActivationFunc[i]
+      //           << std::endl;
+      // std::cout << "  Init function: " << modelArch.FCInitFunctionsType[i]
+      //           << std::endl;
 
       Layers.emplace_back(new FullyConnected(
           modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
           modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize));
 
-      std::cout << "  FC layer " << (i + 1) << " created successfully"
-                << std::endl;
+      // std::cout << "  FC layer " << (i + 1) << " created successfully"
+      //           << std::endl;
       fcInputSize = modelArch.neuronsPerFCLayer[i];
     } catch (const std::exception &e) {
       std::cerr << "ERROR creating FC layer " << (i + 1) << ": " << e.what()
@@ -306,14 +294,14 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
 
   // Create output layer
   try {
-    std::cout << "Creating output layer" << std::endl;
-    std::cout << "  Output layer input size: " << fcInputSize << std::endl;
-    std::cout << "  Number of classes: " << numOfClasses << std::endl;
+    // std::cout << "Creating output layer" << std::endl;
+    // std::cout << "  Output layer input size: " << fcInputSize << std::endl;
+    // std::cout << "  Number of classes: " << numOfClasses << std::endl;
 
     Layers.emplace_back(
         new outputLayer(numOfClasses, fcInputSize, modelArch.distType));
 
-    std::cout << "  Output layer created successfully" << std::endl;
+    // std::cout << "  Output layer created successfully" << std::endl;
   } catch (const std::exception &e) {
     std::cerr << "ERROR creating output layer: " << e.what() << std::endl;
     std::cerr << "  fcInputSize was: " << fcInputSize << std::endl;
@@ -683,6 +671,26 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
 
   vector<TrainingMetrics> history;
 
+  if (Layers.empty()) {
+    if (log_callback) {
+      log_callback("Error: Model is not initialized");
+    }
+    return history;
+  }
+
+  if (Layers.back()->getLayerType() != output) {
+    if (log_callback) {
+      log_callback("Error: Last layer is not an output layer");
+    }
+    return history;
+  }
+
+  std::cout << "Model is initialized - starting training epochs" << std::endl;
+
+  if (log_callback) {
+    log_callback("Model is initialized - starting training epochs");
+  }
+
   size_t num_images = dataset.num_images;
   if (num_images == 0) {
     if (log_callback) {
@@ -709,11 +717,21 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
   // Training loop
   std::mt19937 rng(config.random_seed);
 
+  std::cout << "Starting training epochs - random seed: " << config.random_seed
+            << std::endl;
+
+  if (log_callback) {
+    log_callback("Starting training epochs - random seed: " +
+                 std::to_string(config.random_seed));
+  }
+
   for (size_t epoch = 0; epoch < config.epochs; epoch++) {
     if (log_callback) {
       log_callback("Epoch " + std::to_string(epoch + 1) + "/" +
                    std::to_string(config.epochs));
     }
+
+    std::cout << "Epoch " << epoch + 1 << "/" << config.epochs << std::endl;
 
     // Create and shuffle indices
     vector<size_t> all_indices(num_images);
@@ -721,25 +739,46 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       all_indices[i] = i;
     }
 
+    std::cout << "Shuffling indices" << std::endl;
+
     if (config.shuffle) {
       std::shuffle(all_indices.begin(), all_indices.end(), rng);
     }
 
+    std::cout << "train indices size: " << train_size << std::endl;
+    std::cout << "val indices size: " << val_size << std::endl;
+
     // Split into train and validation indices
     vector<size_t> train_indices(all_indices.begin(),
                                  all_indices.begin() + train_size);
+
     vector<size_t> val_indices;
+
     if (config.use_validation && val_size > 0) {
       val_indices.assign(all_indices.begin() + train_size, all_indices.end());
     }
+
+    std::cout << "train indices size (after split): " << train_indices.size()
+              << std::endl;
+    std::cout << "val indices size (after split): " << val_indices.size()
+              << std::endl;
 
     // Training phase
     size_t train_correct = 0;
     double train_loss_sum = 0.0;
     size_t train_samples = 0;
 
+    // PERFORMANCE OPTIMIZATION: Calculate metrics every N batches instead of
+    // every sample This reduces expensive classify() calls by ~100x
+    const size_t METRICS_UPDATE_INTERVAL = 100; // batches
+    size_t batch_count = 0;
+    size_t total_batches =
+        (train_indices.size() + config.batch_size - 1) / config.batch_size;
+
     vector<image> batch_images;
     vector<int> batch_labels;
+
+    std::cout << "start training" << std::endl;
 
     for (size_t i = 0; i < train_indices.size(); i++) {
       size_t idx = train_indices[i];
@@ -753,30 +792,52 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       batch_images.push_back(image_data);
       batch_labels.push_back(label);
 
+      // std::cout << "batch size: " << batch_images.size() << std::endl;
+
       // Train if batch full or last element
       if (batch_images.size() >= config.batch_size ||
           i == train_indices.size() - 1) {
         if (!batch_images.empty()) {
           // Train the batch
           if (batch_images.size() > 1) {
+            std::cout << "training batch"  << std::endl;
             train_batch(batch_images, batch_labels);
           } else {
+            std::cout << "training single image" << std::endl;
             train(batch_images[0], batch_labels[0]);
           }
 
-          // Calculate accuracy and loss on this batch AFTER training
-          for (size_t b = 0; b < batch_images.size(); b++) {
-            int pred = classify(batch_images[b]);
-            if (pred == batch_labels[b]) {
-              train_correct++;
-            }
+          batch_count++;
 
-            // Calculate loss from probabilities
-            vector<double> probs = getProbabilities();
-            if (!probs.empty()) {
-              train_loss_sum +=
-                  calculate_loss_from_probs(probs, batch_labels[b]);
-              train_samples++;
+          std::cout << "batch count: " << batch_count << std::endl;
+
+          // PERFORMANCE: Only calculate metrics periodically or on last batch
+          bool should_calculate_metrics =
+              (batch_count % METRICS_UPDATE_INTERVAL == 0) ||
+              (i == train_indices.size() - 1);
+
+          if (should_calculate_metrics) {
+            // Calculate metrics on a sample of recent batches (not all
+            // samples!) This gives us approximate accuracy without expensive
+            // per-sample classify()
+            size_t samples_to_check =
+                std::min(static_cast<size_t>(batch_images.size()),
+                         static_cast<size_t>(32) // Check at most 32 samples
+                );
+
+            for (size_t b = 0; b < samples_to_check; b++) {
+              int pred = classify(batch_images[b]);
+              if (pred == batch_labels[b]) {
+                train_correct++;
+              }
+
+              // Calculate loss from probabilities
+              vector<double> probs = getProbabilities();
+              if (!probs.empty()) {
+                train_loss_sum +=
+                    calculate_loss_from_probs(probs, batch_labels[b]);
+                train_samples++;
+              }
             }
           }
 
@@ -787,11 +848,16 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       }
     }
 
+    std::cout << "training completed" << std::endl;
+
     // Calculate training metrics
     double train_acc =
         train_size > 0 ? static_cast<double>(train_correct) / train_size : 0.0;
     double train_loss =
         train_samples > 0 ? train_loss_sum / train_samples : 1.0 - train_acc;
+
+    std::cout << "training accuracy: " << train_acc << std::endl;
+    std::cout << "training loss: " << train_loss << std::endl;
 
     // Validation phase
     double val_acc = 0.0;
@@ -801,6 +867,8 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       size_t val_correct = 0;
       double val_loss_sum = 0.0;
       size_t val_samples = 0;
+
+      std::cout << "validation started" << std::endl;
 
       for (size_t idx : val_indices) {
         const auto &img_obj = dataset.images[idx];
@@ -827,6 +895,8 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
                     : 0.0;
       val_loss = val_samples > 0 ? val_loss_sum / val_samples : 1.0 - val_acc;
     }
+
+    std::cout << "validation completed" << std::endl;
 
     // Store metrics
     TrainingMetrics metrics;

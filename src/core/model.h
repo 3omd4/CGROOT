@@ -61,9 +61,6 @@ struct architecture {
                               // pooling layer and the number of strides
 
   OptimizerConfig optConfig;
-
-  double learningRate;
-  size_t batch_size = 32; // Default batch size for training
   // additional data used to initialize the data
 };
 

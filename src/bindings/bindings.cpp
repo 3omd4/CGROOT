@@ -3,7 +3,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
-
 #include "core/definitions.h"
 #include "core/model.h"
 #include "core/utils/mnist_loader.h"
@@ -71,8 +70,6 @@ void bind_definitions(py::module &m) {
       .def_readwrite("poolingtype", &architecture::poolingtype)
       .def_readwrite("kernelsPerPoolingLayer",
                      &architecture::kernelsPerPoolingLayer)
-      .def_readwrite("learningRate", &architecture::learningRate)
-      .def_readwrite("batch_size", &architecture::batch_size)
       .def_readwrite("optConfig", &architecture::optConfig);
 
   // Bind OptimizerConfig
@@ -141,8 +138,6 @@ void bind_model(py::module &m) {
            py::arg("modelArch"), py::arg("numOfClasses"),
            py::arg("imageVerDim"), py::arg("imageHorDim"),
            py::arg("imageDepDim"))
-      .def("train", &NNModel::train)
-      .def("train_batch", &NNModel::train_batch)
       .def("classify", &NNModel::classify)
       .def("getProbabilities", &NNModel::getProbabilities)
       .def("train_epochs", &NNModel::train_epochs, py::arg("dataset"),

@@ -59,31 +59,6 @@ class ModelWorker(QObject):
             import traceback
             traceback.print_exc()
 
-    def _convert_mnist_to_image_format(self, flat_pixels, height=28, width=28):
-        """Convert flat MNIST pixel array to [depth][height][width] format"""
-        image_data = [[]]  # Single depth channel
-        for y in range(height):
-            row = []
-            for x in range(width):
-                idx = y * width + x
-                if idx < len(flat_pixels):
-                    row.append(int(flat_pixels[idx]))
-                else:
-                    row.append(0)
-            image_data[0].append(row)
-        return image_data
-
-    def _calculate_loss_from_probs(self, probs, true_label):
-        """Calculate cross-entropy loss from probabilities"""
-        if not probs or len(probs) == 0:
-            return 1.0
-        
-        # Cross-entropy loss: -log(p_true)
-        true_prob = probs[true_label] if true_label < len(probs) else 0.0
-        # Add small epsilon to avoid log(0)
-        true_prob = max(true_prob, 1e-10)
-        loss = -math.log(true_prob)
-        return loss
 
     @pyqtSlot(dict)
     def trainModel(self, config):
@@ -126,31 +101,25 @@ class ModelWorker(QObject):
                 # IMPORTANT: If the last FC layer size equals num_classes, it's likely meant
                 # to be the output layer, which is created separately by NNModel.
                 # Remove it to avoid double-counting and bad allocation.
-                if neurons_list and neurons_list[-1] == num_classes:
-                    self.logMessage.emit(f"Detected output layer in FC layers ({neurons_list[-1]}), removing it as output layer is created separately")
-                    neurons_list = neurons_list[:-1]
-                    num_fc_layers = len(neurons_list)
-                    self.logMessage.emit(f"Adjusted to {num_fc_layers} hidden FC layers: {neurons_list}")
+                # if neurons_list and neurons_list[-1] == num_classes:
+                #     self.logMessage.emit(f"Detected output layer in FC layers ({neurons_list[-1]}), removing it as output layer is created separately")
+                #     neurons_list = neurons_list[:-1]
+                #     num_fc_layers = len(neurons_list)
+                #     self.logMessage.emit(f"Adjusted to {num_fc_layers} hidden FC layers: {neurons_list}")
                 
                 # Ensure we have at least one hidden layer
-                if not neurons_list or len(neurons_list) == 0:
-                    self.logMessage.emit(f"WARNING: No hidden layers specified! Adding default hidden layer with 128 neurons")
-                    neurons_list = [128]
-                    num_fc_layers = 1
+                # if not neurons_list or len(neurons_list) == 0:
+                #     self.logMessage.emit(f"WARNING: No hidden layers specified! Adding default hidden layer with 128 neurons")
+                #     neurons_list = [128]
+                #     num_fc_layers = 1
                 
                 # Sanity check: Ensure neurons list length matches num_fc_layers
-                if len(neurons_list) != num_fc_layers:
-                    self.logMessage.emit(f"Warning: Neurons list length ({len(neurons_list)}) does not match FC Layers count ({num_fc_layers}). Using list length.")
-                    num_fc_layers = len(neurons_list)
+                # if len(neurons_list) != num_fc_layers:
+                #     self.logMessage.emit(f"Warning: Neurons list length ({len(neurons_list)}) does not match FC Layers count ({num_fc_layers}). Using list length.")
+                #     num_fc_layers = len(neurons_list)
                     
                 arch.numOfFCLayers = num_fc_layers
                 arch.neuronsPerFCLayer = neurons_list
-                
-                # self.logMessage.emit(f"DEBUG: After setting arch.neuronsPerFCLayer:")
-                # self.logMessage.emit(f"  Type: {type(neurons_list)}")
-                # self.logMessage.emit(f"  Value: {neurons_list}")
-                # self.logMessage.emit(f"  Length: {len(neurons_list)}")
-                # self.logMessage.emit(f"  arch.numOfFCLayers: {arch.numOfFCLayers}")
                 
                 # Default activations and init functions
                 # All FC layers use ReLU except output uses Softmax (handled by output layer)
@@ -183,51 +152,6 @@ class ModelWorker(QObject):
                 else:
                     arch.optConfig.type = cgroot_core.OptimizerType.SGD
 
-                # Set legacy learningRate for compatibility
-                arch.learningRate = lr
-                
-                # Set batch size
-                batch_size = config.get('batch_size', 32)
-                arch.batch_size = batch_size
-
-                # Debug logging to understand the architecture before model creation
-                # self.logMessage.emit(f"================ Architecture Debug Info ================")
-                # self.logMessage.emit(f"Number of Conv Layers: {arch.numOfConvLayers}")
-                # self.logMessage.emit(f"Number of FC Layers: {arch.numOfFCLayers}")
-                # self.logMessage.emit(f"Neurons per FC Layer: {arch.neuronsPerFCLayer}")
-                # self.logMessage.emit(f"FC Activation Functions: {arch.FCLayerActivationFunc}")
-                # self.logMessage.emit(f"FC Init Functions: {arch.FCInitFunctionsType}")
-                # self.logMessage.emit(f"Image dimensions: {img_h}x{img_w}x1")
-                # self.logMessage.emit(f"Number of classes: {num_classes}")
-                # self.logMessage.emit(f"Calculated input size (flattened): {img_h * img_w * 1}")
-
-                # self.logMessage.emit(f"Convolutional layers kernels: {arch.kernelsPerconvLayers}")
-                # self.logMessage.emit(f"Fully connected layers neurons: {arch.neuronsPerFCLayer}")
-                # self.logMessage.emit(f"Convolutional layers activation functions: {arch.convLayerActivationFunc}")
-                # self.logMessage.emit(f"Fully connected layers activation functions: {arch.FCLayerActivationFunc}")
-                # self.logMessage.emit(f"Convolutional layers init functions: {arch.convInitFunctionsType}")
-                # self.logMessage.emit(f"Fully connected layers init functions: {arch.FCInitFunctionsType}")
-                # self.logMessage.emit(f"Pooling layers interval: {arch.poolingLayersInterval}")
-                # self.logMessage.emit(f"Pooling layers type: {arch.poolingtype}")
-                # self.logMessage.emit(f"Pooling layers kernels: {arch.kernelsPerPoolingLayer}")
-
-
-                # self.logMessage.emit(f"Distribution type: {arch.distType}")
-
-                # self.logMessage.emit(f"Learning rate: {arch.learningRate}")
-                # self.logMessage.emit(f"Batch size: {arch.batch_size}")
-                # self.logMessage.emit(f"Optimizer type: {arch.optConfig.type}")
-                # self.logMessage.emit(f"Optimizer learning rate: {arch.optConfig.learningRate}")
-                # self.logMessage.emit(f"Optimizer weight decay: {arch.optConfig.weightDecay}")
-                # self.logMessage.emit(f"Optimizer momentum: {arch.optConfig.momentum}")
-                # self.logMessage.emit(f"Optimizer beta1: {arch.optConfig.beta1}")
-                # self.logMessage.emit(f"Optimizer beta2: {arch.optConfig.beta2}")
-                # self.logMessage.emit(f"Optimizer epsilon: {arch.optConfig.epsilon}")
-                # self.logMessage.emit(f"Batch size: {batch_size}")
-
-
-
-                # self.logMessage.emit(f"=============================================================")
 
                 # Validate configuration before creating model
                 validation_errors = []
@@ -312,12 +236,12 @@ class ModelWorker(QObject):
             
             # Call the C++ train_epochs method (this is where all the magic happens!)
             self.logMessage.emit(f"Starting C++ training loop for {epochs} epochs...")
-            # history = self.model.train_epochs(
-            #     self.dataset, 
-            #     train_config,
-            #     progress_callback,
-            #     log_callback
-            # )
+            history = self.model.train_epochs(
+                self.dataset, 
+                train_config,
+                progress_callback,
+                log_callback
+            )
             
             self.logMessage.emit(f"Training completed! Total epochs: {len(history)}")
             

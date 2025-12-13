@@ -19,7 +19,6 @@
 #include <random>
 #include <vector>
 
-
 using namespace std;
 
 // ============================================================================
@@ -47,9 +46,6 @@ protected:
     arch.FCLayerActivationFunc = {RelU};
     arch.FCInitFunctionsType = {Xavier};
     arch.distType = normalDistribution;
-
-    arch.learningRate = 0.01;
-    arch.batch_size = 32;
 
     // Optimizer config
     arch.optConfig.type = opt_SGD;
