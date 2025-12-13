@@ -847,9 +847,22 @@ int NNModel::classify(const image &imgData) {
 
       break;
     case pooling:
-      // for the pooling layer, the last layer is always a convolution layer
-      static_cast<poolingLayer *>(Layers[i])->forwardProp(
+      // for the pooling layer, the last layer is  a convolution or pooling or input layer
+      switch(Layers[i-1]->getLayerType())
+      {
+      case pooling:
+        static_cast<poolingLayer *>(Layers[i])->forwardProp(
+          static_cast<poolingLayer *>(Layers[i - 1])->getFeatureMaps());
+        break;
+      case input:
+        static_cast<poolingLayer *>(Layers[i])->forwardProp(
+          static_cast<inputLayer *>(Layers[i - 1])->getOutput());
+        break;
+      case conv:
+        static_cast<poolingLayer *>(Layers[i])->forwardProp(
           static_cast<convLayer *>(Layers[i - 1])->getFeatureMaps());
+        break;
+      }
       break;
     case fullyConnected:
       // for the fully connected layer, the last layer is either the flatten
@@ -876,6 +889,10 @@ int NNModel::classify(const image &imgData) {
       case conv:
         static_cast<FlattenLayer *>(Layers[i])->forwardProp(
             static_cast<convLayer *>(Layers[i - 1])->getFeatureMaps());
+        break;
+      case pooling:
+        static_cast<FlattenLayer *>(Layers[i])->forwardProp(
+            static_cast<poolingLayer *>(Layers[i - 1])->getFeatureMaps());
         break;
       }
 
