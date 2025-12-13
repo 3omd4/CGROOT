@@ -24,11 +24,26 @@ except ImportError as e:
     print("Functionality relying on the core library will not work.")
 
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QIcon
+import ctypes
 from mainwindow import MainWindow
 from dark_theme import apply_dark_theme
 
 def main():
     app = QApplication(sys.argv)
+    
+    # Set AppUserModelID for proper taskbar icon handling
+    myappid = 'cgrooot.neuralnetwork.trainer.1.0' 
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception:
+        pass # Non-Windows or other issue
+
+    # Set Window Icon
+    icon_path = project_root / "icons" / "favicon.ico"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+
     apply_dark_theme(app)
     
     window = MainWindow()
