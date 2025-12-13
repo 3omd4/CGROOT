@@ -394,7 +394,132 @@ std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
 
   // 3. Backward Prop
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    switch (Layers[i]->getLayerType()) {
+    switch (Layers[i]->getLayerType()) 
+    {
+    case conv:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      }
+      break;
+
+    case pooling:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      }
+      break;
+    case flatten:
+      switch(Layers[i+1]->getLayerType())
+      {
+      case output:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp(static_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      case fullyConnected:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp(static_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      }
+      break;
     case output:
       switch (Layers[i - 1]->getLayerType()) {
       case fullyConnected:
@@ -446,7 +571,11 @@ std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
 
   // 4. Update Weights
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    switch (Layers[i]->getLayerType()) {
+    switch (Layers[i]->getLayerType()) 
+    {
+    case conv:
+      static_cast<convLayer*>(Layers[i])->update();
+      break;
     case output:
       static_cast<outputLayer *>(Layers[i])->update();
       break;
@@ -487,6 +616,130 @@ std::pair<double, int> NNModel::train_batch(const vector<image> &batchData,
     // 3. Backward Prop
     for (size_t i = Layers.size() - 1; i > 0; i--) {
       switch (Layers[i]->getLayerType()) {
+      case conv:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+        case conv:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        case pooling:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;    
+        case flatten:
+          static_cast<convLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(), 
+                                                          static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+          break;
+        }
+        break;
+      }
+      break;
+
+    case pooling:
+      switch(Layers[i-1]->getLayerType())
+      {
+      case pooling:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<poolingLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case conv:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<convLayer*>(Layers[i-1])->getFeatureMaps(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      case input:
+        switch(Layers[i+1]->getLayerType())
+        {
+          case pooling:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<poolingLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case conv:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<convLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+          case flatten:
+            static_cast<poolingLayer*>(Layers[i])->backwardProp_batch(static_cast<inputLayer*>(Layers[i-1])->getOutput(),
+                                                                static_cast<FlattenLayer*>(Layers[i+1])->getPrevLayerGrad());
+            break;
+        }
+        break;
+      }
+      break;
+    case flatten:
+      switch(Layers[i+1]->getLayerType())
+      {
+      case output:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp_batch(static_cast<outputLayer*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      case fullyConnected:
+        static_cast<FlattenLayer*>(Layers[i])->backwardProp_batch(static_cast<FullyConnected*>(Layers[i+1])->getPrevLayerGrad());
+        break;
+      }
+      break;
       case output:
         switch (Layers[i - 1]->getLayerType()) {
         case fullyConnected:
@@ -541,7 +794,11 @@ std::pair<double, int> NNModel::train_batch(const vector<image> &batchData,
 
   // 4. Update Weights
   for (size_t i = Layers.size() - 1; i > 0; i--) {
-    switch (Layers[i]->getLayerType()) {
+    switch (Layers[i]->getLayerType())
+    {
+    case conv:
+      static_cast<convLayer*>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
+      break;
     case output:
       static_cast<outputLayer *>(Layers[i])->update_batch(static_cast<int>(batchData.size()));
       break;
