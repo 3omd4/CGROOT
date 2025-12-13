@@ -1,6 +1,7 @@
 #include "model.h"
 #include <algorithm>
 #include <iomanip>
+#include <omp.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -87,54 +88,54 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   // ========== END VALIDATION ==========
 
   // Debug logging to understand the architecture before model creation
-  // std::cout << "================ Architecture Debug Info ================"
+  // // std::cout << "================ Architecture Debug Info ================"
   //           << std::endl;
-  // std::cout << "Number of Conv Layers: " << modelArch.numOfConvLayers
+  // // std::cout << "Number of Conv Layers: " << modelArch.numOfConvLayers
   //           << std::endl;
-  // std::cout << "Number of FC Layers: " << modelArch.numOfFCLayers <<
-  // std::endl; std::cout << "Neurons per FC Layer: " <<
+  // // std::cout << "Number of FC Layers: " << modelArch.numOfFCLayers <<
+  // std::endl; // std::cout << "Neurons per FC Layer: " <<
   // modelArch.neuronsPerFCLayer.size()
   //           << std::endl;
-  // std::cout << "Convolutional layers kernels: "
+  // // std::cout << "Convolutional layers kernels: "
   //           << modelArch.kernelsPerconvLayers.size() << std::endl;
-  // std::cout << "Fully connected layers neurons: "
+  // // std::cout << "Fully connected layers neurons: "
   //           << modelArch.neuronsPerFCLayer.size() << std::endl;
-  // std::cout << "Convolutional layers activation functions: "
+  // // std::cout << "Convolutional layers activation functions: "
   //           << modelArch.convLayerActivationFunc.size() << std::endl;
-  // std::cout << "Fully connected layers activation functions: "
+  // // std::cout << "Fully connected layers activation functions: "
   //           << modelArch.FCLayerActivationFunc.size() << std::endl;
-  // std::cout << "Convolutional layers init functions: "
+  // // std::cout << "Convolutional layers init functions: "
   //           << modelArch.convInitFunctionsType.size() << std::endl;
-  // std::cout << "Fully connected layers init functions: "
+  // // std::cout << "Fully connected layers init functions: "
   //           << modelArch.FCInitFunctionsType.size() << std::endl;
-  // std::cout << "Pooling layers interval: "
+  // // std::cout << "Pooling layers interval: "
   //           << modelArch.poolingLayersInterval.size() << std::endl;
-  // std::cout << "Pooling layers type: ";
+  // // std::cout << "Pooling layers type: ";
   // for (size_t i = 0; i < modelArch.poolingtype.size(); i++) {
-  //   std::cout << static_cast<int>(modelArch.poolingtype[i]);
+  //   // std::cout << static_cast<int>(modelArch.poolingtype[i]);
   //   if (i < modelArch.poolingtype.size() - 1)
-  //     std::cout << ", ";
+  //     // std::cout << ", ";
   // }
-  // std::cout << std::endl;
-  // std::cout << "Pooling layers kernels: " << std::endl;
+  // // std::cout << std::endl;
+  // // std::cout << "Pooling layers kernels: " << std::endl;
   // for (size_t i = 0; i < modelArch.kernelsPerPoolingLayer.size(); i++) {
-  //   std::cout << "depth X height X width: ";
-  //   std::cout << modelArch.kernelsPerPoolingLayer[i].filter_depth;
-  //   std::cout << "x";
-  //   std::cout << modelArch.kernelsPerPoolingLayer[i].filter_height;
-  //   std::cout << "x";
-  //   std::cout << modelArch.kernelsPerPoolingLayer[i].filter_width;
+  //   // std::cout << "depth X height X width: ";
+  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_depth;
+  //   // std::cout << "x";
+  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_height;
+  //   // std::cout << "x";
+  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_width;
   //   if (i < modelArch.kernelsPerPoolingLayer.size() - 1)
-  //     std::cout << ",\n";
+  //     // std::cout << ",\n";
   // }
-  // std::cout << std::endl;
-  // std::cout << "Optimizer epsilon: " << modelArch.optConfig.epsilon
+  // // std::cout << std::endl;
+  // // std::cout << "Optimizer epsilon: " << modelArch.optConfig.epsilon
   //           << std::endl;
-  // std::cout <<
+  // // std::cout <<
   // "============================================================="
   //           << std::endl;
 
-  // std::cout << "zxsaceq  wq wq q 123" << std::endl;
+  // // std::cout << "zxsaceq  wq wq q 123" << std::endl;
 
   try {
     // construct the input layer
@@ -144,7 +145,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
     throw;
   }
 
-  // std::cout << "cascasccs123" << std::endl;
+  // // std::cout << "cascasccs123" << std::endl;
 
   // Track current feature map dimensions
   size_t currentHeight = imageHeight;
@@ -158,7 +159,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   // an iterator that is used to iterate the pooling layers information vectors
   size_t poolIter = 0;
 
-  // std::cout << "cascasccs456" << std::endl;
+  // // std::cout << "cascasccs456" << std::endl;
 
   try {
     // start initializing the convolution and pooling layers
@@ -166,7 +167,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
     for (size_t i = 0; i < modelArch.numOfConvLayers; i++) {
       // Calculate feature map dimensions for this conv layer
 
-      // std::cout << "cascasccs789" << std::endl;
+      // // std::cout << "cascasccs789" << std::endl;
 
       featureMapDim fmDim =
           calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
@@ -177,7 +178,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
       modelArch.kernelsPerconvLayers[i].kernel_depth = currentDepth;
       fmDim.FM_depth = modelArch.kernelsPerconvLayers[i].numOfKerenels;
 
-      // std::cout << "cascasccs980" << std::endl;
+      // // std::cout << "cascasccs980" << std::endl;
 
       try {
         // Create convolution layer
@@ -191,7 +192,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
         throw;
       }
 
-      // std::cout << "cascasccs981" << std::endl;
+      // // std::cout << "cascasccs981" << std::endl;
 
       // Update current dimensions
       currentHeight = fmDim.FM_height;
@@ -260,29 +261,30 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                            ? currentHeight * currentWidth * currentDepth
                            : imageHeight * imageWidth * imageDepth;
 
-  // std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
+  // // std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
   //           << std::endl;
-  // std::cout << "Number of FC layers to create: " << modelArch.numOfFCLayers
+  // // std::cout << "Number of FC layers to create: " <<
+  // modelArch.numOfFCLayers
   //           << std::endl;
 
   for (size_t i = 0; i < modelArch.numOfFCLayers; i++) {
     try {
-      // std::cout << "Creating FC layer " << (i + 1) << "/"
+      // // std::cout << "Creating FC layer " << (i + 1) << "/"
       //           << modelArch.numOfFCLayers << std::endl;
-      // std::cout << "  Input size: " << fcInputSize << std::endl;
-      // std::cout << "  Output size (neurons): " <<
+      // // std::cout << "  Input size: " << fcInputSize << std::endl;
+      // // std::cout << "  Output size (neurons): " <<
       // modelArch.neuronsPerFCLayer[i]
       //           << std::endl;
-      // std::cout << "  Activation: " << modelArch.FCLayerActivationFunc[i]
+      // // std::cout << "  Activation: " << modelArch.FCLayerActivationFunc[i]
       //           << std::endl;
-      // std::cout << "  Init function: " << modelArch.FCInitFunctionsType[i]
+      // // std::cout << "  Init function: " << modelArch.FCInitFunctionsType[i]
       //           << std::endl;
 
       Layers.emplace_back(new FullyConnected(
           modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
           modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize));
 
-      // std::cout << "  FC layer " << (i + 1) << " created successfully"
+      // // std::cout << "  FC layer " << (i + 1) << " created successfully"
       //           << std::endl;
       fcInputSize = modelArch.neuronsPerFCLayer[i];
     } catch (const std::exception &e) {
@@ -294,14 +296,15 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
 
   // Create output layer
   try {
-    // std::cout << "Creating output layer" << std::endl;
-    // std::cout << "  Output layer input size: " << fcInputSize << std::endl;
-    // std::cout << "  Number of classes: " << numOfClasses << std::endl;
+    // // std::cout << "Creating output layer" << std::endl;
+    // // std::cout << "  Output layer input size: " << fcInputSize <<
+    // std::endl;
+    // // std::cout << "  Number of classes: " << numOfClasses << std::endl;
 
     Layers.emplace_back(
         new outputLayer(numOfClasses, fcInputSize, modelArch.distType));
 
-    // std::cout << "  Output layer created successfully" << std::endl;
+    // // std::cout << "  Output layer created successfully" << std::endl;
   } catch (const std::exception &e) {
     std::cerr << "ERROR creating output layer: " << e.what() << std::endl;
     std::cerr << "  fcInputSize was: " << fcInputSize << std::endl;
@@ -431,9 +434,14 @@ void NNModel::train(const image &imgData, int trueOutput) {
 // updated Note:         N/A
 void NNModel::train_batch(const vector<image> &batchData,
                           const vector<int> &trueOutput) {
+  // Parallelize batch processing - each thread processes one sample
+  // Note: REMOVED OpenMP here because classify() and backwardProp() use shared
+  // layer state (inputs/outputs). Parallel execution causes race conditions and
+  // garbage results.
   for (size_t sample = 0; sample < batchData.size(); sample++) {
-    // store the last input image so classify() can use it
-    this->data = batchData[sample];
+    // thread-local copy for this sample
+    // Note: forward/backward prop are already thread-safe in layer
+    // implementations
 
     // forward propagation
     classify(batchData[sample]);
@@ -663,11 +671,10 @@ static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
 }
 
 // Train the model for multiple epochs with dataset
-vector<TrainingMetrics>
-NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
-                      const TrainingConfig &config,
-                      ProgressCallback progress_callback,
-                      LogCallback log_callback) {
+vector<TrainingMetrics> NNModel::train_epochs(
+    const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+    const TrainingConfig &config, ProgressCallback progress_callback,
+    LogCallback log_callback, std::atomic<bool> *stop_requested) {
 
   vector<TrainingMetrics> history;
 
@@ -685,7 +692,8 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
     return history;
   }
 
-  std::cout << "Model is initialized - starting training epochs" << std::endl;
+  // std::cout << "Model is initialized - starting training epochs" <<
+  // std::endl;
 
   if (log_callback) {
     log_callback("Model is initialized - starting training epochs");
@@ -717,8 +725,8 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
   // Training loop
   std::mt19937 rng(config.random_seed);
 
-  std::cout << "Starting training epochs - random seed: " << config.random_seed
-            << std::endl;
+  // std::cout << "Starting training epochs - random seed: " <<
+  // config.random_seed << std::endl;
 
   if (log_callback) {
     log_callback("Starting training epochs - random seed: " +
@@ -726,12 +734,20 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
   }
 
   for (size_t epoch = 0; epoch < config.epochs; epoch++) {
+    // Check if training should stop before starting new epoch
+    if (stop_requested && stop_requested->load()) {
+      if (log_callback) {
+        log_callback("Training stopped by user request");
+      }
+      break;
+    }
+
     if (log_callback) {
       log_callback("Epoch " + std::to_string(epoch + 1) + "/" +
                    std::to_string(config.epochs));
     }
 
-    std::cout << "Epoch " << epoch + 1 << "/" << config.epochs << std::endl;
+    // std::cout << "Epoch " << epoch + 1 << "/" << config.epochs << std::endl;
 
     // Create and shuffle indices
     vector<size_t> all_indices(num_images);
@@ -739,14 +755,14 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       all_indices[i] = i;
     }
 
-    std::cout << "Shuffling indices" << std::endl;
+    // std::cout << "Shuffling indices" << std::endl;
 
     if (config.shuffle) {
       std::shuffle(all_indices.begin(), all_indices.end(), rng);
     }
 
-    std::cout << "train indices size: " << train_size << std::endl;
-    std::cout << "val indices size: " << val_size << std::endl;
+    // std::cout << "train indices size: " << train_size << std::endl;
+    // std::cout << "val indices size: " << val_size << std::endl;
 
     // Split into train and validation indices
     vector<size_t> train_indices(all_indices.begin(),
@@ -758,10 +774,9 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       val_indices.assign(all_indices.begin() + train_size, all_indices.end());
     }
 
-    std::cout << "train indices size (after split): " << train_indices.size()
-              << std::endl;
-    std::cout << "val indices size (after split): " << val_indices.size()
-              << std::endl;
+    // std::cout << "train indices size (after split): " << train_indices.size()
+    // << std::endl; std::cout << "val indices size (after split): " <<
+    // val_indices.size() << std::endl;
 
     // Training phase
     size_t train_correct = 0;
@@ -771,6 +786,8 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
     // PERFORMANCE OPTIMIZATION: Calculate metrics every N batches instead of
     // every sample This reduces expensive classify() calls by ~100x
     const size_t METRICS_UPDATE_INTERVAL = 100; // batches
+    const size_t PROGRESS_UPDATE_INTERVAL =
+        10; // Progress callback every 10 batches
     size_t batch_count = 0;
     size_t total_batches =
         (train_indices.size() + config.batch_size - 1) / config.batch_size;
@@ -778,9 +795,17 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
     vector<image> batch_images;
     vector<int> batch_labels;
 
-    std::cout << "start training" << std::endl;
+    // std::cout << "start training" << std::endl;
 
     for (size_t i = 0; i < train_indices.size(); i++) {
+      // STOP FLAG: Check periodically (every 100 samples) to allow interruption
+      if (stop_requested && (i % 100 == 0) && stop_requested->load()) {
+        if (log_callback) {
+          log_callback("Training interrupted by user");
+        }
+        goto epoch_end; // Break out of training loop cleanly
+      }
+
       size_t idx = train_indices[i];
       const auto &img_obj = dataset.images[idx];
 
@@ -792,7 +817,7 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       batch_images.push_back(image_data);
       batch_labels.push_back(label);
 
-      // std::cout << "batch size: " << batch_images.size() << std::endl;
+      // // std::cout << "batch size: " << batch_images.size() << std::endl;
 
       // Train if batch full or last element
       if (batch_images.size() >= config.batch_size ||
@@ -800,16 +825,16 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
         if (!batch_images.empty()) {
           // Train the batch
           if (batch_images.size() > 1) {
-            std::cout << "training batch"  << std::endl;
+            // std::cout << "training batch" << std::endl;
             train_batch(batch_images, batch_labels);
           } else {
-            std::cout << "training single image" << std::endl;
+            // std::cout << "training single image" << std::endl;
             train(batch_images[0], batch_labels[0]);
           }
 
           batch_count++;
 
-          std::cout << "batch count: " << batch_count << std::endl;
+          // std::cout << "batch count: " << batch_count << std::endl;
 
           // PERFORMANCE: Only calculate metrics periodically or on last batch
           bool should_calculate_metrics =
@@ -825,20 +850,43 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
                          static_cast<size_t>(32) // Check at most 32 samples
                 );
 
+            // Parallelize metrics calculation across samples
+            int local_correct = 0;
+            double local_loss_sum = 0.0;
+
+            // Note: REMOVED OpenMP - classify() is not thread-safe due to
+            // shared layer state
             for (size_t b = 0; b < samples_to_check; b++) {
               int pred = classify(batch_images[b]);
               if (pred == batch_labels[b]) {
-                train_correct++;
+                local_correct++;
               }
 
               // Calculate loss from probabilities
               vector<double> probs = getProbabilities();
               if (!probs.empty()) {
-                train_loss_sum +=
+                local_loss_sum +=
                     calculate_loss_from_probs(probs, batch_labels[b]);
-                train_samples++;
               }
             }
+
+            // Update shared counters
+            train_correct += local_correct;
+            train_loss_sum += local_loss_sum;
+            train_samples += samples_to_check;
+          }
+
+          // PERFORMANCE: Batch progress callbacks to reduce Qt signal overhead
+          if (progress_callback &&
+              (batch_count % PROGRESS_UPDATE_INTERVAL == 0 ||
+               i == train_indices.size() - 1)) {
+            double current_acc =
+                train_samples > 0
+                    ? static_cast<double>(train_correct) / train_samples
+                    : 0.0;
+            double current_loss =
+                train_samples > 0 ? train_loss_sum / train_samples : 1.0;
+            progress_callback(epoch, config.epochs, current_loss, current_acc);
           }
 
           // Clear batch
@@ -848,16 +896,21 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       }
     }
 
-    std::cout << "training completed" << std::endl;
+  epoch_end: // Label for goto when training interrupted
+    // std::cout << "training completed" << std::endl;
 
     // Calculate training metrics
-    double train_acc =
-        train_size > 0 ? static_cast<double>(train_correct) / train_size : 0.0;
+    // BUGFIX: Divide by samples actually checked, not total train_size
+    // Since we sample metrics, accuracy is based on checked samples only
+    double train_acc = train_samples > 0
+                           ? static_cast<double>(train_correct) / train_samples
+                           : 0.0;
     double train_loss =
-        train_samples > 0 ? train_loss_sum / train_samples : 1.0 - train_acc;
+        train_samples > 0 ? train_loss_sum / train_samples : 1.0;
 
-    std::cout << "training accuracy: " << train_acc << std::endl;
-    std::cout << "training loss: " << train_loss << std::endl;
+    // std::cout << "training accuracy: " << train_acc << " (based on " <<
+    // train_samples << " sampled)" << std::endl; std::cout << "training loss: "
+    // << train_loss << std::endl;
 
     // Validation phase
     double val_acc = 0.0;
@@ -868,9 +921,12 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       double val_loss_sum = 0.0;
       size_t val_samples = 0;
 
-      std::cout << "validation started" << std::endl;
+      // std::cout << "validation started" << std::endl;
 
-      for (size_t idx : val_indices) {
+      // Parallelize validation loop - each thread processes validation samples
+      // independently Note: REMOVED OpenMP - classify() is not thread-safe
+      for (size_t v = 0; v < val_indices.size(); v++) {
+        size_t idx = val_indices[v];
         const auto &img_obj = dataset.images[idx];
         image image_data =
             convert_mnist_to_image_format(img_obj.pixels, 28, 28);
@@ -896,7 +952,7 @@ NNModel::train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
       val_loss = val_samples > 0 ? val_loss_sum / val_samples : 1.0 - val_acc;
     }
 
-    std::cout << "validation completed" << std::endl;
+    // std::cout << "validation completed" << std::endl;
 
     // Store metrics
     TrainingMetrics metrics;

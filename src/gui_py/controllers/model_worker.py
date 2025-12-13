@@ -10,6 +10,71 @@ try:
 except ImportError:
     cgroot_core = None
 
+# ========================== Training Thread ==========================
+class TrainingThread(QThread):
+    progress = pyqtSignal(int, int, float, float)  # epoch, total, loss, acc
+    log = pyqtSignal(str)
+    finished = pyqtSignal(list)  # history
+
+    def __init__(self, model, dataset, config):
+        super().__init__()
+        self.model = model
+        self.dataset = dataset
+        self.config = config
+        self._stop_requested = False
+
+    def run(self):
+        # Thread-safe callbacks for C++ training
+        def progress_callback(epoch, total, loss, acc):
+            if not self._stop_requested:
+                self.progress.emit(epoch, total, loss, acc)
+
+        def log_callback(msg):
+            if not self._stop_requested:
+                self.log.emit(msg)
+
+        def stop_check():
+            return self._stop_requested
+
+        try:
+            history = self.model.train_epochs(
+                self.dataset,
+                self.config,
+                progress_callback,
+                log_callback,
+                stop_check
+            )
+            if not self._stop_requested:
+                self.finished.emit(history)
+        except Exception as e:
+            self.log.emit(f"Training error: {e}")
+
+    def stop(self):
+        self._stop_requested = True
+
+# ========================== Loader Thread ==========================
+class LoaderThread(QThread):
+    loaded = pyqtSignal(object)  # dataset object
+    log = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, images_path, labels_path):
+        super().__init__()
+        self.images_path = images_path
+        self.labels_path = labels_path
+
+    def run(self):
+        try:
+            self.log.emit(f"Loading dataset from: {self.images_path}")
+            if not cgroot_core:
+                self.error.emit("Core library not loaded")
+                return
+
+            dataset = cgroot_core.MNISTLoader.load_training_data(self.images_path, self.labels_path)
+            self.loaded.emit(dataset)
+        except Exception as e:
+            self.error.emit(f"Exception loading dataset: {e}")
+
 class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
     metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
@@ -28,242 +93,193 @@ class ModelWorker(QObject):
         self.model = None
         self.dataset = None
         self.should_stop = False
-        
-        # Thread safety: Track if training is active to prevent post-finish callbacks
         self._training_active = False
-        
-        # Callback lifetime management: Store references to prevent GC during C++ execution
-        self._progress_callback_ref = None
-        self._log_callback_ref = None
+        self._train_thread = None
+        self._loader_thread = None
         
         # Connect internal signals (these are thread-safe automatically)
         self._internal_log.connect(self._emit_log_from_thread)
         self._internal_progress.connect(self._emit_progress_from_thread)
         
+    
     @pyqtSlot(str, str)
     def loadDataset(self, images_path, labels_path):
+        """Load dataset asynchronously in a background thread."""
         if not cgroot_core:
             self.logMessage.emit("Error: Core library not loaded")
             return
             
-        self.logMessage.emit(f"Loading dataset from: {images_path}")
-        try:
-            self.dataset = cgroot_core.MNISTLoader.load_training_data(images_path, labels_path)
-            
-            if self.dataset:
-                self.logMessage.emit(f"Loaded {self.dataset.num_images} images")
-            else:
-                self.logMessage.emit("Failed to load dataset")
-        except Exception as e:
-            self.logMessage.emit(f"Exception loading dataset: {e}")
-            import traceback
-            traceback.print_exc()
+        self.logMessage.emit(f"Starting async dataset load...")
+        
+        # Create and start loader thread
+        self._loader_thread = LoaderThread(images_path, labels_path)
+        self._loader_thread.log.connect(self.logMessage.emit)
+        self._loader_thread.error.connect(self._on_loader_error)
+        self._loader_thread.loaded.connect(self._on_dataset_loaded)
+        self._loader_thread.start()
+    
+    @pyqtSlot(object)
+    def _on_dataset_loaded(self, dataset):
+        """Handle successful dataset loading."""
+        self.dataset = dataset
+        if self.dataset:
+            self.logMessage.emit(f"Dataset loaded successfully: {self.dataset.num_images} images")
+        else:
+            self.logMessage.emit("Failed to load dataset (returned None)")
+        
+        # Clean up thread
+        self._loader_thread = None
+
+    @pyqtSlot(str)
+    def _on_loader_error(self, error_msg):
+        """Handle dataset loading error."""
+        self.logMessage.emit(error_msg)
+        self._loader_thread = None
+
 
 
     @pyqtSlot(dict)
     def trainModel(self, config):
-        epochs = config.get('epochs', 10)
-        
+        """Train the model asynchronously using a separate thread."""
         if not self.dataset:
             self.logMessage.emit("No dataset loaded")
             self.trainingFinished.emit()
             return
 
+        if not self.model:
+            self._initialize_model(config)
+
+        # Create training configuration
+        train_config = self._create_training_config(config)
+
+        # Start training in separate thread
+        self._train_thread = TrainingThread(self.model, self.dataset, train_config)
+        self._train_thread.progress.connect(self._internal_progress.emit)
+        self._train_thread.log.connect(self._internal_log.emit)
+        self._train_thread.finished.connect(self._on_training_finished)
+        self._training_active = True
         self.should_stop = False
         self.modelStatusChanged.emit(True)
+        self.logMessage.emit("=== Training Session Start ===")
+        self._train_thread.start()
+    
+    def _on_training_finished(self, history):
+        """Handle training completion."""
+        self._training_active = False
+        self.modelStatusChanged.emit(False)
+        self.logMessage.emit("=== Training Session End ===")
+        self.logMessage.emit(f"Training completed! Total epochs: {len(history)}")
+        self.trainingFinished.emit()
+        self._train_thread = None
+    
+    def _initialize_model(self, config):
+        """Initialize the neural network model with the given configuration."""
+        self.logMessage.emit("Initializing NNModel with Config...")
+        arch = cgroot_core.architecture()
         
-        try:
-            # Initialize model if not exists
-            if not self.model:
-                self.logMessage.emit("Initializing NNModel with Config...")
-                arch = cgroot_core.architecture()
-                
-                # Clear vectors to ensure clean state
-                arch.kernelsPerconvLayers = []
-                arch.neuronsPerFCLayer = []
-                arch.convLayerActivationFunc = []
-                arch.FCLayerActivationFunc = []
-                arch.convInitFunctionsType = []
-                arch.FCInitFunctionsType = []
-                arch.poolingLayersInterval = []
-                arch.poolingtype = []
-                arch.kernelsPerPoolingLayer = []
-
-                
-                
-                # Dynamic Config
-                arch.numOfConvLayers = config.get('num_conv_layers', 0)
-                
-                num_fc_layers = config.get('num_fc_layers', 2)
-                neurons_list = config.get('neurons_per_fc_layer', [128, 10])
-                num_classes = config.get('num_classes', 10)
-                
-                # IMPORTANT: If the last FC layer size equals num_classes, it's likely meant
-                # to be the output layer, which is created separately by NNModel.
-                # Remove it to avoid double-counting and bad allocation.
-                # if neurons_list and neurons_list[-1] == num_classes:
-                #     self.logMessage.emit(f"Detected output layer in FC layers ({neurons_list[-1]}), removing it as output layer is created separately")
-                #     neurons_list = neurons_list[:-1]
-                #     num_fc_layers = len(neurons_list)
-                #     self.logMessage.emit(f"Adjusted to {num_fc_layers} hidden FC layers: {neurons_list}")
-                
-                # Ensure we have at least one hidden layer
-                # if not neurons_list or len(neurons_list) == 0:
-                #     self.logMessage.emit(f"WARNING: No hidden layers specified! Adding default hidden layer with 128 neurons")
-                #     neurons_list = [128]
-                #     num_fc_layers = 1
-                
-                # Sanity check: Ensure neurons list length matches num_fc_layers
-                # if len(neurons_list) != num_fc_layers:
-                #     self.logMessage.emit(f"Warning: Neurons list length ({len(neurons_list)}) does not match FC Layers count ({num_fc_layers}). Using list length.")
-                #     num_fc_layers = len(neurons_list)
-                    
-                arch.numOfFCLayers = num_fc_layers
-                arch.neuronsPerFCLayer = neurons_list
-                
-                # Default activations and init functions
-                # All FC layers use ReLU except output uses Softmax (handled by output layer)
-                arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * num_fc_layers
-                arch.FCInitFunctionsType = [cgroot_core.initFunctions.Xavier] * num_fc_layers
-                
-                arch.distType = cgroot_core.distributionType.normalDistribution
-                
-                img_h = config.get('image_height', 28)
-                img_w = config.get('image_width', 28)
-                
-                # Optimizer Config
-                opt_type_str = config.get('optimizer', 'Adam')
-                lr = config.get('learning_rate', 0.001)
-                wd = config.get('weight_decay', 0.0001)
-                mom = config.get('momentum', 0.9)
-                
-                # Setup OptimizerConfig
-                arch.optConfig.learningRate = lr
-                arch.optConfig.weightDecay = wd
-                arch.optConfig.momentum = mom
-                arch.optConfig.beta1 = 0.9
-                arch.optConfig.beta2 = 0.999
-                arch.optConfig.epsilon = 1e-8
-                
-                if opt_type_str == "Adam":
-                    arch.optConfig.type = cgroot_core.OptimizerType.Adam
-                elif opt_type_str == "RMSprop" or opt_type_str == "RMSProp":
-                    arch.optConfig.type = cgroot_core.OptimizerType.RMSprop
-                else:
-                    arch.optConfig.type = cgroot_core.OptimizerType.SGD
-
-
-                # Validate configuration before creating model
-                validation_errors = []
-                
-                if num_fc_layers != len(neurons_list):
-                    validation_errors.append(
-                        f"FC layer count mismatch: num_fc_layers={num_fc_layers} but "
-                        f"neurons_per_fc_layer has {len(neurons_list)} values")
-                
-                if num_fc_layers != len(arch.FCLayerActivationFunc):
-                    validation_errors.append(
-                        f"FC activation function count mismatch: expected {num_fc_layers}, "
-                        f"got {len(arch.FCLayerActivationFunc)}")
-                
-                if num_fc_layers != len(arch.FCInitFunctionsType):
-                    validation_errors.append(
-                        f"FC init function count mismatch: expected {num_fc_layers}, "
-                        f"got {len(arch.FCInitFunctionsType)}")
-                
-                if any(n <= 0 for n in neurons_list):
-                    validation_errors.append(
-                        f"All neuron counts must be positive. Got: {neurons_list}")
-                
-                if img_h <= 0 or img_w <= 0:
-                    validation_errors.append(
-                        f"Image dimensions must be positive. Got: {img_h}x{img_w}")
-                
-                if num_classes <= 0:
-                    validation_errors.append(
-                        f"Number of classes must be positive. Got: {num_classes}")
-                
-                if validation_errors:
-                    error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in validation_errors)
-                    self.logMessage.emit(f"ERROR: {error_msg}")
-                    raise ValueError(error_msg)
-
-                # self.logMessage.emit(f"Architecture configured")
-                # self.logMessage.emit(f"=== ABOUT TO CREATE MODEL ===")
-                # self.logMessage.emit(f"Creating NNModel with:")
-                # self.logMessage.emit(f"  num_classes={num_classes}")
-                # self.logMessage.emit(f"  img_h={img_h}, img_w={img_w}, depth=1")
-                # self.logMessage.emit(f"  neurons_list={neurons_list}")
-                # self.logMessage.emit(f"  Expected output layer input size: {neurons_list[-1] if neurons_list else 'N/A'}")
-                # self.logMessage.emit(f"  Expected output layer output size: {num_classes}")
-                
-                self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
-                self.logMessage.emit(f"Model initialized successfully")
-
-            # Create training configuration for C++
-            train_config = cgroot_core.TrainingConfig()
-            train_config.epochs = epochs
-            train_config.batch_size = config.get('batch_size', 32)
-            train_config.validation_split = config.get('validation_split', 0.2)
-            train_config.use_validation = config.get('use_validation', True)
-            train_config.shuffle = True
-            train_config.random_seed = 42
-            
-            # Define thread-safe callbacks for C++ to call
-            # These use QMetaObject.invokeMethod to safely cross thread boundaries
-            def progress_callback(epoch, total_epochs, loss, accuracy):
-                """
-                Thread-safe progress callback.
-                Emits internal signal which is automatically thread-safe in Qt.
-                """
-                self._internal_progress.emit(epoch, total_epochs, loss, accuracy)
-            
-            def log_callback(message):
-                """
-                Thread-safe log callback.
-                Emits internal signal which is automatically thread-safe in Qt.
-                """
-                self._internal_log.emit(message)
-
-
-            # Store callback references to prevent garbage collection during C++ execution
-            self._progress_callback_ref = progress_callback
-            self._log_callback_ref = log_callback
-            self._training_active = True
-            
-            self.logMessage.emit(f"=== Training Session Start ===")
-            self.logMessage.emit(f"Worker thread ID: {int(QThread.currentThreadId())}")
-            
-            # Call the C++ train_epochs method (this is where all the magic happens!)
-            self.logMessage.emit(f"Starting C++ training loop for {epochs} epochs...")
-            history = self.model.train_epochs(
-                self.dataset, 
-                train_config,
-                progress_callback,
-                log_callback
-            )
-            
-            self.logMessage.emit(f"Training completed! Total epochs: {len(history)}")
-            
-        except Exception as e:
-            self.logMessage.emit(f"Training error: {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            # CRITICAL: Clear training state and callbacks even if exception occurs
-            # This MUST happen before emitting trainingFinished signal
-            self._training_active = False
-            self._progress_callback_ref = None
-            self._log_callback_ref = None
-            self.logMessage.emit(f"=== Training Session End ===")
-            
-            # Reset model status and notify completion
-            self.modelStatusChanged.emit(False)
-            self.trainingFinished.emit()
+        # Clear vectors to ensure clean state
+        arch.kernelsPerconvLayers = []
+        arch.neuronsPerFCLayer = []
+        arch.convLayerActivationFunc = []
+        arch.FCLayerActivationFunc = []
+        arch.convInitFunctionsType = []
+        arch.FCInitFunctionsType = []
+        arch.poolingLayersInterval = []
+        arch.poolingtype = []
+        arch.kernelsPerPoolingLayer = []
+        
+        # Configure architecture
+        arch.numOfConvLayers = config.get('num_conv_layers', 0)
+        num_fc_layers = config.get('num_fc_layers', 2)
+        neurons_list = config.get('neurons_per_fc_layer', [128, 10])
+        num_classes = config.get('num_classes', 10)
+        
+        arch.numOfFCLayers = num_fc_layers
+        arch.neuronsPerFCLayer = neurons_list
+        arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * num_fc_layers
+        arch.FCInitFunctionsType = [cgroot_core.initFunctions.Xavier] * num_fc_layers
+        arch.distType = cgroot_core.distributionType.normalDistribution
+        
+        img_h = config.get('image_height', 28)
+        img_w = config.get('image_width', 28)
+        
+        # Configure optimizer
+        opt_type_str = config.get('optimizer', 'Adam')
+        arch.optConfig.learningRate = config.get('learning_rate', 0.001)
+        arch.optConfig.weightDecay = config.get('weight_decay', 0.0001)
+        arch.optConfig.momentum = config.get('momentum', 0.9)
+        arch.optConfig.beta1 = 0.9
+        arch.optConfig.beta2 = 0.999
+        arch.optConfig.epsilon = 1e-8
+        
+        if opt_type_str == "Adam":
+            arch.optConfig.type = cgroot_core.OptimizerType.Adam
+        elif opt_type_str == "RMSprop" or opt_type_str == "RMSProp":
+            arch.optConfig.type = cgroot_core.OptimizerType.RMSprop
+        else:
+            arch.optConfig.type = cgroot_core.OptimizerType.SGD
+        
+        # Validate configuration
+        self._validate_config(num_fc_layers, neurons_list, arch, img_h, img_w, num_classes)
+        
+        # Create model
+        self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
+        self.logMessage.emit("Model initialized successfully")
+    
+    def _validate_config(self, num_fc_layers, neurons_list, arch, img_h, img_w, num_classes):
+        """Validate model configuration parameters."""
+        validation_errors = []
+        
+        if num_fc_layers != len(neurons_list):
+            validation_errors.append(
+                f"FC layer count mismatch: num_fc_layers={num_fc_layers} but "
+                f"neurons_per_fc_layer has {len(neurons_list)} values")
+        
+        if num_fc_layers != len(arch.FCLayerActivationFunc):
+            validation_errors.append(
+                f"FC activation function count mismatch: expected {num_fc_layers}, "
+                f"got {len(arch.FCLayerActivationFunc)}")
+        
+        if num_fc_layers != len(arch.FCInitFunctionsType):
+            validation_errors.append(
+                f"FC init function count mismatch: expected {num_fc_layers}, "
+                f"got {len(arch.FCInitFunctionsType)}")
+        
+        if any(n <= 0 for n in neurons_list):
+            validation_errors.append(
+                f"All neuron counts must be positive. Got: {neurons_list}")
+        
+        if img_h <= 0 or img_w <= 0:
+            validation_errors.append(
+                f"Image dimensions must be positive. Got: {img_h}x{img_w}")
+        
+        if num_classes <= 0:
+            validation_errors.append(
+                f"Number of classes must be positive. Got: {num_classes}")
+        
+        if validation_errors:
+            error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in validation_errors)
+            self.logMessage.emit(f"ERROR: {error_msg}")
+            raise ValueError(error_msg)
+    
+    def _create_training_config(self, config):
+        """Create a TrainingConfig object from the provided configuration dict."""
+        train_config = cgroot_core.TrainingConfig()
+        train_config.epochs = config.get('epochs', 10)
+        train_config.batch_size = config.get('batch_size', 32)
+        train_config.validation_split = config.get('validation_split', 0.2)
+        train_config.use_validation = config.get('use_validation', True)
+        train_config.shuffle = True
+        train_config.random_seed = 42
+        return train_config
 
     @pyqtSlot()
     def stopTraining(self):
+        """Stop the training thread."""
         self.should_stop = True
+        if hasattr(self, "_train_thread") and self._train_thread:
+            self._train_thread.stop()
+            self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
 
     @pyqtSlot(object)
     def runInference(self, qimage_obj):

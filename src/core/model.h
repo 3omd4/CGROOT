@@ -171,13 +171,15 @@ public:
   //               -config (training configuration)
   //               -progress_callback (optional callback for progress updates)
   //               -log_callback (optional callback for log messages)
+  //               -stop_requested (optional atomic flag for cancellation)
   // output:       vector of TrainingMetrics for each epoch
   // side effect:  The model is trained and parameters are updated
   vector<TrainingMetrics>
   train_epochs(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
                const TrainingConfig &config,
                ProgressCallback progress_callback = nullptr,
-               LogCallback log_callback = nullptr);
+               LogCallback log_callback = nullptr,
+               std::atomic<bool> *stop_requested = nullptr);
 
   // additional functions
 };

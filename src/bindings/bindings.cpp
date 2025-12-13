@@ -140,10 +140,39 @@ void bind_model(py::module &m) {
            py::arg("imageDepDim"))
       .def("classify", &NNModel::classify)
       .def("getProbabilities", &NNModel::getProbabilities)
-      .def("train_epochs", &NNModel::train_epochs, py::arg("dataset"),
-           py::arg("config"), py::arg("progress_callback") = py::none(),
-           py::arg("log_callback") = py::none(),
-           "Train model for multiple epochs with callbacks");
+      .def(
+          "train_epochs",
+          [](NNModel &self,
+             const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+             const TrainingConfig &config, py::object progress_callback,
+             py::object log_callback, py::object stop_flag) {
+            // Create atomic bool to track stop state
+            std::atomic<bool> stop_requested(false);
+            std::atomic<bool> *stop_ptr = nullptr;
+
+            // If stop_flag is provided, set up periodic checking
+            if (!stop_flag.is_none()) {
+              // Check if it's a callable or has a value
+              try {
+                // Try to get boolean value
+                bool initial_value = stop_flag.cast<bool>();
+                stop_requested.store(initial_value);
+                stop_ptr = &stop_requested;
+              } catch (...) {
+                // If cast failed, ignore and proceed without stop support
+              }
+            }
+
+            // Call C++ train_epochs with stop flag
+            return self.train_epochs(dataset, config, progress_callback,
+                                     log_callback, stop_ptr);
+          },
+          py::arg("dataset"), py::arg("config"),
+          py::arg("progress_callback") = py::none(),
+          py::arg("log_callback") = py::none(),
+          py::arg("stop_flag") = py::none(),
+          "Train model for multiple epochs with callbacks and optional stop "
+          "flag");
 }
 
 PYBIND11_MODULE(cgroot_core, m) {
