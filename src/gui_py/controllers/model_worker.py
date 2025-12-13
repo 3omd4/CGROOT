@@ -172,95 +172,17 @@ class ModelWorker(QObject):
         self.trainingFinished.emit()
         self._train_thread = None
     
-    def _initialize_model(self, config):
-        """Initialize the neural network model with the given configuration."""
-        self.logMessage.emit("Initializing NNModel with Config...")
-        arch = cgroot_core.architecture()
-        
-        # Clear vectors to ensure clean state
-        arch.kernelsPerconvLayers = []
-        arch.neuronsPerFCLayer = []
-        arch.convLayerActivationFunc = []
-        arch.FCLayerActivationFunc = []
-        arch.convInitFunctionsType = []
-        arch.FCInitFunctionsType = []
-        arch.poolingLayersInterval = []
-        arch.poolingtype = []
-        arch.kernelsPerPoolingLayer = []
-        
-        # Configure architecture
-        arch.numOfConvLayers = config.get('num_conv_layers', 0)
-        num_fc_layers = config.get('num_fc_layers', 2)
-        neurons_list = config.get('neurons_per_fc_layer', [128, 10])
-        num_classes = config.get('num_classes', 10)
-        
-        arch.numOfFCLayers = num_fc_layers
-        arch.neuronsPerFCLayer = neurons_list
-        arch.FCLayerActivationFunc = [cgroot_core.activationFunction.RelU] * num_fc_layers
-        arch.FCInitFunctionsType = [cgroot_core.initFunctions.Xavier] * num_fc_layers
-        arch.distType = cgroot_core.distributionType.normalDistribution
-        
-        img_h = config.get('image_height', 28)
-        img_w = config.get('image_width', 28)
-        
-        # Configure optimizer
-        opt_type_str = config.get('optimizer', 'Adam')
-        arch.optConfig.learningRate = config.get('learning_rate', 0.001)
-        arch.optConfig.weightDecay = config.get('weight_decay', 0.0001)
-        arch.optConfig.momentum = config.get('momentum', 0.9)
-        arch.optConfig.beta1 = 0.9
-        arch.optConfig.beta2 = 0.999
-        arch.optConfig.epsilon = 1e-8
-        
-        if opt_type_str == "Adam":
-            arch.optConfig.type = cgroot_core.OptimizerType.Adam
-        elif opt_type_str == "RMSprop" or opt_type_str == "RMSProp":
-            arch.optConfig.type = cgroot_core.OptimizerType.RMSprop
-        else:
-            arch.optConfig.type = cgroot_core.OptimizerType.SGD
-        
-        # Validate configuration
-        self._validate_config(num_fc_layers, neurons_list, arch, img_h, img_w, num_classes)
-        
-        # Create model
-        self.model = cgroot_core.NNModel(arch, num_classes, img_h, img_w, 1)
-        self.logMessage.emit("Model initialized successfully")
     
-    def _validate_config(self, num_fc_layers, neurons_list, arch, img_h, img_w, num_classes):
-        """Validate model configuration parameters."""
-        validation_errors = []
-        
-        if num_fc_layers != len(neurons_list):
-            validation_errors.append(
-                f"FC layer count mismatch: num_fc_layers={num_fc_layers} but "
-                f"neurons_per_fc_layer has {len(neurons_list)} values")
-        
-        if num_fc_layers != len(arch.FCLayerActivationFunc):
-            validation_errors.append(
-                f"FC activation function count mismatch: expected {num_fc_layers}, "
-                f"got {len(arch.FCLayerActivationFunc)}")
-        
-        if num_fc_layers != len(arch.FCInitFunctionsType):
-            validation_errors.append(
-                f"FC init function count mismatch: expected {num_fc_layers}, "
-                f"got {len(arch.FCInitFunctionsType)}")
-        
-        if any(n <= 0 for n in neurons_list):
-            validation_errors.append(
-                f"All neuron counts must be positive. Got: {neurons_list}")
-        
-        if img_h <= 0 or img_w <= 0:
-            validation_errors.append(
-                f"Image dimensions must be positive. Got: {img_h}x{img_w}")
-        
-        if num_classes <= 0:
-            validation_errors.append(
-                f"Number of classes must be positive. Got: {num_classes}")
-        
-        if validation_errors:
-            error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in validation_errors)
-            self.logMessage.emit(f"ERROR: {error_msg}")
-            raise ValueError(error_msg)
+    def _initialize_model(self, config):
+        """Initialize the neural network model with the given configuration using C++ factory."""
+        self.logMessage.emit("Initializing NNModel with Config (via C++ Factory)...")
+        try:
+            self.model = cgroot_core.create_model(config)
+            self.logMessage.emit("Model initialized successfully")
+        except Exception as e:
+            self.logMessage.emit(f"Error initializing model: {e}")
+            raise e
+
     
     def _create_training_config(self, config):
         """Create a TrainingConfig object from the provided configuration dict."""
@@ -295,25 +217,20 @@ class ModelWorker(QObject):
             
         self.modelStatusChanged.emit(True)
         try:
-            # Convert QImage to 3D vector [1][28][28]
+            # Convert QImage to 8-bit grayscale
             img = qimage_obj.scaled(28, 28).convertToFormat(QImage.Format.Format_Grayscale8)
             
             width = img.width()
             height = img.height()
+            stride = img.bytesPerLine()
             
-            rows = []
-            for y in range(height):
-                row = []
-                for x in range(width):
-                    pixel_val = qGray(img.pixel(x, y))
-                    row.append(pixel_val)
-                rows.append(row)
+            # fast access to bytes
+            bits = img.bits()
+            bits.setsize(img.sizeInBytes())
             
-            image_data = [rows]  # Depth 1
-            
-            # Run Classification
-            self.logMessage.emit("Running inference on image...")
-            predicted_class = self.model.classify(image_data)
+            # Run Classification using C++ helper
+            self.logMessage.emit("Running inference on image (C++ optimized)...")
+            predicted_class = cgroot_core.classify_pixels(self.model, bits, width, height, stride)
             
             self.logMessage.emit(f"Inference Result: {predicted_class}")
             

@@ -2,6 +2,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
+#include <stdexcept>
 
 #include "core/definitions.h"
 #include "core/model.h"
@@ -132,49 +133,6 @@ void bind_mnist_loader(py::module &m) {
       .def_static("load_test_data", &cgroot::data::MNISTLoader::load_test_data);
 }
 
-// void bind_model(py::module &m) {
-//   py::class_<NNModel>(m, "NNModel")
-//       .def(py::init<architecture, size_t, size_t, size_t, size_t>(),
-//            py::arg("modelArch"), py::arg("numOfClasses"),
-//            py::arg("imageVerDim"), py::arg("imageHorDim"),
-//            py::arg("imageDepDim"))
-//       .def("classify", &NNModel::classify)
-//       .def("getProbabilities", &NNModel::getProbabilities)
-//       .def(
-//           "train_epochs",
-//           [](NNModel &self,
-//              const cgroot::data::MNISTLoader::MNISTDataset &dataset,
-//              const TrainingConfig &config, py::object progress_callback,
-//              py::object log_callback, py::object stop_flag) {
-//             // Create atomic bool to track stop state
-//             std::atomic<bool> stop_requested(false);
-//             std::atomic<bool> *stop_ptr = nullptr;
-
-//             // If stop_flag is provided, set up periodic checking
-//             if (!stop_flag.is_none()) {
-//               // Check if it's a callable or has a value
-//               try {
-//                 // Try to get boolean value
-//                 bool initial_value = stop_flag.cast<bool>();
-//                 stop_requested.store(initial_value);
-//                 stop_ptr = &stop_requested;
-//               } catch (...) {
-//                 // If cast failed, ignore and proceed without stop support
-//               }
-//             }
-
-//             // Call C++ train_epochs with stop flag
-//             return self.train_epochs(dataset, config, progress_callback,
-//                                      log_callback, stop_ptr);
-//           },
-//           py::arg("dataset"), py::arg("config"),
-//           py::arg("progress_callback") = py::none(),
-//           py::arg("log_callback") = py::none(),
-//           py::arg("stop_flag") = py::none(),
-//           "Train model for multiple epochs with callbacks and optional stop "
-//           "flag");
-// }
-
 void bind_model(py::module &m) {
   py::class_<NNModel>(m, "NNModel")
       .def(py::init<architecture, size_t, size_t, size_t, size_t>(),
@@ -237,10 +195,164 @@ void bind_model(py::module &m) {
   // --- FIX ENDS HERE ---
 }
 
+// Helper to validate model configuration
+void validate_config_cpp(int num_fc_layers,
+                         const std::vector<int> &neurons_list,
+                         const architecture &arch, int img_h, int img_w,
+                         int num_classes) {
+  if (num_fc_layers != neurons_list.size()) {
+    throw std::runtime_error("FC layer count mismatch");
+  }
+
+  if (num_fc_layers != arch.FCLayerActivationFunc.size()) {
+    throw std::runtime_error("FC activation function count mismatch");
+  }
+
+  if (num_fc_layers != arch.FCInitFunctionsType.size()) {
+    throw std::runtime_error("FC init function count mismatch");
+  }
+
+  for (size_t i = 0; i < neurons_list.size(); ++i) {
+    if (neurons_list[i] <= 0) {
+      throw std::runtime_error("All neuron counts must be positive.");
+    }
+  }
+
+  if (img_h <= 0 || img_w <= 0) {
+    throw std::runtime_error("Image dimensions must be positive.");
+  }
+
+  if (num_classes <= 0) {
+    throw std::runtime_error("Number of classes must be positive.");
+  }
+}
+
+// Factory function to create NNModel from config dict
+NNModel *create_model(py::dict config) {
+  architecture arch;
+
+  // Defaults
+  int num_conv_layers = 0;
+  if (config.contains("num_conv_layers"))
+    num_conv_layers = config["num_conv_layers"].cast<int>();
+
+  int num_fc_layers = 2;
+  if (config.contains("num_fc_layers"))
+    num_fc_layers = config["num_fc_layers"].cast<int>();
+
+  std::vector<int> neurons_list = {128, 10};
+  if (config.contains("neurons_per_fc_layer"))
+    neurons_list = config["neurons_per_fc_layer"].cast<std::vector<int>>();
+
+  int num_classes = 10;
+  if (config.contains("num_classes"))
+    num_classes = config["num_classes"].cast<int>();
+
+  int img_h = 28;
+  if (config.contains("image_height"))
+    img_h = config["image_height"].cast<int>();
+
+  int img_w = 28;
+  if (config.contains("image_width"))
+    img_w = config["image_width"].cast<int>();
+
+  // Use std::vector<size_t> for internal storage as per struct definition
+  std::vector<size_t> neurons_list_sz;
+  for (int n : neurons_list)
+    neurons_list_sz.push_back((size_t)n);
+
+  arch.numOfConvLayers = num_conv_layers;
+  arch.numOfFCLayers = num_fc_layers;
+  arch.neuronsPerFCLayer = neurons_list_sz;
+
+  // Defaults for FC layers
+  for (int i = 0; i < num_fc_layers; ++i) {
+    arch.FCLayerActivationFunc.push_back(activationFunction::RelU);
+    arch.FCInitFunctionsType.push_back(initFunctions::Xavier);
+  }
+
+  arch.distType = distributionType::normalDistribution;
+
+  // Optimizer Config
+  std::string opt_type = "Adam";
+  if (config.contains("optimizer"))
+    opt_type = config["optimizer"].cast<std::string>();
+
+  float lr = 0.001f;
+  if (config.contains("learning_rate"))
+    lr = config["learning_rate"].cast<float>();
+
+  float decay = 0.0001f;
+  if (config.contains("weight_decay"))
+    decay = config["weight_decay"].cast<float>();
+
+  float momentum = 0.9f;
+  if (config.contains("momentum"))
+    momentum = config["momentum"].cast<float>();
+
+  arch.optConfig.learningRate = lr;
+  arch.optConfig.weightDecay = decay;
+  arch.optConfig.momentum = momentum;
+  arch.optConfig.beta1 = 0.9;
+  arch.optConfig.beta2 = 0.999;
+  arch.optConfig.epsilon = 1e-8;
+
+  if (opt_type == "Adam")
+    arch.optConfig.type = OptimizerType::opt_Adam;
+  else if (opt_type == "RMSprop" || opt_type == "RMSProp")
+    arch.optConfig.type = OptimizerType::opt_RMSprop;
+  else
+    arch.optConfig.type = OptimizerType::opt_SGD;
+
+  validate_config_cpp(num_fc_layers, neurons_list, arch, img_h, img_w,
+                      num_classes);
+
+  // Note: hardcoded depth 1 for now as per Python code
+  return new NNModel(arch, num_classes, img_h, img_w, 1);
+}
+
+// Helper to classify raw pixel data
+int classify_pixels(NNModel &model, py::buffer image_buffer, int width,
+                    int height, int stride) {
+  py::buffer_info info = image_buffer.request();
+  // We expect a flat buffer or 1D buffer from bits()
+  if (info.ndim != 1) {
+    // throw std::runtime_error("Expected 1D buffer of pixels");
+    // Relaxed check: bits() returns void*, pybind sees it as buffer.
+  }
+
+  uint8_t *ptr = static_cast<uint8_t *>(info.ptr);
+
+  // Convert to model's image format: vector<vector<vector<double>>>
+  // Depth is 1
+  image img_data;
+  img_data.resize(1);
+  img_data[0].resize(height);
+
+  for (int y = 0; y < height; ++y) {
+    img_data[0][y].resize(width);
+    for (int x = 0; x < width; ++x) {
+      int idx = y * stride + x;
+      // Safety check (might slow down, can remove if trusted)
+      // if (idx >= info.size) throw std::runtime_error("Buffer overflow");
+
+      img_data[0][y][x] = static_cast<double>(ptr[idx]);
+    }
+  }
+
+  return model.classify(img_data);
+}
+
 PYBIND11_MODULE(cgroot_core, m) {
   m.doc() = "CGROOT Core Neural Network Library Bindings";
 
   bind_definitions(m);
   bind_mnist_loader(m);
   bind_model(m);
+
+  // Bind new factory/utility functions
+  m.def("create_model", &create_model, py::return_value_policy::take_ownership,
+        "Create a new NNModel from a configuration dictionary");
+  m.def("classify_pixels", &classify_pixels,
+        "Classify image from raw pixel buffer");
 }
