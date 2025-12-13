@@ -20,6 +20,22 @@ poolingLayer::poolingLayer(poolKernel& kernelConfig, featureMapDim& FM_Dim, pool
                         featureMaps[i][j].assign(FM_Dim.FM_width, 0.0);
                 }
         }
+
+
+
+    size_t inputHeight = kernelConfig.filter_height + kernelConfig.stride * (fm.FM_height - 1);
+    size_t inputWidth = kernelConfig.filter_width + kernelConfig.stride * (fm.FM_width - 1);
+    size_t inputDepth = kernelConfig.filter_depth;
+
+    prevLayerGrad.resize(inputDepth);
+    for(size_t i = 0; i < inputDepth; i++)
+    {
+      prevLayerGrad[i].resize(inputHeight);
+      for(size_t j = 0; j < inputHeight; j++)
+      {
+        prevLayerGrad[i][j].assign(inputWidth, 0.0);
+      }
+    }
 }
 
 //forward propagation of the pooling layer

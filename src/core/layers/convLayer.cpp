@@ -50,6 +50,22 @@ convLayer::convLayer(convKernels& kernelConfig, activationFunction actFunc,
             map[j].assign(fm.FM_width, 0.0);    //make and initialzie each row to zeros
         }
         featureMaps.emplace_back(map);  //store the feature map in the feature maps vector
+
+    }
+
+
+    size_t inputHeight = fm.FM_height + kernelConfig.kernel_height - 1;
+    size_t inputWidth = fm.FM_width + kernelConfig.kernel_width - 1;
+    size_t inputDepth = kernelConfig.kernel_depth;
+
+    prevLayerGrad.resize(inputDepth);
+    for(size_t i = 0; i < inputDepth; i++)
+    {
+      prevLayerGrad[i].resize(inputHeight);
+      for(size_t j = 0; j < inputHeight; j++)
+      {
+        prevLayerGrad[i][j].assign(inputWidth, 0.0);
+      }
     }
 }
 
