@@ -683,6 +683,8 @@ def build_and_run(cmake_path, config, compiler_name):
 
     log(f"Starting Build and Run {config}")
 
+    # clean_build_dir()
+
     
     # Smart clean logic
     generator_name = "Visual Studio 16 2019"
@@ -1009,6 +1011,9 @@ def show_log():
     pause()
 
 def main_menu(cmake_cmd, compiler_name):
+    if "--clean" in sys.argv:
+        clean_build_dir()
+
     if "--build" in sys.argv:
         build_and_run(cmake_cmd, "Release", compiler_name)
         return False

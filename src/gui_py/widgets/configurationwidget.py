@@ -186,6 +186,7 @@ class ConfigurationWidget(QWidget):
             neurons = [int(x.strip()) for x in neurons_str.split(',') if x.strip()]
         except ValueError:
             neurons = [128, 10]
+            logging.warning("Invalid neurons per FC layer. Using default: 128, 10")
             
         return {
             'num_classes': self.num_classes.value(),

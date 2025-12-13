@@ -183,3 +183,42 @@ class MainWindow(QMainWindow):
                           "CGROOT++ Neural Network Trainer\n\n"
                           "Python Implementation (PyQt6)\n"
                           "Replicated from C++ Reference GUI")
+    
+    def closeEvent(self, event):
+        """
+        Override closeEvent to ensure graceful shutdown.
+        
+        Shutdown sequence:
+        1. Stop training
+        2. Wait for worker thread
+        3. Cleanup worker resources
+        4. Accept close event
+        """
+        self.log_message("=== Application Shutdown Initiated ===")
+        
+        # 1. Request training stop
+        self.controller.requestStop.emit()
+        
+        # 2. Wait for worker thread to finish
+        if hasattr(self.controller, 'workerThread') and self.controller.workerThread:
+            if self.controller.workerThread.isRunning():
+                self.log_message("Waiting for worker thread to stop...")
+                self.controller.workerThread.quit()
+                
+                # Wait up to 5 seconds for graceful stop
+                if not self.controller.workerThread.wait(5000):
+                    self.log_message("Worker thread did not stop gracefully, terminating...")
+                    self.controller.workerThread.terminate()
+                    self.controller.workerThread.wait()
+                else:
+                    self.log_message("Worker thread stopped successfully")
+        
+        # 3. Cleanup worker resources
+        if hasattr(self.controller, 'worker') and self.controller.worker:
+            self.log_message("Cleaning up worker resources...")
+            self.controller.worker.cleanup()
+        
+        self.log_message("=== Application Shutdown Complete ===")
+        
+        # 4. Accept the close event
+        event.accept()

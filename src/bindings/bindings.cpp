@@ -1,11 +1,12 @@
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
+
 #include "core/definitions.h"
 #include "core/model.h"
 #include "core/utils/mnist_loader.h"
-
 
 namespace py = pybind11;
 
@@ -71,6 +72,7 @@ void bind_definitions(py::module &m) {
       .def_readwrite("kernelsPerPoolingLayer",
                      &architecture::kernelsPerPoolingLayer)
       .def_readwrite("learningRate", &architecture::learningRate)
+      .def_readwrite("batch_size", &architecture::batch_size)
       .def_readwrite("optConfig", &architecture::optConfig);
 
   // Bind OptimizerConfig
@@ -83,6 +85,25 @@ void bind_definitions(py::module &m) {
       .def_readwrite("beta1", &OptimizerConfig::beta1)
       .def_readwrite("beta2", &OptimizerConfig::beta2)
       .def_readwrite("epsilon", &OptimizerConfig::epsilon);
+
+  // Bind TrainingConfig
+  py::class_<TrainingConfig>(m, "TrainingConfig")
+      .def(py::init<>())
+      .def_readwrite("epochs", &TrainingConfig::epochs)
+      .def_readwrite("batch_size", &TrainingConfig::batch_size)
+      .def_readwrite("validation_split", &TrainingConfig::validation_split)
+      .def_readwrite("use_validation", &TrainingConfig::use_validation)
+      .def_readwrite("shuffle", &TrainingConfig::shuffle)
+      .def_readwrite("random_seed", &TrainingConfig::random_seed);
+
+  // Bind TrainingMetrics
+  py::class_<TrainingMetrics>(m, "TrainingMetrics")
+      .def(py::init<>())
+      .def_readwrite("epoch", &TrainingMetrics::epoch)
+      .def_readwrite("train_loss", &TrainingMetrics::train_loss)
+      .def_readwrite("train_accuracy", &TrainingMetrics::train_accuracy)
+      .def_readwrite("val_loss", &TrainingMetrics::val_loss)
+      .def_readwrite("val_accuracy", &TrainingMetrics::val_accuracy);
 }
 
 void bind_mnist_loader(py::module &m) {
@@ -123,7 +144,11 @@ void bind_model(py::module &m) {
       .def("train", &NNModel::train)
       .def("train_batch", &NNModel::train_batch)
       .def("classify", &NNModel::classify)
-      .def("getProbabilities", &NNModel::getProbabilities);
+      .def("getProbabilities", &NNModel::getProbabilities)
+      .def("train_epochs", &NNModel::train_epochs, py::arg("dataset"),
+           py::arg("config"), py::arg("progress_callback") = py::none(),
+           py::arg("log_callback") = py::none(),
+           "Train model for multiple epochs with callbacks");
 }
 
 PYBIND11_MODULE(cgroot_core, m) {
