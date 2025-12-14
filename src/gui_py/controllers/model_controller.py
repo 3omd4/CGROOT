@@ -9,7 +9,8 @@ class ModelController(QObject):
     imagePredicted = pyqtSignal(int, object, list) # predictedClass, QImage, probabilities
     trainingFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool) # isTraining
-    featureMapsReady = pyqtSignal(list, int) # maps, layer_type
+    featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
+    trainingPreviewReady = pyqtSignal(int, object, list) # NEW
     
     # Signals to Worker
     requestLoadDataset = pyqtSignal(str, str)
@@ -30,6 +31,7 @@ class ModelController(QObject):
         self.worker.metricsUpdated.connect(self.metricsUpdated)
         self.worker.progressUpdated.connect(self.progressUpdated)
         self.worker.imagePredicted.connect(self.imagePredicted)
+        self.worker.trainingPreviewReady.connect(self.trainingPreviewReady) # NEW
         self.worker.trainingFinished.connect(self.trainingFinished)
         self.worker.modelStatusChanged.connect(self.modelStatusChanged)
         self.worker.featureMapsReady.connect(self.featureMapsReady)

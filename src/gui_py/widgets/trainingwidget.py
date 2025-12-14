@@ -10,6 +10,11 @@ class TrainingWidget(QWidget):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
+        
+        # Default Visualization Settings
+        self.viz_show_preview = True
+        self.viz_map_frequency = "Every Epoch"
+        
         self.init_ui()
         self.connect_signals()
         
@@ -20,55 +25,78 @@ class TrainingWidget(QWidget):
 
 
         # Preview Group
-        preview_group = QGroupBox("Training Preview")
+        preview_group = QGroupBox() # Title moved inside
         preview_layout = QVBoxLayout(preview_group)
-        # Image Preview
-        self.image_label = QLabel("Waiting for training data...")
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setMinimumWidth(100)
-        self.image_label.setMinimumHeight(75)
-        self.image_label.setMaximumHeight(100)
-        self.image_label.setStyleSheet("QLabel { background-color: #222; border: 1px solid #444; }")
-        self.image_label.setScaledContents(False) # Prevent distortion
-        self.image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # Allow resizing
-        preview_layout.addWidget(self.image_label)
+
+        preview_header_layout = QHBoxLayout()
         
+        # Header for Preview
+        preview_header = QLabel("Training Preview")
+        preview_header.setStyleSheet("font-weight: bold;")
+        preview_header_layout.addWidget(preview_header)
+
+        preview_header_layout.addStretch()
+        
+        preview_layout.addLayout(preview_header_layout)
+        
+        # Image Preview
+        self.image_scroll_area = QScrollArea() 
+        self.image_scroll_area.setWidgetResizable(True)
+        self.image_scroll_area.setMinimumHeight(300) 
+
+        self.image_label = QLabel("Waiting for training data...") 
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_label.setScaledContents(False) 
+        self.image_label.setStyleSheet("QLabel { background-color: #222; }")
+        self.image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored) # Avoid overlay
+        
+        self.image_scroll_area.setWidget(self.image_label)
+        preview_layout.addWidget(self.image_scroll_area)
+
         # Feature Maps Preview
-        self.fm_group = QGroupBox("Feature Maps (Layer 1)")
+        self.fm_group = QGroupBox() # Title moved inside
         fm_layout = QVBoxLayout(self.fm_group) 
         
+        # Header Layout (Title + Controls)
+        header_layout = QHBoxLayout()
+        
+        self.fm_title_label = QLabel("Feature Maps (Layer 1)")
+        self.fm_title_label.setStyleSheet("font-weight: bold;")
+        header_layout.addWidget(self.fm_title_label)
+        
+        header_layout.addStretch()
+        
         # Layer Selector
-        layer_select_layout = QHBoxLayout()
         layer_label = QLabel("Select Layer:")
         self.layer_spin = QSpinBox()
-        self.layer_spin.setRange(0, 100) # Arbitrary max, model dependent
+        self.layer_spin.setRange(0, 100) 
         self.layer_spin.setValue(1)
         self.layer_spin.valueChanged.connect(self.on_layer_changed)
-        layer_select_layout.addWidget(layer_label)
-        layer_select_layout.addWidget(self.layer_spin)
-        layer_select_layout.addStretch()
-        fm_layout.addLayout(layer_select_layout)
+        
+        header_layout.addWidget(layer_label)
+        header_layout.addWidget(self.layer_spin)
+        
+        fm_layout.addLayout(header_layout)
         
         self.scroll_area = QScrollArea() 
         self.scroll_area.setWidgetResizable(True)
-        # Fix: Remove fixed height or make it small
         self.scroll_area.setMinimumHeight(300) 
         
-        self.fm_label = QLabel() 
+        self.fm_label = QLabel("Waiting for feature maps...") 
         self.fm_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.fm_label.setScaledContents(False) # Allow scaling
-        # Fix: Remove large minimum width forcing.
-        self.fm_label.setMinimumWidth(400)
-        self.fm_label.setMaximumHeight(300) 
-        self.fm_label.setStyleSheet("QLabel { background-color: #111; }")
-        self.fm_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # Allow resizing
-        
+        self.fm_label.setScaledContents(False) 
+        self.fm_label.setStyleSheet("QLabel { background-color: #222; }")
+        self.fm_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored) # Avoid overlay
         
         self.scroll_area.setWidget(self.fm_label)
         fm_layout.addWidget(self.scroll_area)
         
-        main_layout.addWidget(preview_group)
-        main_layout.addWidget(self.fm_group)
+        # Top Row (Preview + Feature Maps)
+        top_row = QHBoxLayout()
+        top_row.addWidget(preview_group, 1) # 50%
+        top_row.addWidget(self.fm_group, 1) # 50%
+        
+        main_layout.addLayout(top_row)
         
         # Button Layout
         btn_layout = QHBoxLayout()
@@ -84,16 +112,18 @@ class TrainingWidget(QWidget):
         self.start_btn.clicked.connect(self.on_start_clicked)
         self.stop_btn.clicked.connect(self.on_stop_clicked)
         
-        btn_layout.addWidget(self.start_btn)
-        btn_layout.addWidget(self.stop_btn)
-        btn_layout.addStretch()
-        
-        main_layout.addLayout(btn_layout)
-        
         # Status Label
         self.status_label = QLabel("Ready to start training")
         self.status_label.setStyleSheet("QLabel { font-weight: bold; padding: 5px; }")
-        main_layout.addWidget(self.status_label)
+        
+        btn_layout.addWidget(self.start_btn)
+        btn_layout.addWidget(self.stop_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.status_label)
+        
+        btn_layout.setContentsMargins(0, 5, 0, 5)
+        
+        main_layout.addLayout(btn_layout)
         
         main_layout.addStretch()
         
@@ -111,7 +141,7 @@ class TrainingWidget(QWidget):
         self.set_training_state(False)
         
     def on_layer_changed(self, val):
-        self.fm_group.setTitle(f"Feature Maps (Layer {val})")
+        self.fm_title_label.setText(f"Feature Maps (Layer {val})")
         self.controller.setTargetLayer.emit(val)
 
     def set_training_state(self, is_running):
@@ -129,7 +159,26 @@ class TrainingWidget(QWidget):
         self.set_training_state(False)
         self.status_label.setText("Training Completed")
 
+    # Visualization Settings Slot
+    def set_visualization_settings(self, settings):
+        self.viz_show_preview = settings.get('show_preview', True)
+        self.viz_map_frequency = settings.get('map_frequency', "Every Epoch")
+        
+        # Feedback for Disabled Preview
+        if not self.viz_show_preview:
+            self.image_label.clear()
+            self.image_label.setText("Preview Disabled")
+            self.image_label.setStyleSheet("QLabel { background-color: #333; color: #888; font-style: italic; }")
+        else:
+            # Reset style (or keep it waiting)
+             if not self.image_label.pixmap():
+                 self.image_label.setText("Waiting for training data...")
+                 self.image_label.setStyleSheet("QLabel { background-color: #222; color: #white; }")
+
     def display_image(self, predicted_class, q_img, probs):
+        if not self.viz_show_preview:
+            return
+
         if q_img:
             # Scale to label size while keeping aspect ratio
             w = self.image_label.width()
@@ -146,11 +195,17 @@ class TrainingWidget(QWidget):
             # Optional: Show confidence of current sample (passed as probs)
             pass
 
-    def display_feature_maps(self, maps_3d, layer_type=-1):
+    def display_feature_maps(self, maps_3d, layer_type=-1, is_epoch_end=False):
         """
         Display existing feature maps in a grid.
         maps_3d: List of List of List of floats [depth][height][width]
         """
+        setting = self.viz_map_frequency
+        if setting == "Never":
+            return
+        if setting == "Every Epoch" and not is_epoch_end:
+            return
+        # If "Every Sample", we proceed regardless of is_epoch_end
         LAYER_NAMES = {
             0: "Input",
             1: "Flatten",
@@ -163,7 +218,7 @@ class TrainingWidget(QWidget):
         # Update title regardless of content
         type_str = LAYER_NAMES.get(layer_type, "Unknown")
         current_layer_idx = self.layer_spin.value()
-        self.fm_group.setTitle(f"Feature Maps ({current_layer_idx}: {type_str})")
+        self.fm_title_label.setText(f"Feature Maps ({current_layer_idx}: {type_str})")
 
         if not maps_3d:
              # Clear the label if no maps

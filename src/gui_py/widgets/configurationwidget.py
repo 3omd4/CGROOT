@@ -9,6 +9,7 @@ import datetime
 
 class ConfigurationWidget(QWidget):
     parametersChanged = pyqtSignal()
+    vizSettingsChanged = pyqtSignal(dict) # settings_dict
 
     def __init__(self, controller):
         super().__init__()
@@ -23,6 +24,7 @@ class ConfigurationWidget(QWidget):
         self.setup_model_tab()
         self.setup_training_tab()
         self.setup_network_tab()
+        self.setup_gui_tab()
         
         main_layout.addWidget(self.tab_widget)
         
@@ -206,7 +208,44 @@ class ConfigurationWidget(QWidget):
         
         scroll.setWidget(widget)
         scroll.setWidgetResizable(True)
+        scroll.setWidgetResizable(True)
         self.tab_widget.addTab(scroll, "Network Architecture")
+
+    def setup_gui_tab(self):
+        panel = QWidget()
+        layout = QFormLayout(panel)
+        
+        # Training Preview
+        self.show_preview_cb = QCheckBox("Show Training Preview")
+        self.show_preview_cb.setChecked(True)
+        self.show_preview_cb.setToolTip("Toggle displaying proper training samples during training (affects performance)")
+        
+        # Feature Maps
+        self.fm_freq_combo = QComboBox()
+        self.fm_freq_combo.addItems(["Every Epoch", "Every Sample", "Never"])
+        self.fm_freq_combo.setCurrentIndex(1) # Default: Every Sample
+        self.fm_freq_combo.setToolTip("Control how often feature maps are updated")
+        
+        # New Settings
+        self.auto_scroll_cb = QCheckBox("Auto-Scroll Logs")
+        self.auto_scroll_cb.setChecked(True)
+        self.auto_scroll_cb.setToolTip("Automatically scroll to the bottom when new logs arrive")
+        
+        self.chart_anim_cb = QCheckBox("Chart Animations")
+        self.chart_anim_cb.setChecked(False) # Default off for performance
+        self.chart_anim_cb.setToolTip("Enable animated transitions for charts (can be CPU intensive)")
+        
+        layout.addRow("Training Preview:", self.show_preview_cb)
+        layout.addRow("Feature Maps Update:", self.fm_freq_combo)
+        layout.addRow("Auto-Scroll Logs:", self.auto_scroll_cb)
+        layout.addRow("Chart Animations:", self.chart_anim_cb)
+        
+        self.show_preview_cb.toggled.connect(self.on_viz_setting_changed)
+        self.fm_freq_combo.currentTextChanged.connect(self.on_viz_setting_changed)
+        self.auto_scroll_cb.toggled.connect(self.on_viz_setting_changed)
+        self.chart_anim_cb.toggled.connect(self.on_viz_setting_changed)
+        
+        self.tab_widget.addTab(panel, "GUI Settings")
 
     def get_architecture_parameters(self):
         # Parse neurons list
@@ -258,6 +297,18 @@ class ConfigurationWidget(QWidget):
 
     def on_parameter_changed(self):
         self.parametersChanged.emit()
+
+    def on_viz_setting_changed(self):
+        settings = self.get_gui_settings()
+        self.vizSettingsChanged.emit(settings)
+        
+    def get_gui_settings(self):
+        return {
+            'show_preview': self.show_preview_cb.isChecked(),
+            'map_frequency': self.fm_freq_combo.currentText(),
+            'auto_scroll': self.auto_scroll_cb.isChecked(),
+            'chart_animations': self.chart_anim_cb.isChecked()
+        }
 
     def on_reset_defaults(self):
         self.num_classes.setValue(10)

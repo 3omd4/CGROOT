@@ -164,8 +164,9 @@ class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
     metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
     progressUpdated = pyqtSignal(int, int)
-    featureMapsReady = pyqtSignal(list, int) # maps, layer_type
-    imagePredicted = pyqtSignal(int, object, list) # int, QImage, list of floats
+    featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
+    trainingPreviewReady = pyqtSignal(int, object, list) # int, QImage, list of floats (Training Only)
+    imagePredicted = pyqtSignal(int, object, list) # int, QImage, list of floats (Inference Only)
     trainingFinished = pyqtSignal()
     inferenceFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool)
@@ -384,11 +385,11 @@ class ModelWorker(QObject):
             # Emit feature maps if they were updated (checked by not None)
             # Empty list [] IS valid (it means clear/unknown)
             if feature_maps is not None:
-                 self.featureMapsReady.emit(feature_maps, layer_type)
+                 self.featureMapsReady.emit(feature_maps, layer_type, is_epoch_end)
             
             # Emit image if present (per sample)
             if q_image:
-                self.imagePredicted.emit(pred_class, q_image, probs)
+                self.trainingPreviewReady.emit(pred_class, q_image, probs)
     
     # ========================================================================
     # Lifecycle Management

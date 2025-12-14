@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
         
         # Log Output
         log_group = QGroupBox("Log Output")
+        log_group.setMinimumSize(200, 200)
         log_layout = QVBoxLayout(log_group)
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
@@ -188,9 +189,14 @@ class MainWindow(QMainWindow):
         self.controller.metricsUpdated.connect(self.update_metrics)
         self.controller.trainingFinished.connect(self.training_finished)
         self.controller.imagePredicted.connect(self.inference_tab.displayPrediction)
-        self.controller.imagePredicted.connect(self.training_tab.display_image)
+        self.controller.trainingPreviewReady.connect(self.training_tab.display_image) # UPDATED
         
         self.controller.featureMapsReady.connect(self.training_tab.display_feature_maps)
+        
+        self.config_tab.vizSettingsChanged.connect(self.on_gui_settings_changed)
+        
+        # Initialize GUI Settings
+        self.on_gui_settings_changed(self.config_tab.get_gui_settings())
         
         # Loading State Connections
         # Note: ModelWorker emits modelStatusChanged(True) for training/inference
@@ -223,6 +229,9 @@ class MainWindow(QMainWindow):
         
     def log_message(self, msg):
         self.log_output.append(msg)
+        if hasattr(self, 'auto_scroll_logs') and self.auto_scroll_logs:
+            scrollbar = self.log_output.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
         
     def update_progress(self, val, max_val):
         self.progress_bar.setMaximum(max_val)
@@ -237,6 +246,18 @@ class MainWindow(QMainWindow):
         self.spinner.stop()
         self.status_label.setText("Training Completed")
         QMessageBox.information(self, "Training Complete", "Model training has finished successfully!")
+    
+    def on_gui_settings_changed(self, settings):
+        """Handle GUI settings changes from ConfigurationWidget."""
+        # Training Preview & Feature Maps
+        self.training_tab.set_visualization_settings(settings)
+        
+        # Auto-Scroll Logs
+        self.auto_scroll_logs = settings.get('auto_scroll', True)
+        
+        # Chart Animations
+        animations_enabled = settings.get('chart_animations', False)
+        self.metrics_tab.set_animations(animations_enabled)
         
     def show_about(self):
         QMessageBox.about(self, "About", 

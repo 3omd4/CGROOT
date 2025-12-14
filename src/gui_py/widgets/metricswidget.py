@@ -34,14 +34,16 @@ class MetricsWidget(QWidget):
         
         stats_layout.addWidget(QLabel("Current Epoch:"), 0, 0)
         stats_layout.addWidget(self.curr_epoch_lbl, 0, 1)
-        stats_layout.addWidget(QLabel("Current Loss:"), 1, 0)
-        stats_layout.addWidget(self.curr_loss_lbl, 1, 1)
-        stats_layout.addWidget(QLabel("Current Accuracy:"), 2, 0)
-        stats_layout.addWidget(self.curr_acc_lbl, 2, 1)
-        stats_layout.addWidget(QLabel("Best Loss:"), 3, 0)
-        stats_layout.addWidget(self.best_loss_lbl, 3, 1)
-        stats_layout.addWidget(QLabel("Best Accuracy:"), 4, 0)
-        stats_layout.addWidget(self.best_acc_lbl, 4, 1)
+        stats_layout.addWidget(QLabel("Current Loss:"), 0, 2)
+        stats_layout.addWidget(self.curr_loss_lbl, 0, 3)
+        
+        stats_layout.addWidget(QLabel("Current Accuracy:"), 1, 0)
+        stats_layout.addWidget(self.curr_acc_lbl, 1, 1)
+        stats_layout.addWidget(QLabel("Best Loss:"), 1, 2)
+        stats_layout.addWidget(self.best_loss_lbl, 1, 3)
+        
+        stats_layout.addWidget(QLabel("Best Accuracy:"), 2, 0)
+        stats_layout.addWidget(self.best_acc_lbl, 2, 1)
         
         splitter.addWidget(stats_group)
         
@@ -145,6 +147,15 @@ class MetricsWidget(QWidget):
         self.acc_series.attachAxis(self.acc_axis_y)
         
         self.acc_view.setChart(self.acc_chart)
+    
+    def set_animations(self, enabled):
+        """Enable or disable chart animations for performance."""
+        if enabled:
+            self.loss_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
+            self.acc_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
+        else:
+            self.loss_chart.setAnimationOptions(QChart.AnimationOption.NoAnimation)
+            self.acc_chart.setAnimationOptions(QChart.AnimationOption.NoAnimation)
         
     def clear(self):
         self.loss_series.clear()
