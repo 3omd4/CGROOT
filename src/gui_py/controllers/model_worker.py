@@ -12,7 +12,7 @@ except ImportError:
 
 # ========================== Training Thread ==========================
 class TrainingThread(QThread):
-    progress = pyqtSignal(int, int, float, float)  # epoch, total, loss, acc
+    progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int)  # epoch, total, loss, acc, feature_maps(object), pred, qimage, probs, current_idx, layer_type
     log = pyqtSignal(str)
     finished = pyqtSignal(list)  # history
 
@@ -22,12 +22,97 @@ class TrainingThread(QThread):
         self.dataset = dataset
         self.config = config
         self._stop_requested = False
+        self.layer_index = 1 # Default to layer 1
+        
+    def set_layer_index(self, idx):
+        self.layer_index = idx
 
     def run(self):
         # Thread-safe callbacks for C++ training
-        def progress_callback(epoch, total, loss, acc):
+        def progress_callback(epoch, total, loss, acc, current_idx=-1):
             if not self._stop_requested:
-                self.progress.emit(epoch, total, loss, acc)
+                # Safe to access model here as C++ execution is paused in callback
+                maps = None
+                layer_type = -1
+                
+                # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
+                # But careful: per-sample updates shouldn't fetch heavy maps.
+                try:
+                    # Access dynamic layer index
+                    target_layer = self.layer_index
+                    if target_layer < 0: target_layer = 0
+                    
+                    # Get maps. If invalid layer, this returns []
+                    maps = self.model.getLayerFeatureMaps(target_layer)
+                    layer_type = self.model.getLayerType(target_layer)
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    # No fallback! Let it be empty list or None so UI knows it failed/is invalid.
+                    maps = [] # Explicitly empty so UI clears it
+                    layer_type = -1
+                
+                # Also, pick a random image from dataset to show as "preview"
+                # This ensures the user sees 'Activity'
+                preview_img_data = None
+                preview_pred = -1
+                preview_probs = []
+                
+                if self.dataset and hasattr(self.dataset, 'num_images') and self.dataset.num_images > 0:
+                    try:
+                        # Use current_idx if valid (>=0), otherwise random if we want (or skip)
+                        # The C++ code emits -1 at epoch end.
+                        idx = -1
+                        if current_idx >= 0:
+                            idx = current_idx
+                            # User requested NO INFERENCE during training.
+                            preview_pred = -1
+                            preview_probs = []
+                                
+                            # Prepare QImage for display
+                            # Access properties directly as defined in bindings
+                            width = self.dataset.image_width
+                            height = self.dataset.image_height
+                            
+                            # Access pixels from MNISTImage object
+                            # self.dataset.images is a list of MNISTImage objects
+                            # images[idx].pixels is the vector of uint8
+                            img_data_vec = self.dataset.images[idx].pixels
+                            
+                            if img_data_vec:
+                                # Create QImage from raw data
+                                # QImage constructor from data requires bytes, so we might need to convert
+                                # vector<uint8_t> (which pybind gives as list of int) to bytes.
+                                # Or loop setPixel if that's safer/easier given the format.
+                                # Flattened list of ints.
+                                
+                                q_img = QImage(width, height, QImage.Format.Format_Grayscale8)
+                                
+                                
+                                for y in range(height):
+                                    for x in range(width):
+                                        idx_pixel = y * width + x
+                                        val = int(img_data_vec[idx_pixel])
+                                        q_img.setPixel(x, y, qRgb(val, val, val))
+                                
+                                preview_img_data = q_img
+                        else:
+                            # If current_idx is -1 (e.g., epoch end), we might still want to show a random image
+                            # or just skip updating the image. For now, we'll keep it as None.
+                            pass
+                    except Exception as e:
+                        print(f"Error getting preview image or performing inference: {e}")
+                
+                
+                # Emit
+                # We need to distinguish what we are updating in the UI.
+                # The _internal_progress signal handles all.
+                # If 'maps' is empty list, UI won't update maps (if we handle it right in Controller/MainWindow/Widget)
+                # If 'preview_img_data' is None, UI won't update image.
+                
+                # Emit includes current_idx and layer_type
+                
+                self.progress.emit(epoch, total, loss, acc, maps, preview_pred, preview_img_data, preview_probs, current_idx, layer_type)
 
         def log_callback(msg):
             if not self._stop_requested:
@@ -79,6 +164,7 @@ class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
     metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
     progressUpdated = pyqtSignal(int, int)
+    featureMapsReady = pyqtSignal(list, int) # maps, layer_type
     imagePredicted = pyqtSignal(int, object, list) # int, QImage, list of floats
     trainingFinished = pyqtSignal()
     inferenceFinished = pyqtSignal()
@@ -86,7 +172,7 @@ class ModelWorker(QObject):
     
     # Internal signals for thread-safe callback emissions
     _internal_log = pyqtSignal(str)
-    _internal_progress = pyqtSignal(int, int, float, float)
+    _internal_progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int)
     
     def __init__(self):
         super().__init__()
@@ -138,6 +224,14 @@ class ModelWorker(QObject):
 
 
 
+    @pyqtSlot(int)
+    def setTargetLayer(self, layer_idx):
+        """Update the layer index to visualize."""
+        if hasattr(self, "_train_thread") and self._train_thread:
+            self._train_thread.set_layer_index(layer_idx)
+        # Store for future threads
+        self._last_layer_idx = layer_idx 
+
     @pyqtSlot(dict)
     def trainModel(self, config):
         """Train the model asynchronously using a separate thread."""
@@ -162,6 +256,10 @@ class ModelWorker(QObject):
         self.should_stop = False
         self.modelStatusChanged.emit(True)
         self.logMessage.emit("=== Training Session Start ===")
+        # Pass last layer index if set
+        if hasattr(self, "_last_layer_idx"):
+            self._train_thread.set_layer_index(self._last_layer_idx)
+            
         self._train_thread.start()
     
     def _on_training_finished(self, history):
@@ -268,16 +366,29 @@ class ModelWorker(QObject):
         if self._training_active:
             self.logMessage.emit(message)
     
-    @pyqtSlot(int, int, float, float)
-    def _emit_progress_from_thread(self, epoch, total_epochs, loss, accuracy):
+    @pyqtSlot(int, int, float, float, object, int, object, list, int, int)
+    def _emit_progress_from_thread(self, epoch, total_epochs, loss, accuracy, feature_maps, pred_class, q_image, probs, current_idx, layer_type):
         """
         Thread-safe progress/metrics emission helper.
         Called via QMetaObject.invokeMethod from C++ callback thread.
         Only emits if training is still active to prevent post-finish emissions.
         """
         if self._training_active:
-            self.metricsUpdated.emit(loss, accuracy, epoch)
-            self.progressUpdated.emit(epoch, total_epochs)
+
+            is_epoch_end = (current_idx == -1)
+
+            if is_epoch_end:
+                self.metricsUpdated.emit(loss, accuracy, epoch)
+                self.progressUpdated.emit(epoch, total_epochs)
+            
+            # Emit feature maps if they were updated (checked by not None)
+            # Empty list [] IS valid (it means clear/unknown)
+            if feature_maps is not None:
+                 self.featureMapsReady.emit(feature_maps, layer_type)
+            
+            # Emit image if present (per sample)
+            if q_image:
+                self.imagePredicted.emit(pred_class, q_image, probs)
     
     # ========================================================================
     # Lifecycle Management

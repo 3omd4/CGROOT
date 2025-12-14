@@ -141,6 +141,8 @@ void bind_model(py::module &m) {
            py::arg("imageDepDim"))
       .def("classify", &NNModel::classify)
       .def("getProbabilities", &NNModel::getProbabilities)
+      .def("getLayerFeatureMaps", &NNModel::getLayerFeatureMaps)
+      .def("getLayerType", &NNModel::getLayerType)
 
       // --- FIX STARTS HERE ---
       .def(
@@ -157,9 +159,11 @@ void bind_model(py::module &m) {
             ProgressCallback progress_cpp = nullptr;
             if (!py_progress_callback.is_none()) {
               progress_cpp = [py_progress_callback](int epoch, int total,
-                                                    double loss, double acc) {
+                                                    double loss, double acc,
+                                                    int current_image_idx) {
                 py::gil_scoped_acquire acquire; // Lock Python
-                py_progress_callback(epoch, total, loss, acc);
+                py_progress_callback(epoch, total, loss, acc,
+                                     current_image_idx);
               };
             }
 

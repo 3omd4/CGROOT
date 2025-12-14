@@ -9,12 +9,14 @@ class ModelController(QObject):
     imagePredicted = pyqtSignal(int, object, list) # predictedClass, QImage, probabilities
     trainingFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool) # isTraining
+    featureMapsReady = pyqtSignal(list, int) # maps, layer_type
     
     # Signals to Worker
     requestLoadDataset = pyqtSignal(str, str)
     requestTrain = pyqtSignal(dict) # CHANGED: Accepts config dict now
     requestStop = pyqtSignal()
     requestInference = pyqtSignal(object)
+    setTargetLayer = pyqtSignal(int)
 
     def __init__(self):
         super().__init__()
@@ -30,12 +32,14 @@ class ModelController(QObject):
         self.worker.imagePredicted.connect(self.imagePredicted)
         self.worker.trainingFinished.connect(self.trainingFinished)
         self.worker.modelStatusChanged.connect(self.modelStatusChanged)
+        self.worker.featureMapsReady.connect(self.featureMapsReady)
         
         # Connect Controller -> Worker
         self.requestLoadDataset.connect(self.worker.loadDataset)
         self.requestTrain.connect(self.worker.trainModel)
         self.requestStop.connect(self.worker.stopTraining)
         self.requestInference.connect(self.worker.runInference)
+        self.setTargetLayer.connect(self.worker.setTargetLayer)
         
         self.thread.start()
         

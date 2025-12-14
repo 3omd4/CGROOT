@@ -8,6 +8,7 @@ from widgets.configurationwidget import ConfigurationWidget
 from widgets.trainingwidget import TrainingWidget
 from widgets.inferencewidget import InferenceWidget
 from widgets.metricswidget import MetricsWidget
+from widgets.spinner import SpinnerWidget
 from controllers.model_controller import ModelController
 
 class MainWindow(QMainWindow):
@@ -170,6 +171,11 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Ready")
         self.status_bar.addWidget(self.status_label)
         
+        # Spinner in status bar
+        self.spinner = SpinnerWidget(self)
+        self.status_bar.addPermanentWidget(self.spinner)
+        self.spinner.hide()
+        
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximumWidth(200)
         self.progress_bar.setTextVisible(True)
@@ -183,6 +189,17 @@ class MainWindow(QMainWindow):
         self.controller.trainingFinished.connect(self.training_finished)
         self.controller.imagePredicted.connect(self.inference_tab.displayPrediction)
         self.controller.imagePredicted.connect(self.training_tab.display_image)
+        
+        self.controller.featureMapsReady.connect(self.training_tab.display_feature_maps)
+        
+        # Loading State Connections
+        # Note: ModelWorker emits modelStatusChanged(True) for training/inference
+        # But we want specifically to handle Dataset Loading which is separate.
+        # ModelWorker uses log messages for dataset loading start/end, but that's hard to parse.
+        # Ideally ModelWorker should have a specific signal for "loading".
+        # I will add signal connections assuming I add them to ModelController/Worker later.
+        
+        self.controller.modelStatusChanged.connect(self.on_model_status_changed)
         
         # Widget -> Controller/MainWindow
         self.training_tab.startTrainingRequested.connect(self.start_training)
@@ -202,6 +219,7 @@ class MainWindow(QMainWindow):
         
     def stop_training(self):
         self.controller.requestStop.emit()
+        self.spinner.stop()
         
     def log_message(self, msg):
         self.log_output.append(msg)
@@ -216,6 +234,7 @@ class MainWindow(QMainWindow):
         
     def training_finished(self):
         self.training_tab.training_finished()
+        self.spinner.stop()
         self.status_label.setText("Training Completed")
         QMessageBox.information(self, "Training Complete", "Model training has finished successfully!")
         
@@ -263,3 +282,22 @@ class MainWindow(QMainWindow):
         
         # 4. Accept the close event
         event.accept()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+            
+    def on_model_status_changed(self, is_active):
+        if is_active:
+             self.spinner.start()
+             self.status_label.setText("Processing...")
+        else:
+             self.spinner.stop()
+             self.status_label.setText("Ready")
+
+    def on_dataset_load_start(self):
+        self.spinner.start()
+        self.status_label.setText("Loading Dataset...")
+        
+    def on_dataset_load_finish(self):
+         self.spinner.stop()
+         self.status_label.setText("Dataset Loaded")

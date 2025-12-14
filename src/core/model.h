@@ -5,10 +5,10 @@
 #include "layers/layers.h"
 #include "optimizers/optimizer.h"
 #include "utils/mnist_loader.h"
+#include <atomic>
 #include <functional>
 #include <random>
 #include <vector>
-#include <atomic>
 
 using cgroot::data::MNISTLoader;
 using std::vector;
@@ -89,8 +89,9 @@ struct TrainingMetrics {
 };
 
 // Callback types for training progress updates
-// Callback signature: (epoch, total_epochs, current_loss, current_accuracy)
-using ProgressCallback = std::function<void(int, int, double, double)>;
+// Callback signature: (epoch, total_epochs, current_loss, current_accuracy,
+// current_image_idx)
+using ProgressCallback = std::function<void(int, int, double, double, int)>;
 // Callback signature: (message)
 using LogCallback = std::function<void(const std::string &)>;
 
@@ -180,6 +181,19 @@ public:
                ProgressCallback progress_callback = nullptr,
                LogCallback log_callback = nullptr,
                std::atomic<bool> *stop_requested = nullptr);
+
+  // Get the feature maps of a specific layer
+  // input:        layerIndex
+  // output:       vector<vector<vector<double>>> (feature maps)
+  // Get the feature maps of a specific layer
+  // input:        layerIndex
+  // output:       vector<vector<vector<double>>> (feature maps)
+  vector<vector<vector<double>>> getLayerFeatureMaps(size_t layerIndex);
+
+  // Get the type of a specific layer
+  // input:        layerIndex
+  // output:       int (LayerType enum value)
+  int getLayerType(size_t layerIndex);
 
   // additional functions
 };
