@@ -1,4 +1,5 @@
 #include "model.h"
+#include "utils/store_and_load.h"
 #include <algorithm>
 #include <iomanip>
 #include <omp.h>
@@ -1180,4 +1181,99 @@ int NNModel::getLayerType(size_t layerIndex) {
     return -1; // Invalid or out of bounds
   }
   return (int)Layers[layerIndex]->getLayerType();
+}
+
+
+//store all the model parameters (kernels and weights)
+//input:          folderPath (the path of the folder where the file
+//                containing the model paramters will be created)
+//output:         bool (true: operation successful, false: operation failed)
+//side effects:   the model paramters are saved in file "model_param<number>.txt" in the folder path
+//Note:           N/A
+bool store(string &folderPath)
+{
+  string baseName = "\\model_param";
+  string extention = ".txt";
+
+  int counter = 0;
+
+  string path = folderPath + baseName + to_string(counter) + extention;
+
+  ifstream checker(path);
+  while (checker.good())
+  {
+    checker.close();
+    counter++;
+    path = folderPath + baseName + to_string(counter) + extention;
+    checker.open(path);
+  }
+
+  checker.close();
+
+  ofstream newFile(path);
+  newFile.close();
+
+  for (size_t i = 1; i < Layers.size(); i++)
+  {
+    switch (Layers[i]->getLayerType())
+    {
+    case conv:
+      if (!save4DVector<double>(static_cast<convLayer *>(Layers[i])->getKernels(), path))
+      {
+        return false;
+      }
+      break;
+    case fullyConnected:
+      if (!save2DVector<double>(static_cast<FullyConnected *>(Layers[i])->getNeurons(), path))
+      {
+        return false;
+      }
+      break;
+    case output:
+      if (!save2DVector<double>(static_cast<outputLayer *>(Layers[i])->getNeurons(), path))
+      {
+        return false;
+      }
+      break;
+    }
+  }
+
+  return true;
+}
+
+//load the model parameters (kernels and weights)
+//input:          filePath (the path of the file from which 
+//                the model paramters will be loaded)
+//output:         bool (true: operation successful, false: operation failed)
+//side effects:   the model paramters are loaded into the weights and kernels
+//Note:           N/A
+bool load(string &filePath)
+{
+  std::streampos cursor = 0;
+  for (size_t i = 1; i < Layers.size(); i++)
+  {
+    switch (Layers[i]->getLayerType())
+    {
+    case conv:
+      if (!load4DVector<double>(static_cast<convLayer *>(Layers[i])->getKernels(), filePath, cursor))
+      {
+        return false;
+      }
+      break;
+    case fullyConnected:
+      if (!load2DVector<double>(static_cast<FullyConnected *>(Layers[i])->getNeurons(), filePath, cursor))
+      {
+        return false;
+      }
+      break;
+    case output:
+      if (!load2DVector<double>(static_cast<outputLayer *>(Layers[i])->getNeurons(), filePath, cursor))
+      {
+        return false;
+      }
+      break;
+    }
+  }
+
+  return true;
 }

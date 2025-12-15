@@ -185,6 +185,8 @@ public:
   vector<featureMapType> &getPrevLayerGrad() { return prevLayerGrad; } // get the previous layer gradient
   LayerType getLayerType() override { return type; }  // get the layer type
 
+  //get the convolution layer kernels(used by load and store functions)
+  vector<kernelType>& getKernels() {return kernels;}
 
   ~convLayer();
 };
@@ -339,6 +341,9 @@ public:
   // get the layer type
   LayerType getLayerType() override { return type; }
 
+  //get the fully connected layer neurons(used by load and store functions)
+  vector<weights>& getNeurons() {return neurons;} 
+
   ~FullyConnected();
 
 };
@@ -486,6 +491,9 @@ public:
 
   // get the output probability vector
   vector<double>& getOutput() { return outputData; }
+
+  //get the output layer neurons(used by load and store functions)
+  vector<weights>& getNeurons() {return neurons;} 
 
   ~outputLayer();
 };
