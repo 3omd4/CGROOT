@@ -16,6 +16,7 @@ namespace py = pybind11;
 void bind_definitions(py::module &m) {
   py::enum_<OptimizerType>(m, "OptimizerType")
       .value("SGD", opt_SGD)
+      .value("SGD_Momentum", opt_SGD_Momentum)
       .value("Adam", opt_Adam)
       .value("RMSprop", opt_RMSprop);
 
@@ -82,6 +83,7 @@ void bind_definitions(py::module &m) {
       .def_readwrite("weightDecay", &OptimizerConfig::weightDecay)
       .def_readwrite("beta1", &OptimizerConfig::beta1)
       .def_readwrite("beta2", &OptimizerConfig::beta2)
+      .def_readwrite("beta", &OptimizerConfig::beta)
       .def_readwrite("epsilon", &OptimizerConfig::epsilon);
 
   // Bind TrainingConfig
@@ -391,17 +393,36 @@ NNModel *create_model(py::dict config) {
     if (config.contains("momentum"))
       momentum = config["momentum"].cast<float>();
 
+    float beta1 = 0.9f;
+    if (config.contains("beta1"))
+      beta1 = config["beta1"].cast<float>();
+
+    float beta2 = 0.999f;
+    if (config.contains("beta2"))
+      beta2 = config["beta2"].cast<float>();
+
+    float beta = 0.9f;
+    if (config.contains("beta"))
+      beta = config["beta"].cast<float>();
+
+    float epsilon = 1e-8f;
+    if (config.contains("epsilon"))
+      epsilon = config["epsilon"].cast<float>();
+
     arch.optConfig.learningRate = lr;
     arch.optConfig.weightDecay = decay;
     arch.optConfig.momentum = momentum;
-    arch.optConfig.beta1 = 0.9;
-    arch.optConfig.beta2 = 0.999;
-    arch.optConfig.epsilon = 1e-8;
+    arch.optConfig.beta1 = beta1;
+    arch.optConfig.beta2 = beta2;
+    arch.optConfig.beta = beta;
+    arch.optConfig.epsilon = epsilon;
 
     if (opt_type == "Adam")
       arch.optConfig.type = OptimizerType::opt_Adam;
     else if (opt_type == "RMSprop" || opt_type == "RMSProp")
       arch.optConfig.type = OptimizerType::opt_RMSprop;
+    else if (opt_type == "SGD with Momentum" || opt_type == "SGD_Momentum")
+      arch.optConfig.type = OptimizerType::opt_SGD_Momentum;
     else
       arch.optConfig.type = OptimizerType::opt_SGD;
 

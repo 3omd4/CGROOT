@@ -53,30 +53,36 @@ class ConfigurationWidget(QWidget):
         self.num_classes = QSpinBox()
         self.num_classes.setRange(2, 1000)
         self.num_classes.setValue(10)
-        self.num_classes.setToolTip("The number of distinct classes/categories in your dataset (e.g. 10 for MNIST).")
+        self.num_classes.setToolTip(
+            "Number of output categories your model will predict.\n"
+            "Examples: 10 (MNIST digits 0-9), 2 (binary classification), 1000 (ImageNet).\n"
+            "Must match the size of your final output layer."
+        )
         
         self.image_width = QSpinBox()
         self.image_width.setRange(1, 1000)
         self.image_width.setValue(28)
-        self.image_width.setToolTip("Width of the input images in pixels.")
+        self.image_width.setToolTip(
+            "Width of input images in pixels.\n"
+            "Common sizes: 28 (MNIST), 32 (CIFAR), 224 (ImageNet), 299 (Inception).\n"
+            "All training images will be resized to this dimension."
+        )
         
         self.image_height = QSpinBox()
         self.image_height.setRange(1, 1000)
         self.image_height.setValue(28)
-        self.image_height.setToolTip("Height of the input images in pixels.")
-        
-        self.num_layers = QSpinBox()
-        self.num_layers.setRange(1, 100)
-        self.num_layers.setValue(2)
-        self.num_layers.setToolTip("Total number of layers in the custom model.")
+        self.image_height.setToolTip(
+            "Height of input images in pixels.\n"
+            "Common sizes: 28 (MNIST), 32 (CIFAR), 224 (ImageNet), 299 (Inception).\n"
+            "All training images will be resized to this dimension."
+        )
         
         layout.addRow("Number of Classes:", self.num_classes)
         layout.addRow("Image Width:", self.image_width)
         layout.addRow("Image Height:", self.image_height)
-        layout.addRow("Number of Layers:", self.num_layers)
         
         # Connect signals
-        for w in [self.num_classes, self.image_width, self.image_height, self.num_layers]:
+        for w in [self.num_classes, self.image_width, self.image_height]:
             w.valueChanged.connect(self.on_parameter_changed)
             
         scroll.setWidget(widget)
@@ -89,66 +95,198 @@ class ConfigurationWidget(QWidget):
         layout = QFormLayout(widget)
         
         self.optimizer_combo = QComboBox()
-        self.optimizer_combo.addItems(["SGD", "Adam", "RMSprop"])
-        self.optimizer_combo.setCurrentIndex(1) # Default to Adam
-        self.optimizer_combo.setToolTip("The optimization algorithm. 'Adam' is generally a good default choice.")
+        self.optimizer_combo.addItems(["SGD", "SGD with Momentum", "Adam", "RMSprop"])
+        self.optimizer_combo.setCurrentIndex(2) # Default to Adam
+        self.optimizer_combo.setToolTip(
+            "Optimization algorithm for training:\n"
+            "• SGD: Simple, stable, requires careful tuning\n"
+            "• SGD with Momentum: Faster than SGD, reduces oscillations\n"
+            "• Adam: Best default choice, adaptive learning rates (recommended)\n"
+            "• RMSprop: Good for RNNs and non-stationary problems"
+        )
         
         self.learning_rate = QDoubleSpinBox()
+        self.learning_rate.setDecimals(5)
         self.learning_rate.setRange(0.0, 10.0)
         self.learning_rate.setValue(0.01)
-        self.learning_rate.setDecimals(5)
-        self.learning_rate.setToolTip("Step size for the optimizer. Too high = divergent, too low = slow.")
+        self.learning_rate.setToolTip(
+            "Controls how much weights change per update (step size).\n\n"
+            "Typical values:\n"
+            "• SGD/Momentum: 0.01 - 0.1\n"
+            "• Adam/RMSprop: 0.0001 - 0.001\n\n"
+            "Too high → Training diverges or oscillates wildly\n"
+            "Too low → Training is extremely slow\n"
+            "Start with defaults and adjust if needed."
+        )
         
         self.weight_decay = QDoubleSpinBox()
+        self.weight_decay.setDecimals(5)
         self.weight_decay.setRange(0.0, 1.0)
         self.weight_decay.setValue(0.01)
-        self.weight_decay.setDecimals(5)
-        self.weight_decay.setToolTip("L2 Regularization term to prevent overfitting.")
+        self.weight_decay.setToolTip(
+            "L2 regularization - penalizes large weights to prevent overfitting.\n\n"
+            "Typical values: 0.0001 - 0.01\n"
+            "Set to 0 to disable regularization.\n\n"
+            "Use when: Validation loss increases while training loss decreases\n"
+            "(indicates overfitting)."
+        )
         
         self.momentum = QDoubleSpinBox()
+        self.momentum.setDecimals(3)
         self.momentum.setRange(0.0, 1.0)
         self.momentum.setValue(0.9)
-        self.momentum.setDecimals(3)
-        self.momentum.setToolTip("Accelerates SGD in the relevant direction and dampens oscillations.")
+        self.momentum.setToolTip(
+            "Momentum coefficient for SGD with Momentum optimizer.\n\n"
+            "Accelerates convergence in relevant directions and dampens oscillations.\n"
+            "Think of it as a 'ball rolling downhill' - builds up speed.\n\n"
+            "Standard value: 0.9\n"
+            "Higher (0.95-0.99): More smoothing, may overshoot\n"
+            "Lower (0.5-0.8): Less smoothing, more responsive"
+        )
+        
+        self.beta1 = QDoubleSpinBox()
+        self.beta1.setDecimals(3)
+        self.beta1.setRange(0.0, 1.0)
+        self.beta1.setValue(0.9)
+        self.beta1.setToolTip(
+            "Beta1 - Exponential decay rate for first moment (mean) in Adam.\n\n"
+            "Controls the momentum-like behavior in Adam.\n"
+            "Standard value: 0.9 (rarely needs changing)\n\n"
+            "Higher values → More weight to past gradients\n"
+            "Lower values → More responsive to recent gradients"
+        )
+        
+        self.beta2 = QDoubleSpinBox()
+        self.beta2.setDecimals(4)  # Set decimals FIRST
+        self.beta2.setRange(0.0, 1.0)
+        self.beta2.setSingleStep(0.001)
+        self.beta2.setValue(0.999)
+        self.beta2.setToolTip(
+            "Beta2 - Exponential decay rate for second moment (variance) in Adam.\n\n"
+            "Controls the adaptive learning rate behavior.\n"
+            "Standard value: 0.999 (rarely needs changing)\n\n"
+            "For sparse gradients, try 0.99 or lower.\n"
+            "Keep close to 1.0 for most problems."
+        )
+        
+        self.beta = QDoubleSpinBox()
+        self.beta.setDecimals(3)  # Set decimals FIRST
+        self.beta.setRange(0.0, 1.0)
+        self.beta.setSingleStep(0.01)
+        self.beta.setValue(0.9)
+        self.beta.setToolTip(
+            "Beta - Decay rate for moving average in RMSprop.\n\n"
+            "Controls how much history is used for adaptive learning rates.\n"
+            "Standard value: 0.9\n\n"
+            "Higher (0.95-0.99): More smoothing, slower adaptation\n"
+            "Lower (0.8-0.85): Less smoothing, faster adaptation"
+        )
+        
+        self.epsilon = QDoubleSpinBox()
+        self.epsilon.setDecimals(10)  # Set decimals FIRST for scientific notation
+        self.epsilon.setRange(0.0, 1e-5)
+        self.epsilon.setSingleStep(1e-9)
+        self.epsilon.setValue(1e-8)
+        self.epsilon.setToolTip(
+            "Epsilon - Small constant for numerical stability.\n\n"
+            "Prevents division by zero in Adam and RMSprop.\n"
+            "Standard value: 1e-8 (almost never needs changing)\n\n"
+            "Only adjust if you encounter numerical instability.\n"
+            "Larger values (1e-7) → More stable but less precise\n"
+            "Smaller values (1e-9) → More precise but may be unstable"
+        )
         
         self.epochs = QSpinBox()
         self.epochs.setRange(1, 10000)
         self.epochs.setValue(10)
-        self.epochs.setToolTip("Number of full passes through the training dataset. More epochs = better accuracy but longer training.")
+        self.epochs.setToolTip(
+            "Number of complete passes through the entire training dataset.\n\n"
+            "Each epoch processes all training samples once.\n"
+            "Typical values: 10-100 depending on dataset size\n\n"
+            "More epochs → Better learning (up to a point)\n"
+            "Too many → Overfitting (model memorizes training data)\n\n"
+            "Monitor validation loss to find optimal number."
+        )
         
         self.batch_size = QSpinBox()
         self.batch_size.setRange(1, 10000)
         self.batch_size.setValue(64)
-        self.batch_size.setToolTip("Number of training examples used in one iteration. Larger batches = more stable training.")
+        self.batch_size.setToolTip(
+            "Number of samples processed before updating weights.\n\n"
+            "Common values: 32, 64, 128, 256\n\n"
+            "Larger batches (128-256):\n"
+            "  + More stable gradients\n"
+            "  + Better GPU utilization\n"
+            "  - More memory required\n\n"
+            "Smaller batches (16-32):\n"
+            "  + Less memory\n"
+            "  + May generalize better\n"
+            "  - Noisier gradients"
+        )
         
         self.use_validation = QCheckBox()
         self.use_validation.setChecked(False)
-        self.use_validation.setToolTip("If checked, a portion of training data is set aside to validate model performance.")
+        self.use_validation.setToolTip(
+            "Enable validation set to monitor overfitting.\n\n"
+            "When enabled, splits training data into:\n"
+            "  • Training set (for learning)\n"
+            "  • Validation set (for monitoring)\n\n"
+            "Validation loss increasing while training loss decreases\n"
+            "indicates overfitting - stop training or add regularization."
+        )
         
         self.validation_split = QDoubleSpinBox()
         self.validation_split.setRange(0.0, 0.5)
         self.validation_split.setValue(0.0)
-        self.validation_split.setToolTip("Percentage of data to use for validation (0.2 = 20%).")
+        self.validation_split.setToolTip(
+            "Fraction of training data reserved for validation.\n\n"
+            "Common values: 0.1 (10%), 0.2 (20%), 0.3 (30%)\n\n"
+            "Example: With 1000 samples and 0.2 split:\n"
+            "  • 800 samples for training\n"
+            "  • 200 samples for validation\n\n"
+            "Larger splits → More reliable validation, less training data\n"
+            "Smaller splits → More training data, less reliable validation"
+        )
         
         layout.addRow("Optimizer:", self.optimizer_combo)
         layout.addRow("Learning Rate:", self.learning_rate)
         layout.addRow("Weight Decay:", self.weight_decay)
+        
+        # Optimizer-specific parameters (visibility controlled dynamically)
+        self.momentum_row = layout.rowCount()
         layout.addRow("Momentum:", self.momentum)
+        self.beta1_row = layout.rowCount()
+        layout.addRow("Beta1:", self.beta1)
+        self.beta2_row = layout.rowCount()
+        layout.addRow("Beta2:", self.beta2)
+        self.beta_row = layout.rowCount()
+        layout.addRow("Beta (RMSprop):", self.beta)
+        self.epsilon_row = layout.rowCount()
+        layout.addRow("Epsilon:", self.epsilon)
+        
         layout.addRow("Epochs:", self.epochs)
         layout.addRow("Batch Size:", self.batch_size)
         layout.addRow("Use Validation Set:", self.use_validation)
         layout.addRow("Validation Split:", self.validation_split)
         
         # Connect signals
+        self.optimizer_combo.currentTextChanged.connect(self.on_optimizer_changed)
         self.optimizer_combo.currentIndexChanged.connect(self.on_parameter_changed)
         self.use_validation.toggled.connect(self.on_parameter_changed)
         for w in [self.learning_rate, self.weight_decay, self.momentum, 
+                  self.beta1, self.beta2, self.beta, self.epsilon,
                   self.epochs, self.batch_size, self.validation_split]:
             w.valueChanged.connect(self.on_parameter_changed)
 
         scroll.setWidget(widget)
         scroll.setWidgetResizable(True)
         self.tab_widget.addTab(scroll, "Training")
+        
+        # Store reference to layout for dynamic parameter visibility
+        self.training_layout = layout
+        
+        # Initialize parameter visibility (must be after tab is added)
+        self.on_optimizer_changed(self.optimizer_combo.currentText())
 
     def setup_network_tab(self):
         scroll = QScrollArea()
@@ -297,6 +435,41 @@ class ConfigurationWidget(QWidget):
 
     def on_parameter_changed(self):
         self.parametersChanged.emit()
+    
+    def on_optimizer_changed(self, optimizer_name):
+        """Show/hide optimizer-specific parameters based on selection"""
+        # Use stored layout reference
+        layout = self.training_layout
+        
+        # Hide all optimizer-specific parameters first
+        layout.itemAt(self.momentum_row, QFormLayout.ItemRole.LabelRole).widget().hide()
+        layout.itemAt(self.momentum_row, QFormLayout.ItemRole.FieldRole).widget().hide()
+        layout.itemAt(self.beta1_row, QFormLayout.ItemRole.LabelRole).widget().hide()
+        layout.itemAt(self.beta1_row, QFormLayout.ItemRole.FieldRole).widget().hide()
+        layout.itemAt(self.beta2_row, QFormLayout.ItemRole.LabelRole).widget().hide()
+        layout.itemAt(self.beta2_row, QFormLayout.ItemRole.FieldRole).widget().hide()
+        layout.itemAt(self.beta_row, QFormLayout.ItemRole.LabelRole).widget().hide()
+        layout.itemAt(self.beta_row, QFormLayout.ItemRole.FieldRole).widget().hide()
+        layout.itemAt(self.epsilon_row, QFormLayout.ItemRole.LabelRole).widget().hide()
+        layout.itemAt(self.epsilon_row, QFormLayout.ItemRole.FieldRole).widget().hide()
+        
+        # Show relevant parameters based on optimizer
+        if optimizer_name == "SGD with Momentum":
+            layout.itemAt(self.momentum_row, QFormLayout.ItemRole.LabelRole).widget().show()
+            layout.itemAt(self.momentum_row, QFormLayout.ItemRole.FieldRole).widget().show()
+        elif optimizer_name == "Adam":
+            layout.itemAt(self.beta1_row, QFormLayout.ItemRole.LabelRole).widget().show()
+            layout.itemAt(self.beta1_row, QFormLayout.ItemRole.FieldRole).widget().show()
+            layout.itemAt(self.beta2_row, QFormLayout.ItemRole.LabelRole).widget().show()
+            layout.itemAt(self.beta2_row, QFormLayout.ItemRole.FieldRole).widget().show()
+            layout.itemAt(self.epsilon_row, QFormLayout.ItemRole.LabelRole).widget().show()
+            layout.itemAt(self.epsilon_row, QFormLayout.ItemRole.FieldRole).widget().show()
+        elif optimizer_name == "RMSprop":
+            layout.itemAt(self.beta_row, QFormLayout.ItemRole.LabelRole).widget().show()
+            layout.itemAt(self.beta_row, QFormLayout.ItemRole.FieldRole).widget().show()
+            layout.itemAt(self.epsilon_row, QFormLayout.ItemRole.LabelRole).widget().show()
+            layout.itemAt(self.epsilon_row, QFormLayout.ItemRole.FieldRole).widget().show()
+        # SGD shows no additional parameters (only learning_rate and weight_decay)
 
     def on_viz_setting_changed(self):
         settings = self.get_gui_settings()
@@ -314,14 +487,17 @@ class ConfigurationWidget(QWidget):
         self.num_classes.setValue(10)
         self.image_width.setValue(28)
         self.image_height.setValue(28)
-        self.num_layers.setValue(3)
         
-        self.optimizer_combo.setCurrentIndex(1) # Adam
-        self.learning_rate.setValue(0.01)  # Good default for Adam
-        self.weight_decay.setValue(0.01)  # L2 regularization
+        self.optimizer_combo.setCurrentIndex(2) # Adam
+        self.learning_rate.setValue(0.01)
+        self.weight_decay.setValue(0.01)
         self.momentum.setValue(0.9)
-        self.epochs.setValue(10)  # More epochs for better convergence
-        self.batch_size.setValue(64)  # Larger batch for stability
+        self.beta1.setValue(0.9)
+        self.beta2.setValue(0.999)
+        self.beta.setValue(0.9)
+        self.epsilon.setValue(1e-8)
+        self.epochs.setValue(10)
+        self.batch_size.setValue(64)
         self.use_validation.setChecked(False)
         self.validation_split.setValue(0.0)
         
@@ -392,6 +568,10 @@ class ConfigurationWidget(QWidget):
                 if 'learning_rate' in config: self.learning_rate.setValue(config['learning_rate'])
                 if 'weight_decay' in config: self.weight_decay.setValue(config['weight_decay'])
                 if 'momentum' in config: self.momentum.setValue(config['momentum'])
+                if 'beta1' in config: self.beta1.setValue(config['beta1'])
+                if 'beta2' in config: self.beta2.setValue(config['beta2'])
+                if 'beta' in config: self.beta.setValue(config['beta'])
+                if 'epsilon' in config: self.epsilon.setValue(config['epsilon'])
                 if 'epochs' in config: self.epochs.setValue(config['epochs'])
                 if 'batch_size' in config: self.batch_size.setValue(config['batch_size'])
                 if 'validation_split' in config: self.validation_split.setValue(config['validation_split'])
@@ -438,6 +618,10 @@ class ConfigurationWidget(QWidget):
             'optimizer': self.optimizer_combo.currentText(),
             'weight_decay': self.weight_decay.value(),
             'momentum': self.momentum.value(),
+            'beta1': self.beta1.value(),
+            'beta2': self.beta2.value(),
+            'beta': self.beta.value(),
+            'epsilon': self.epsilon.value(),
             'validation_split': self.validation_split.value(),
             'use_validation': self.use_validation.isChecked(),
         }

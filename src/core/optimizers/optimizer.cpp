@@ -1,6 +1,6 @@
 #include "optimizer.h"
 #include "../definitions.h"
-#include <cmath> 
+#include <cmath>
 #include <iostream>
 
 // Optimizer Base
@@ -10,7 +10,8 @@ Optimizer::Optimizer(double lr, double wd)
 // SGD Implementation
 SGD::SGD(double lr, double wd) : Optimizer(lr, wd) {}
 
-void SGD::update(std::vector<double>& weights, const std::vector<double>& grads){
+void SGD::update(std::vector<double> &weights,
+                 const std::vector<double> &grads) {
 #ifndef NDEBUG
   if (weights.size() != grads.size()) {
     std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size()
@@ -19,17 +20,18 @@ void SGD::update(std::vector<double>& weights, const std::vector<double>& grads)
   }
 #endif
 
-    for (size_t i = 0; i < weights.size(); ++i) {
-        // Gradient descent with L2 regularization
-        weights[i] -= learning_rate * (grads[i] + weight_decay * weights[i]);
-    }
+  for (size_t i = 0; i < weights.size(); ++i) {
+    // Gradient descent with L2 regularization
+    weights[i] -= learning_rate * (grads[i] + weight_decay * weights[i]);
+  }
 }
 
 // SGD_Momentum Implementation
-SGD_Momentum::SGD_Momentum(double lr, double mom, double wd) : Optimizer(lr, wd), momentum(mom) {}
+SGD_Momentum::SGD_Momentum(double lr, double mom, double wd)
+    : Optimizer(lr, wd), momentum(mom) {}
 
 void SGD_Momentum::update(std::vector<double> &weights,
-                 const std::vector<double> &grads) {
+                          const std::vector<double> &grads) {
 #ifndef NDEBUG
   if (weights.size() != grads.size()) {
     std::cerr << "Error: Optimizer size mismatch! Weights: " << weights.size()
@@ -119,16 +121,17 @@ void RMSprop::update(std::vector<double> &weights,
 // Factory Implementation
 Optimizer *createOptimizer(const OptimizerConfig &config) {
   switch (config.type) {
-    case opt_SGD_Momentum:
-      return new SGD_Momentum(config.learningRate, config.momentum, config.weightDecay);
-    case opt_Adam:
-      return new Adam(config.learningRate, config.beta1, config.beta2,
-                      config.epsilon, config.weightDecay);
-    case opt_RMSprop:
-      return new RMSprop(config.learningRate, config.beta1, config.epsilon,
-                         config.weightDecay);
-    case opt_SGD:
-    default:
-      return new SGD(config.learningRate, config.weightDecay);
+  case opt_SGD_Momentum:
+    return new SGD_Momentum(config.learningRate, config.momentum,
+                            config.weightDecay);
+  case opt_Adam:
+    return new Adam(config.learningRate, config.beta1, config.beta2,
+                    config.epsilon, config.weightDecay);
+  case opt_RMSprop:
+    return new RMSprop(config.learningRate, config.beta, config.epsilon,
+                       config.weightDecay);
+  case opt_SGD:
+  default:
+    return new SGD(config.learningRate, config.weightDecay);
   }
 }
