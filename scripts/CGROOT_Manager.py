@@ -571,16 +571,16 @@ def build_configuration(cmake_path, config, compiler_name):
         
     cgrunner_path = find_exe("cgrunner")
     test_path = find_exe("test_diagnostics")
-    gui_path = find_exe("cgroot_gui")
+    # gui_path = find_exe("cgroot_gui")
 
     print(f"- {cgrunner_path}")
     print(f"- {test_path}")
     
     # Check for GUI executable (only if Qt6 was found)
-    if gui_path.exists():
-        print(f"- {gui_path} {GREEN}(GUI){RESET}")
-    else:
-        print(f"- {gui_path} {YELLOW}(not built - Qt6 may not be found){RESET}")
+    # if gui_path.exists():
+    #     print(f"- {gui_path} {GREEN}(GUI){RESET}")
+    # else:
+    #     print(f"- {gui_path} {YELLOW}(not built - Qt6 may not be found){RESET}")
     
     log(f"{config} build completed successfully")
     pause()
@@ -612,7 +612,7 @@ def run_executables(configuration):
 
     main_exec = get_exe_path("cgrunner")
     test_exec = get_exe_path("test_diagnostics")
-    gui_exec = get_exe_path("cgroot_gui")
+    # gui_exec = get_exe_path("cgroot_gui")
 
     executables_found = False
 
@@ -803,7 +803,7 @@ def show_status(compiler_name):
                 if p2.exists(): return p2, True
                 return p1, False
 
-            for name in ["cgrunner", "test_diagnostics", "cgroot_gui"]:
+            for name in ["cgrunner", "test_diagnostics"]:
                 path, exists = check_exe(name)
                 status_str = "EXISTS" if exists else "MISSING"
                 color = GREEN if exists else (YELLOW if "gui" in name else RED)
@@ -1018,6 +1018,80 @@ def show_log():
     print()
     pause()
 
+def build_installer():
+    clear_screen()
+    print()
+    print(f"{CYAN}================================================{RESET}")
+    print(f"{CYAN}           Building Installer (PyInstaller){RESET}")
+    print(f"{CYAN}================================================{RESET}")
+    print()
+
+    # Check for PyInstaller
+    if not shutil.which("pyinstaller"):
+         print(f"{RED}Error: PyInstaller not found in PATH.{RESET}")
+         print(f"{YELLOW}Please install it using: pip install pyinstaller{RESET}")
+         log("PyInstaller not found")
+         pause()
+         return
+
+    log("Starting PyInstaller build")
+    
+    # Run PyInstaller using the spec file
+    print(f"{BLUE}Running PyInstaller (CGROOT_Trainer.spec)...{RESET}")
+    cmd = "pyinstaller CGROOT_Trainer.spec --noconfirm"
+    ret = run_command(cmd)
+    
+    if ret != 0:
+        print(f"{RED}PyInstaller build failed!{RESET}")
+        log("PyInstaller build failed")
+        pause()
+        return
+
+    print(f"{GREEN}PyInstaller build successful.{RESET}")
+
+    # Deploy to build/CGROOT_Trainer
+    dist_path = project_root / "dist" / "CGROOT_Trainer"
+    target_path = build_dir / "CGROOT_Trainer"
+    
+    print(f"{BLUE}Deploying to {target_path}...{RESET}")
+    
+    try:
+        if not build_dir.exists():
+            build_dir.mkdir(parents=True)
+
+        if target_path.exists():
+            print(f"{YELLOW}Removing existing deployment...{RESET}")
+            shutil.rmtree(target_path)
+            
+        print(f"{BLUE}Copying build artifacts...{RESET}")
+        shutil.copytree(dist_path, target_path)
+        print(f"{GREEN}Deployment successful.{RESET}")
+    except Exception as e:
+        print(f"{RED}Deployment failed: {e}{RESET}")
+        log(f"Deployment failed: {e}")
+        pause()
+        return
+        
+    # Copy src/data to target/src/data
+    data_src = project_root / "src" / "data"
+    data_dst = target_path / "src" / "data"
+    
+    print(f"{BLUE}Copying data directory...{RESET}")
+    if data_src.exists():
+        try:
+            if data_dst.exists():
+                shutil.rmtree(data_dst)
+            shutil.copytree(data_src, data_dst)
+            print(f"{GREEN}Data copied successfully to {data_dst}{RESET}")
+        except Exception as e:
+            print(f"{RED}Data copy failed: {e}{RESET}")
+            log(f"Data copy failed: {e}")
+    else:
+         print(f"{YELLOW}Warning: Source data directory not found at {data_src}{RESET}")
+
+    log("Installer built and deployed successfully")
+    pause()
+
 def main_menu(cmake_cmd, compiler_name):
 
     clear_screen()
@@ -1057,9 +1131,10 @@ def main_menu(cmake_cmd, compiler_name):
         print(f"{GREEN}11.{RESET} Generate Documentation")
         print(f"{GREEN}12.{RESET} Show Build Log")
         print(f"{GREEN}13.{RESET} Change Compiler")
+        print(f"{GREEN}14.{RESET} Build Installer (PyInstaller)")
         print(f"{RED}0.{RESET} Exit")
         print()
-        choice = input(f"{YELLOW}Enter your choice (0-13): {RESET}").strip()
+        choice = input(f"{YELLOW}Enter your choice (0-14): {RESET}").strip()
 
         if choice == "1":
             build_configuration(cmake_cmd, "Debug", compiler_name)
@@ -1088,6 +1163,8 @@ def main_menu(cmake_cmd, compiler_name):
             show_log()
         elif choice == "13":
             return True  # change compiler
+        elif choice == "14":
+            build_installer()
         elif choice == "0":
             clear_screen()
             print()
@@ -1134,14 +1211,14 @@ def run_full_cycle():
     5. Package application
     6. Run the packaged executable
     """
+
+    clear_screen()
+
     print()
     print(f"{CYAN}================================================{RESET}")
     print(f"{CYAN}           STARTING FULL BUILD CYCLE{RESET}")
     print(f"{CYAN}================================================{RESET}")
     print()
-
-    # 1. Kill Zombie Processes
-    kill_zombie_processes()
 
     # 2. Clean Build Directory
     clean_build_dir()
@@ -1159,6 +1236,7 @@ def run_full_cycle():
 
     # 3. Run Full Build (Release)
     success = build_configuration(cmake_cmd, "Release", compiler_name)
+    
     if not success:
         print(f"{RED}Build failed. Aborting full cycle.{RESET}")
         sys.exit(1)
@@ -1191,8 +1269,9 @@ def run_full_cycle():
     if dist_exe.exists():
         try:
             subprocess.run(str(dist_exe))
+            print(f"{BLUE}Application started successfully. Path: {dist_exe}{RESET}")
         except Exception as e:
-             print(f"{RED}Failed to run executable: {e}{RESET}")
+            print(f"{RED}Failed to run executable: {e}{RESET}")
     else:
         print(f"{RED}Packaged executable not found at {dist_exe}{RESET}")
 

@@ -146,7 +146,7 @@ public:
   // updated Note:         N/A
   std::pair<double, int> train(const image &data, int trueOutput);
 
-  std::pair<double, int> train_batch(const vector<const image*> &data,
+  std::pair<double, int> train_batch(const vector<const image *> &data,
                                      const vector<int> &trueOutput);
 
   // classify the image by applying the forward propagation on the image
@@ -195,22 +195,21 @@ public:
   // output:       int (LayerType enum value)
   int getLayerType(size_t layerIndex);
 
-  //store all the model parameters (kernels and weights)
-  //input:          folderPath (the path of the folder where the file
-  //                containing the model paramters will be created)
-  //output:         bool (true: operation successful, false: operation failed)
-  //side effects:   the model paramters are saved in file "model_param<number>.txt" in the folder path
-  //Note:           N/A
-  bool store(const string& folderPath);
+  // store all the model parameters (kernels and weights)
+  // input:          folderPath (the path of the folder where the file
+  //                 containing the model paramters will be created)
+  // output:         bool (true: operation successful, false: operation failed)
+  // side effects:   the model paramters are saved in file
+  // "model_param<number>.txt" in the folder path Note:           N/A
+  bool store(const string &folderPath);
 
-  //load the model parameters (kernels and weights)
-  //input:          filePath (the path of the file from which 
-  //                the model paramters will be loaded)
-  //output:         bool (true: operation successful, false: operation failed)
-  //side effects:   the model paramters are loaded into the weights and kernels
-  //Note:           N/A
-  bool load(const string& filePath);
-  
+  // load the model parameters (kernels and weights)
+  // input:          filePath (the path of the file from which
+  //                 the model paramters will be loaded)
+  // output:         bool (true: operation successful, false: operation failed)
+  // side effects:   the model paramters are loaded into the weights and kernels
+  // Note:           N/A
+  bool load(const string &filePath);
 };
 
 #endif

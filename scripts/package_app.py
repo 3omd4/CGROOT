@@ -36,6 +36,37 @@ def find_extension_module():
             
     return None
 
+def ensure_src_data_structure(dist_dir: str, project_root: str):
+    """
+    Ensures that `src/data` exists inside the distribution directory.
+    If missing, it attempts to copy it from the project root.
+
+    Args:
+        dist_dir (str): Path to the built/distribution directory
+        project_root (str): Path to the project root containing `data`
+    """
+
+    dist_dir = Path(dist_dir)
+    src_dir = dist_dir / "src"
+    data_dir = src_dir / "data"
+
+    source_data = Path(project_root) / "data"
+
+    # Create src directory if missing
+    src_dir.mkdir(exist_ok=True)
+
+    # If data already exists, nothing to do
+    if data_dir.exists():
+        return
+
+    # If source data exists, copy it
+    if source_data.exists() and source_data.is_dir():
+        shutil.copytree(source_data, data_dir)
+        print(f"[INFO] Copied data folder to: {data_dir}")
+    else:
+        print("[WARNING] 'data' folder not found in project root.")
+        print("Application may not function correctly.")
+
 def main():
     print("=== CGROOT++ Application Packager ===")
     check_pyinstaller()
@@ -65,6 +96,9 @@ def main():
         # We put it in root of bundle so direct import works
         f"--add-binary={ext_path};.", 
         
+        # Add icons folder
+        f"--add-data={PROJECT_ROOT / 'icons'};icons", 
+        
         # Paths to search for imports (src/gui_py)
         f"--paths={PROJECT_ROOT / 'src' / 'gui_py'}",
         
@@ -84,6 +118,8 @@ def main():
     print("\n=== Packaging Complete! ===")
     dist_dir = PROJECT_ROOT / "dist" / "CGROOT_Trainer"
     print(f"Executable is located at: {dist_dir / 'CGROOT_Trainer.exe'}")
+
+    
     
     print("\n[IMPORTANT NOTE]")
     print("The application expects 'src/data' structure relative to it.")
@@ -92,6 +128,11 @@ def main():
     print("2. Create folder 'src'")
     print("3. Copy 'data' folder from project root to 'src/data'")
     print("   (Or ensure your logic handles missing paths)")
+
+
+    ensure_src_data_structure(str(dist_dir), str(PROJECT_ROOT))
+
+
 
 if __name__ == "__main__":
     main()

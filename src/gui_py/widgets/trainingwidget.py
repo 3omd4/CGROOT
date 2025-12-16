@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QProgressBar, QLabel, QGroupBox, QGridLayout, QScrollArea, QSpinBox, QSizePolicy, QFileDialog)
+                             QProgressBar, QLabel, QGroupBox, QGridLayout, QScrollArea, QSpinBox, QSizePolicy, QFileDialog, QCheckBox)
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, qRgb
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -27,6 +27,12 @@ class TrainingWidget(QWidget):
         
         # Params Group removed (moved to Configuration Tab)
 
+        # Visualization Toggle (Global)
+        self.viz_checkbox = QCheckBox("Enable Real-time Visualizations (Uncheck for faster training)")
+        self.viz_checkbox.setChecked(True)
+        self.viz_checkbox.toggled.connect(self.on_viz_toggled)
+        self.viz_checkbox.setToolTip("Disabling visualizations significantly improves training speed by reducing data transfer overhead.")
+        main_layout.addWidget(self.viz_checkbox)
 
         # Preview Group
         self.preview_group = QGroupBox() # Title moved inside
@@ -214,6 +220,17 @@ class TrainingWidget(QWidget):
     def training_finished(self):
         self.set_training_state(False)
         self.status_label.setText("Training Completed")
+
+    def on_viz_toggled(self, checked):
+        self.controller.setVisualizationsEnabled.emit(checked)
+        self.preview_group.setEnabled(checked)
+        self.fm_group.setEnabled(checked)
+        self.preview_group.setVisible(checked)
+        self.fm_group.setVisible(checked)
+        if not checked:
+             self.status_label.setText("Visualizations Disabled - Training runs at maximum speed")
+        else:
+             self.status_label.setText("Visualizations Enabled - Training runs at normal speed")    
 
     # Visualization Settings Slot
     def set_visualization_settings(self, settings):

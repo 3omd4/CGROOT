@@ -23,6 +23,10 @@ class TrainingThread(QThread):
         self.config = config
         self._stop_requested = False
         self.layer_index = 1 # Default to layer 1
+        self._visualizations_enabled = True
+        
+    def set_visualizations_enabled(self, enabled):
+        self._visualizations_enabled = enabled
         
     def set_layer_index(self, idx):
         self.layer_index = idx
@@ -36,75 +40,84 @@ class TrainingThread(QThread):
                 layer_type = -1
                 
                 # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
-                # But careful: per-sample updates shouldn't fetch heavy maps.
-                try:
-                    # Access dynamic layer index
-                    target_layer = self.layer_index
-                    if target_layer < 0: target_layer = 0
-                    
-                    # Get maps. If invalid layer, this returns []
-                    maps = self.model.getLayerFeatureMaps(target_layer)
-                    layer_type = self.model.getLayerType(target_layer)
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                    # No fallback! Let it be empty list or None so UI knows it failed/is invalid.
-                    maps = [] # Explicitly empty so UI clears it
-                    layer_type = -1
-                
-                # Also, pick a random image from dataset to show as "preview"
-                # This ensures the user sees 'Activity'
-                preview_img_data = None
-                preview_pred = -1
-                preview_probs = []
-                preview_label = -1
-                
-                if self.dataset and hasattr(self.dataset, 'num_images') and self.dataset.num_images > 0:
+                if self._visualizations_enabled:
+                    # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
+                    # But careful: per-sample updates shouldn't fetch heavy maps.
                     try:
-                        # Use current_idx if valid (>=0), otherwise random if we want (or skip)
-                        # The C++ code emits -1 at epoch end.
-                        idx = -1
-                        if current_idx >= 0:
-                            idx = current_idx
-                            # User requested NO INFERENCE during training.
-                            preview_pred = -1
-                            preview_probs = []
-                                
-                            # Prepare QImage for display
-                            # Access properties directly as defined in bindings
-                            width = self.dataset.image_width
-                            height = self.dataset.image_height
-                            
-                            # Access pixels from MNISTImage object
-                            # self.dataset.images is a list of MNISTImage objects
-                            # images[idx].pixels is the vector of uint8
-                            img_data_vec = self.dataset.images[idx].pixels
-                            preview_label = self.dataset.images[idx].label
-                            
-                            if img_data_vec:
-                                # Create QImage from raw data
-                                # QImage constructor from data requires bytes, so we might need to convert
-                                # vector<uint8_t> (which pybind gives as list of int) to bytes.
-                                # Or loop setPixel if that's safer/easier given the format.
-                                # Flattened list of ints.
-                                
-                                q_img = QImage(width, height, QImage.Format.Format_Grayscale8)
-                                
-                                
-                                for y in range(height):
-                                    for x in range(width):
-                                        idx_pixel = y * width + x
-                                        val = int(img_data_vec[idx_pixel])
-                                        q_img.setPixel(x, y, qRgb(val, val, val))
-                                
-                                preview_img_data = q_img
-                        else:
-                            # If current_idx is -1 (e.g., epoch end), we might still want to show a random image
-                            # or just skip updating the image. For now, we'll keep it as None.
-                            pass
+                        # Access dynamic layer index
+                        target_layer = self.layer_index
+                        if target_layer < 0: target_layer = 0
+                        
+                        # Get maps. If invalid layer, this returns []
+                        maps = self.model.getLayerFeatureMaps(target_layer)
+                        layer_type = self.model.getLayerType(target_layer)
                     except Exception as e:
-                        print(f"Error getting preview image or performing inference: {e}")
-                
+                        import traceback
+                        traceback.print_exc()
+                        # No fallback! Let it be empty list or None so UI knows it failed/is invalid.
+                        maps = [] # Explicitly empty so UI clears it
+                        layer_type = -1
+                    
+                    # Also, pick a random image from dataset to show as "preview"
+                    # This ensures the user sees 'Activity'
+                    preview_img_data = None
+                    preview_pred = -1
+                    preview_probs = []
+                    preview_label = -1
+                    
+                    if self.dataset and hasattr(self.dataset, 'num_images') and self.dataset.num_images > 0:
+                        try:
+                            # Use current_idx if valid (>=0), otherwise random if we want (or skip)
+                            # The C++ code emits -1 at epoch end.
+                            idx = -1
+                            if current_idx >= 0:
+                                idx = current_idx
+                                # User requested NO INFERENCE during training.
+                                preview_pred = -1
+                                preview_probs = []
+                                    
+                                # Prepare QImage for display
+                                # Access properties directly as defined in bindings
+                                width = self.dataset.image_width
+                                height = self.dataset.image_height
+                                
+                                # Access pixels from MNISTImage object
+                                # self.dataset.images is a list of MNISTImage objects
+                                # images[idx].pixels is the vector of uint8
+                                img_data_vec = self.dataset.images[idx].pixels
+                                preview_label = self.dataset.images[idx].label
+                                
+                                if img_data_vec:
+                                    # Create QImage from raw data
+                                    # QImage constructor from data requires bytes, so we might need to convert
+                                    # vector<uint8_t> (which pybind gives as list of int) to bytes.
+                                    # Or loop setPixel if that's safer/easier given the format.
+                                    # Flattened list of ints.
+                                    
+                                    q_img = QImage(width, height, QImage.Format.Format_Grayscale8)
+                                    
+                                    
+                                    for y in range(height):
+                                        for x in range(width):
+                                            idx_pixel = y * width + x
+                                            val = int(img_data_vec[idx_pixel])
+                                            q_img.setPixel(x, y, qRgb(val, val, val))
+                                    
+                                    preview_img_data = q_img
+                            else:
+                                # If current_idx is -1 (e.g., epoch end), we might still want to show a random image
+                                # or just skip updating the image. For now, we'll keep it as None.
+                                pass
+                        except Exception as e:
+                            print(f"Error getting preview image or performing inference: {e}")
+                else:
+                    # Visualizations DISABLED
+                    maps = []
+                    layer_type = -1
+                    preview_img_data = None
+                    preview_pred = -1
+                    preview_probs = []
+                    preview_label = -1
                 
                 # Emit
                 # We need to distinguish what we are updating in the UI.
@@ -132,7 +145,7 @@ class TrainingThread(QThread):
                 stop_check
             )
             if not self._stop_requested:
-                self.finished.emit(history)
+                self.finished.emit()
         except Exception as e:
             self.log.emit(f"Training error: {e}")
 
@@ -182,6 +195,7 @@ class ModelWorker(QObject):
         self.dataset = None
         self.should_stop = False
         self._training_active = False
+        self._visualizations_enabled = True # Default
         self._train_thread = None
         self._loader_thread = None
         
@@ -229,6 +243,14 @@ class ModelWorker(QObject):
 
 
 
+
+    @pyqtSlot(bool)
+    def setVisualizationsEnabled(self, enabled):
+        """Enable or disable heavy visualization data generation during training."""
+        self._visualizations_enabled = enabled
+        if hasattr(self, "_train_thread") and self._train_thread:
+            self._train_thread.set_visualizations_enabled(enabled)
+
     @pyqtSlot(int)
     def setTargetLayer(self, layer_idx):
         """Update the layer index to visualize."""
@@ -249,10 +271,10 @@ class ModelWorker(QObject):
             self._initialize_model(config)
             
         # Log Full Configuration
-        import json
-        self.logMessage.emit("=== Training Configuration ===")
-        self.logMessage.emit(json.dumps(config, indent=4))
-        self.logMessage.emit("================================")
+        # import json
+        # self.logMessage.emit("=== Training Configuration ===")
+        # self.logMessage.emit(json.dumps(config, indent=4))
+        # self.logMessage.emit("================================")
 
         # Store config for later save
         self._last_config = config
@@ -273,6 +295,8 @@ class ModelWorker(QObject):
         # Pass last layer index if set
         if hasattr(self, "_last_layer_idx"):
             self._train_thread.set_layer_index(self._last_layer_idx)
+        
+        self._train_thread.set_visualizations_enabled(self._visualizations_enabled)
             
         self._train_thread.start()
     
@@ -328,16 +352,21 @@ class ModelWorker(QObject):
         try:
             import json
             from pathlib import Path
+            from datetime import datetime
             
             folder = Path(folder_path)
             folder.mkdir(parents=True, exist_ok=True)
             
             # Store weights using C++ model.store()
+            # The C++ function creates a timestamped file: model_param_YYYYMMDD_HHMMSS.bin
             success = self.model.store(str(folder))
             
-            # Also save configuration if we have it
+            # Also save configuration with the same timestamp
             if success and hasattr(self, '_last_config'):
-                config_file = folder / "model_config.json"
+                # Generate timestamp in the same format as C++ (YYYYMMDD_HHMMSS)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                config_file = folder / f"model_config_{timestamp}.json"
+                
                 with open(config_file, 'w') as f:
                     json.dump(self._last_config, f, indent=4)
                 self.logMessage.emit(f"Configuration saved to: {config_file}")
@@ -382,17 +411,35 @@ class ModelWorker(QObject):
                 model_file = bin_files[0]  # Use the first one
                 self.logMessage.emit(f"Found model file: {model_file}")
             
-            config_file = model_file.parent / "model_config.json"
+            # Extract timestamp from the model file name (e.g., model_param_20231216_143025.bin)
+            import re
+            timestamp_match = re.search(r'model_param_(\d{8}_\d{6})\.bin', model_file.name)
+            
+            # Try to find config file with matching timestamp first
+            config_file = None
+            if timestamp_match:
+                timestamp = timestamp_match.group(1)
+                timestamped_config = model_file.parent / f"model_config_{timestamp}.json"
+                if timestamped_config.exists():
+                    config_file = timestamped_config
+                    self.logMessage.emit(f"Found timestamped config: {config_file}")
+            
+            # Fallback to generic model_config.json if timestamped version not found
+            if not config_file:
+                generic_config = model_file.parent / "model_config.json"
+                if generic_config.exists():
+                    config_file = generic_config
+                    self.logMessage.emit(f"Using generic config file: {config_file}")
             
             # Load configuration
-            if not config_file.exists():
-                self.logMessage.emit(f"Warning: Config file not found at {config_file}")
+            if not config_file:
+                self.logMessage.emit(f"Warning: No config file found for {model_file.name}")
                 self.logMessage.emit("Attempting to load weights into existing model...")
                 
                 if not self.model:
                     self.logMessage.emit("Error: Model not initialized and no config file found.")
                     self.logMessage.emit("Please either:")
-                    self.logMessage.emit("  1. Ensure model_config.json exists in the same directory, OR")
+                    self.logMessage.emit("  1. Ensure model_config_TIMESTAMP.json exists in the same directory, OR")
                     self.logMessage.emit("  2. Initialize the model architecture first (e.g., start training)")
                     self.modelStatusChanged.emit(False)
                     return

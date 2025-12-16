@@ -11,11 +11,12 @@ class InferenceWidget(QWidget):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-        self.class_names = [
-            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
-        ]
+        self.dataset_type = "generic"
         self.current_image = None
         self.init_ui()
+        
+    def set_dataset_type(self, dataset_type):
+        self.dataset_type = dataset_type
         
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -119,7 +120,7 @@ class InferenceWidget(QWidget):
         from dataset_utils import get_class_name
         
         # We default to generic or update if we know dataset
-        name = get_class_name("generic", predicted_class)
+        name = get_class_name(self.dataset_type, predicted_class)
         self.pred_label.setText(f"Predicted: {name}")
             
         if probabilities and predicted_class < len(probabilities):
@@ -141,7 +142,7 @@ class InferenceWidget(QWidget):
         indexed_probs.sort(key=lambda x: x[1], reverse=True)
         
         for idx, prob in indexed_probs:
-            name = get_class_name("generic", idx) # Improve detection later
+            name = get_class_name(self.dataset_type, idx) # Improve detection later
             text = f"{name}: {prob*100:.2f}%"
             item = QListWidgetItem(text)
             self.prob_list.addItem(item)

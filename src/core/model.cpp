@@ -1,5 +1,7 @@
 #include "model.h"
+#include "utils/store_and_load.h"
 #include <algorithm>
+#include <chrono>
 #include <iomanip>
 #include <omp.h>
 #include <sstream>
@@ -1187,15 +1189,6 @@ int NNModel::getLayerType(size_t layerIndex) {
   return (int)Layers[layerIndex]->getLayerType();
 }
 
-struct ModelFileHeader {
-  uint32_t magic;      // 'NNMD'
-  uint32_t version;    // format version
-  uint32_t layerCount; // number of stored layers
-};
-
-static constexpr uint32_t MODEL_MAGIC = 0x4E4E4D44; // "NNMD"
-static constexpr uint32_t MODEL_VERSION = 1;
-
 // store all the model parameters (kernels and weights)
 // input:          folderPath (the path of the folder where the file
 //                 containing the model paramters will be created)
@@ -1211,12 +1204,28 @@ bool NNModel::store(const std::string &folderPath) {
     return false;
   }
 
-  // Generate unique file name
-  int counter = 0;
-  fs::path filePath;
-  do {
-    filePath = dir / ("model_param" + std::to_string(counter++) + ".bin");
-  } while (fs::exists(filePath));
+  // Generate unique file name using timestamp
+  auto now = std::chrono::system_clock::now();
+  auto time_t_now = std::chrono::system_clock::to_time_t(now);
+  std::tm tm_now;
+
+#ifdef _WIN32
+  localtime_s(&tm_now, &time_t_now);
+#else
+  localtime_r(&time_t_now, &tm_now);
+#endif
+
+  std::ostringstream oss;
+  oss << "model_param_" << std::put_time(&tm_now, "%Y%m%d_%H%M%S") << ".bin";
+
+  fs::path filePath = dir / oss.str();
+
+  if (fs::exists(filePath)) {
+    oss.str("");
+    oss << "model_param_" << std::put_time(&tm_now, "%Y%m%d_%H%M%S")
+        << " (2).bin";
+    filePath = dir / oss.str();
+  }
 
   // Open file
   std::ofstream file(filePath, std::ios::binary);
@@ -1225,13 +1234,11 @@ bool NNModel::store(const std::string &folderPath) {
     return false;
   }
 
-  // Write header
-  ModelFileHeader header{};
-  header.magic = MODEL_MAGIC;
-  header.version = MODEL_VERSION;
-  header.layerCount = static_cast<uint32_t>(Layers.size() - 1);
-
-  file.write(reinterpret_cast<const char *>(&header), sizeof(header));
+  // Write header using helper function
+  if (!writeModelHeader(file, static_cast<uint32_t>(Layers.size() - 1))) {
+    std::cerr << "Failed to write model header\n";
+    return false;
+  }
 
   // Save each layer with type marker
   for (size_t i = 1; i < Layers.size(); ++i) {
@@ -1245,23 +1252,10 @@ bool NNModel::store(const std::string &folderPath) {
         std::cerr << "Failed to cast to convLayer\n";
         return false;
       }
-      // Write kernel dimensions and data inline
-      const auto &kernels = layer->getKernels();
-      size_t D1 = kernels.size();
-      size_t D2 = D1 ? kernels[0].size() : 0;
-      size_t D3 = D2 ? kernels[0][0].size() : 0;
-      size_t D4 = D3 ? kernels[0][0][0].size() : 0;
-
-      file.write(reinterpret_cast<const char *>(&D1), sizeof(D1));
-      file.write(reinterpret_cast<const char *>(&D2), sizeof(D2));
-      file.write(reinterpret_cast<const char *>(&D3), sizeof(D3));
-      file.write(reinterpret_cast<const char *>(&D4), sizeof(D4));
-
-      for (size_t a = 0; a < D1; a++)
-        for (size_t b = 0; b < D2; b++)
-          for (size_t c = 0; c < D3; c++)
-            file.write(reinterpret_cast<const char *>(kernels[a][b][c].data()),
-                       D4 * sizeof(double));
+      if (!writeConvKernels(file, layer->getKernels())) {
+        std::cerr << "Failed to write conv layer kernels\n";
+        return false;
+      }
       break;
     }
 
@@ -1271,17 +1265,10 @@ bool NNModel::store(const std::string &folderPath) {
         std::cerr << "Failed to cast to FullyConnected\n";
         return false;
       }
-      // Write weight dimensions and data inline
-      const auto &neurons = layer->getNeurons();
-      size_t rows = neurons.size();
-      size_t cols = rows ? neurons[0].size() : 0;
-
-      file.write(reinterpret_cast<const char *>(&rows), sizeof(rows));
-      file.write(reinterpret_cast<const char *>(&cols), sizeof(cols));
-
-      for (size_t r = 0; r < rows; r++)
-        file.write(reinterpret_cast<const char *>(neurons[r].data()),
-                   cols * sizeof(double));
+      if (!writeNeuronWeights(file, layer->getNeurons())) {
+        std::cerr << "Failed to write FC layer weights\n";
+        return false;
+      }
       break;
     }
 
@@ -1291,17 +1278,10 @@ bool NNModel::store(const std::string &folderPath) {
         std::cerr << "Failed to cast to outputLayer\n";
         return false;
       }
-      // Write weight dimensions and data inline
-      const auto &neurons = layer->getNeurons();
-      size_t rows = neurons.size();
-      size_t cols = rows ? neurons[0].size() : 0;
-
-      file.write(reinterpret_cast<const char *>(&rows), sizeof(rows));
-      file.write(reinterpret_cast<const char *>(&cols), sizeof(cols));
-
-      for (size_t r = 0; r < rows; r++)
-        file.write(reinterpret_cast<const char *>(neurons[r].data()),
-                   cols * sizeof(double));
+      if (!writeNeuronWeights(file, layer->getNeurons())) {
+        std::cerr << "Failed to write output layer weights\n";
+        return false;
+      }
       break;
     }
 
@@ -1336,21 +1316,13 @@ bool NNModel::load(const std::string &filePath) {
     return false;
   }
 
-  // Read and validate header
+  // Read and validate header using helper function
   ModelFileHeader header{};
-  file.read(reinterpret_cast<char *>(&header), sizeof(header));
-
-  if (header.magic != MODEL_MAGIC) {
-    std::cerr << "Invalid model file (bad magic number)\n";
+  if (!readModelHeader(file, header)) {
     return false;
   }
 
-  if (header.version != MODEL_VERSION) {
-    std::cerr << "Incompatible model version (expected " << MODEL_VERSION
-              << ", got " << header.version << ")\n";
-    return false;
-  }
-
+  // Validate layer count
   if (header.layerCount != Layers.size() - 1) {
     std::cerr << "Model architecture mismatch (expected " << (Layers.size() - 1)
               << " layers, got " << header.layerCount << ")\n";
@@ -1374,29 +1346,9 @@ bool NNModel::load(const std::string &filePath) {
         std::cerr << "Failed to cast to convLayer\n";
         return false;
       }
-
-      // Read kernel dimensions
-      size_t D1, D2, D3, D4;
-      file.read(reinterpret_cast<char *>(&D1), sizeof(D1));
-      file.read(reinterpret_cast<char *>(&D2), sizeof(D2));
-      file.read(reinterpret_cast<char *>(&D3), sizeof(D3));
-      file.read(reinterpret_cast<char *>(&D4), sizeof(D4));
-
-      // Get reference to kernels and verify dimensions
-      auto &kernels = layer->getKernels();
-      if (kernels.size() != D1 || (D1 && kernels[0].size() != D2) ||
-          (D2 && kernels[0][0].size() != D3) ||
-          (D3 && kernels[0][0][0].size() != D4)) {
-        std::cerr << "Kernel dimension mismatch at layer " << i << "\n";
+      if (!readConvKernels(file, layer->getKernels(), i)) {
         return false;
       }
-
-      // Read kernel data
-      for (size_t a = 0; a < D1; a++)
-        for (size_t b = 0; b < D2; b++)
-          for (size_t c = 0; c < D3; c++)
-            file.read(reinterpret_cast<char *>(kernels[a][b][c].data()),
-                      D4 * sizeof(double));
       break;
     }
 
@@ -1406,23 +1358,10 @@ bool NNModel::load(const std::string &filePath) {
         std::cerr << "Failed to cast to FullyConnected\n";
         return false;
       }
-
-      // Read weight dimensions
-      size_t rows, cols;
-      file.read(reinterpret_cast<char *>(&rows), sizeof(rows));
-      file.read(reinterpret_cast<char *>(&cols), sizeof(cols));
-
-      // Get reference to neurons and verify dimensions
-      auto &neurons = layer->getNeurons();
-      if (neurons.size() != rows || (rows && neurons[0].size() != cols)) {
-        std::cerr << "Weight dimension mismatch at layer " << i << "\n";
+      if (!readNeuronWeights(file, layer->getNeurons(),
+                             "FC layer " + std::to_string(i))) {
         return false;
       }
-
-      // Read weight data
-      for (size_t r = 0; r < rows; r++)
-        file.read(reinterpret_cast<char *>(neurons[r].data()),
-                  cols * sizeof(double));
       break;
     }
 
@@ -1432,23 +1371,9 @@ bool NNModel::load(const std::string &filePath) {
         std::cerr << "Failed to cast to outputLayer\n";
         return false;
       }
-
-      // Read weight dimensions
-      size_t rows, cols;
-      file.read(reinterpret_cast<char *>(&rows), sizeof(rows));
-      file.read(reinterpret_cast<char *>(&cols), sizeof(cols));
-
-      // Get reference to neurons and verify dimensions
-      auto &neurons = layer->getNeurons();
-      if (neurons.size() != rows || (rows && neurons[0].size() != cols)) {
-        std::cerr << "Weight dimension mismatch at output layer\n";
+      if (!readNeuronWeights(file, layer->getNeurons(), "output layer")) {
         return false;
       }
-
-      // Read weight data
-      for (size_t r = 0; r < rows; r++)
-        file.read(reinterpret_cast<char *>(neurons[r].data()),
-                  cols * sizeof(double));
       break;
     }
 

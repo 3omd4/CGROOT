@@ -50,5 +50,9 @@ MATRIX_OPS_IO_REFERENCE.md
 
 **/__pycache__/**
 
+**/dist/**
+
+
 
 **/build_temp/**
+CGROOT_Trainer.spec

@@ -10,19 +10,22 @@ from widgets.inferencewidget import InferenceWidget
 from widgets.metricswidget import MetricsWidget
 from widgets.spinner import SpinnerWidget
 from controllers.model_controller import ModelController
+from utils.resource_path import resource_path
+from PyQt6.QtGui import QIcon
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
         self.setWindowTitle("CGROOT++ Neural Network Trainer")
+        self.setWindowIcon(QIcon(resource_path("icons/favicon.ico")))
         self.resize(1200, 800)
         
         self.controller = ModelController()
         
         self.setup_ui()
         self.setup_menubar()
-        self.setup_toolbar()
+        # self.setup_toolbar()
         self.setup_statusbar()
         self.create_connections()
         
@@ -55,7 +58,7 @@ class MainWindow(QMainWindow):
         
         # Log Output
         log_group = QGroupBox("Log Output")
-        log_group.setMinimumSize(200, 200)
+        log_group.setMinimumSize(200, 150)
         log_layout = QVBoxLayout(log_group)
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
@@ -78,7 +81,7 @@ class MainWindow(QMainWindow):
         # File Menu
         file_menu = menu_bar.addMenu("&File")
         
-        load_dataset_act = QAction("&Load Dataset...", self)
+        load_dataset_act = QAction(QIcon(resource_path("icons/open.png")), "&Load Dataset...", self)
         load_dataset_act.setShortcut("Ctrl+O")
         load_dataset_act.triggered.connect(self.on_load_dataset)
         file_menu.addAction(load_dataset_act)
@@ -163,6 +166,9 @@ class MainWindow(QMainWindow):
         self.log_message(f"Selected Dataset Type: {dataset_type}")
         self.log_message(f"Images File: {os.path.basename(images_path)}")
         self.log_message(f"Labels File: {os.path.basename(labels_path)}")
+        
+        # Update Inference Tab
+        self.inference_tab.set_dataset_type(dataset_type)
             
         self.controller.requestLoadDataset.emit(images_path, labels_path)
 
@@ -171,10 +177,11 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         
         # Quick actions with shortcuts
-        start_action = toolbar.addAction("Start Training (Ctrl+T)", self.training_tab.on_start_clicked)
+        
+        start_action = toolbar.addAction(QIcon(resource_path("icons/play.png")), "&Start Training (Ctrl+T)", self.training_tab.on_start_clicked)
         start_action.setShortcut("Ctrl+T")
         
-        stop_action = toolbar.addAction("Stop Training (Ctrl+S)", self.training_tab.on_stop_clicked)
+        stop_action = toolbar.addAction(QIcon(resource_path("icons/stop.png")), "&Stop Training (Ctrl+S)", self.training_tab.on_stop_clicked)
         stop_action.setShortcut("Ctrl+S")
 
     def setup_statusbar(self):

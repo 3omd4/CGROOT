@@ -5,100 +5,144 @@
 #include <string>
 #include <vector>
 
+// ============================================================================
+// Model Serialization Structures and Constants
+// ============================================================================
 
-template <typename T>
-bool save4DVector(
-    const std::vector<std::vector<std::vector<std::vector<T>>>> &vec4d,
-    const std::string &filename) {
-  std::ofstream file(filename, std::ios::binary | std::ios::app);
-  if (!file.is_open()) {
-    std::cerr << "Error opening file for writing: " << filename << "\n";
+#include <cstdint>
+
+struct ModelFileHeader {
+  uint32_t magic;      // 'NNMD'
+  uint32_t version;    // format version
+  uint32_t layerCount; // number of stored layers
+};
+
+static constexpr uint32_t MODEL_MAGIC = 0x4E4E4D44; // "NNMD"
+static constexpr uint32_t MODEL_VERSION = 1;
+
+// ============================================================================
+// Model Serialization Helper Functions
+// ============================================================================
+
+// Write model file header
+inline bool writeModelHeader(std::ofstream &file, uint32_t layerCount) {
+  ModelFileHeader header{};
+  header.magic = MODEL_MAGIC;
+  header.version = MODEL_VERSION;
+  header.layerCount = layerCount;
+
+  file.write(reinterpret_cast<const char *>(&header), sizeof(header));
+  return file.good();
+}
+
+// Read and validate model file header
+inline bool readModelHeader(std::ifstream &file, ModelFileHeader &header) {
+  file.read(reinterpret_cast<char *>(&header), sizeof(header));
+
+  if (header.magic != MODEL_MAGIC) {
+    std::cerr << "Invalid model file (bad magic number)\n";
     return false;
   }
 
-  size_t D1 = vec4d.size();
-  size_t D2 = D1 ? vec4d[0].size() : 0;
-  size_t D3 = D2 ? vec4d[0][0].size() : 0;
-  size_t D4 = D3 ? vec4d[0][0][0].size() : 0;
-
-  file.write((char *)&D1, sizeof(D1));
-  file.write((char *)&D2, sizeof(D2));
-  file.write((char *)&D3, sizeof(D3));
-  file.write((char *)&D4, sizeof(D4));
-
-  for (size_t i = 0; i < D1; i++)
-    for (size_t j = 0; j < D2; j++)
-      for (size_t k = 0; k < D3; k++)
-        file.write((char *)vec4d[i][j][k].data(), D4 * sizeof(T));
+  if (header.version != MODEL_VERSION) {
+    std::cerr << "Incompatible model version (expected " << MODEL_VERSION
+              << ", got " << header.version << ")\n";
+    return false;
+  }
 
   return true;
 }
 
-template <typename T>
-bool load4DVector(std::vector<std::vector<std::vector<std::vector<T>>>> &vec4d,
-                  const std::string &filename, std::streampos &bookmark) {
-  std::ifstream file(filename, std::ios::binary);
-  if (!file.is_open() || bookmark == std::streampos(-1))
-    return false;
+// Write 4D convolution kernel data (already exists as save4DVector, but
+// specialized)
+inline bool writeConvKernels(
+    std::ofstream &file,
+    const std::vector<std::vector<std::vector<std::vector<double>>>> &kernels) {
+  size_t D1 = kernels.size();
+  size_t D2 = D1 ? kernels[0].size() : 0;
+  size_t D3 = D2 ? kernels[0][0].size() : 0;
+  size_t D4 = D3 ? kernels[0][0][0].size() : 0;
 
-  file.seekg(bookmark);
+  file.write(reinterpret_cast<const char *>(&D1), sizeof(D1));
+  file.write(reinterpret_cast<const char *>(&D2), sizeof(D2));
+  file.write(reinterpret_cast<const char *>(&D3), sizeof(D3));
+  file.write(reinterpret_cast<const char *>(&D4), sizeof(D4));
 
+  for (size_t a = 0; a < D1; a++)
+    for (size_t b = 0; b < D2; b++)
+      for (size_t c = 0; c < D3; c++)
+        file.write(reinterpret_cast<const char *>(kernels[a][b][c].data()),
+                   D4 * sizeof(double));
+
+  return file.good();
+}
+
+// Read 4D convolution kernel data and validate dimensions
+inline bool readConvKernels(
+    std::ifstream &file,
+    std::vector<std::vector<std::vector<std::vector<double>>>> &kernels,
+    size_t layerIndex) {
+  // Read kernel dimensions
   size_t D1, D2, D3, D4;
-  file.read((char *)&D1, sizeof(D1));
-  file.read((char *)&D2, sizeof(D2));
-  file.read((char *)&D3, sizeof(D3));
-  file.read((char *)&D4, sizeof(D4));
+  file.read(reinterpret_cast<char *>(&D1), sizeof(D1));
+  file.read(reinterpret_cast<char *>(&D2), sizeof(D2));
+  file.read(reinterpret_cast<char *>(&D3), sizeof(D3));
+  file.read(reinterpret_cast<char *>(&D4), sizeof(D4));
 
-  vec4d.assign(D1,
-               std::vector<std::vector<std::vector<T>>>(
-                   D2, std::vector<std::vector<T>>(D3, std::vector<T>(D4))));
+  // Verify dimensions match
+  if (kernels.size() != D1 || (D1 && kernels[0].size() != D2) ||
+      (D2 && kernels[0][0].size() != D3) ||
+      (D3 && kernels[0][0][0].size() != D4)) {
+    std::cerr << "Kernel dimension mismatch at layer " << layerIndex << "\n";
+    return false;
+  }
 
-  for (size_t i = 0; i < D1; i++)
-    for (size_t j = 0; j < D2; j++)
-      for (size_t k = 0; k < D3; k++)
-        file.read((char *)vec4d[i][j][k].data(), D4 * sizeof(T));
+  // Read kernel data
+  for (size_t a = 0; a < D1; a++)
+    for (size_t b = 0; b < D2; b++)
+      for (size_t c = 0; c < D3; c++)
+        file.read(reinterpret_cast<char *>(kernels[a][b][c].data()),
+                  D4 * sizeof(double));
 
-  bookmark = file.tellg();
-  return true;
+  return file.good();
 }
 
-template <typename T>
-bool save2DVector(const std::vector<std::vector<T>> &vec2d,
-                  const std::string &filename) {
-  std::ofstream file(filename, std::ios::binary | std::ios::app);
-  if (!file.is_open())
-    return false;
+// Write 2D neuron weights (FC or output layer)
+inline bool
+writeNeuronWeights(std::ofstream &file,
+                   const std::vector<std::vector<double>> &neurons) {
+  size_t rows = neurons.size();
+  size_t cols = rows ? neurons[0].size() : 0;
 
-  size_t rows = vec2d.size();
-  size_t cols = rows ? vec2d[0].size() : 0;
-
-  file.write((char *)&rows, sizeof(rows));
-  file.write((char *)&cols, sizeof(cols));
+  file.write(reinterpret_cast<const char *>(&rows), sizeof(rows));
+  file.write(reinterpret_cast<const char *>(&cols), sizeof(cols));
 
   for (size_t r = 0; r < rows; r++)
-    file.write((char *)vec2d[r].data(), cols * sizeof(T));
+    file.write(reinterpret_cast<const char *>(neurons[r].data()),
+               cols * sizeof(double));
 
-  return true;
+  return file.good();
 }
 
-template <typename T>
-bool load2DVector(std::vector<std::vector<T>> &vec2d,
-                  const std::string &filename, std::streampos &bookmark) {
-  std::ifstream file(filename, std::ios::binary);
-  if (!file.is_open() || bookmark == std::streampos(-1))
-    return false;
-
-  file.seekg(bookmark);
-
+// Read 2D neuron weights and validate dimensions
+inline bool readNeuronWeights(std::ifstream &file,
+                              std::vector<std::vector<double>> &neurons,
+                              const std::string &layerName) {
+  // Read weight dimensions
   size_t rows, cols;
-  file.read((char *)&rows, sizeof(rows));
-  file.read((char *)&cols, sizeof(cols));
+  file.read(reinterpret_cast<char *>(&rows), sizeof(rows));
+  file.read(reinterpret_cast<char *>(&cols), sizeof(cols));
 
-  vec2d.assign(rows, std::vector<T>(cols));
+  // Verify dimensions match
+  if (neurons.size() != rows || (rows && neurons[0].size() != cols)) {
+    std::cerr << "Weight dimension mismatch at " << layerName << "\n";
+    return false;
+  }
 
+  // Read weight data
   for (size_t r = 0; r < rows; r++)
-    file.read((char *)vec2d[r].data(), cols * sizeof(T));
+    file.read(reinterpret_cast<char *>(neurons[r].data()),
+              cols * sizeof(double));
 
-  bookmark = file.tellg();
-  return true;
+  return file.good();
 }

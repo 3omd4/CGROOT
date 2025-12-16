@@ -20,6 +20,7 @@ class ModelController(QObject):
     setTargetLayer = pyqtSignal(int)
     requestStoreModel = pyqtSignal(str) # folderPath
     requestLoadModel = pyqtSignal(str) # filePath
+    setVisualizationsEnabled = pyqtSignal(bool) # NEW: Toggle visualizations
 
     def __init__(self):
         super().__init__()
@@ -46,6 +47,7 @@ class ModelController(QObject):
         self.setTargetLayer.connect(self.worker.setTargetLayer)
         self.requestStoreModel.connect(self.worker.storeModel)
         self.requestLoadModel.connect(self.worker.loadModel)
+        self.setVisualizationsEnabled.connect(self.worker.setVisualizationsEnabled)
         
         self.thread.start()
         
