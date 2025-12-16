@@ -1,0 +1,5 @@
+# CGROOT++ Python GUI Dependencies
+PyQt6>=6.4.0
+pyqtgraph>=0.13.0
+numpy>=1.21.0
+colorama>=0.4.4

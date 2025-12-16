@@ -10,7 +10,7 @@ class ModelController(QObject):
     trainingFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool) # isTraining
     featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
-    trainingPreviewReady = pyqtSignal(int, object, list) # NEW
+    trainingPreviewReady = pyqtSignal(int, object, list, int) # NEW
     
     # Signals to Worker
     requestLoadDataset = pyqtSignal(str, str)
@@ -18,6 +18,8 @@ class ModelController(QObject):
     requestStop = pyqtSignal()
     requestInference = pyqtSignal(object)
     setTargetLayer = pyqtSignal(int)
+    requestStoreModel = pyqtSignal(str) # folderPath
+    requestLoadModel = pyqtSignal(str) # filePath
 
     def __init__(self):
         super().__init__()
@@ -42,6 +44,8 @@ class ModelController(QObject):
         self.requestStop.connect(self.worker.stopTraining)
         self.requestInference.connect(self.worker.runInference)
         self.setTargetLayer.connect(self.worker.setTargetLayer)
+        self.requestStoreModel.connect(self.worker.storeModel)
+        self.requestLoadModel.connect(self.worker.loadModel)
         
         self.thread.start()
         

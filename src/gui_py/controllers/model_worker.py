@@ -12,9 +12,9 @@ except ImportError:
 
 # ========================== Training Thread ==========================
 class TrainingThread(QThread):
-    progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int)  # epoch, total, loss, acc, feature_maps(object), pred, qimage, probs, current_idx, layer_type
+    # epoch, total, loss, acc, feature_maps(object), pred, qimage, probs, current_idx, layer_type, true_label
+    progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int, int)
     log = pyqtSignal(str)
-    finished = pyqtSignal(list)  # history
 
     def __init__(self, model, dataset, config):
         super().__init__()
@@ -57,6 +57,7 @@ class TrainingThread(QThread):
                 preview_img_data = None
                 preview_pred = -1
                 preview_probs = []
+                preview_label = -1
                 
                 if self.dataset and hasattr(self.dataset, 'num_images') and self.dataset.num_images > 0:
                     try:
@@ -78,6 +79,7 @@ class TrainingThread(QThread):
                             # self.dataset.images is a list of MNISTImage objects
                             # images[idx].pixels is the vector of uint8
                             img_data_vec = self.dataset.images[idx].pixels
+                            preview_label = self.dataset.images[idx].label
                             
                             if img_data_vec:
                                 # Create QImage from raw data
@@ -112,7 +114,7 @@ class TrainingThread(QThread):
                 
                 # Emit includes current_idx and layer_type
                 
-                self.progress.emit(epoch, total, loss, acc, maps, preview_pred, preview_img_data, preview_probs, current_idx, layer_type)
+                self.progress.emit(epoch, total, loss, acc, maps, preview_pred, preview_img_data, preview_probs, current_idx, layer_type, preview_label)
 
         def log_callback(msg):
             if not self._stop_requested:
@@ -150,7 +152,6 @@ class LoaderThread(QThread):
 
     def run(self):
         try:
-            self.log.emit(f"Loading dataset from: {self.images_path}")
             if not cgroot_core:
                 self.error.emit("Core library not loaded")
                 return
@@ -165,7 +166,7 @@ class ModelWorker(QObject):
     metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
     progressUpdated = pyqtSignal(int, int)
     featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
-    trainingPreviewReady = pyqtSignal(int, object, list) # int, QImage, list of floats (Training Only)
+    trainingPreviewReady = pyqtSignal(int, object, list, int) # int, QImage, list of floats, int (true_label) (Training Only)
     imagePredicted = pyqtSignal(int, object, list) # int, QImage, list of floats (Inference Only)
     trainingFinished = pyqtSignal()
     inferenceFinished = pyqtSignal()
@@ -173,7 +174,7 @@ class ModelWorker(QObject):
     
     # Internal signals for thread-safe callback emissions
     _internal_log = pyqtSignal(str)
-    _internal_progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int)
+    _internal_progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int, int)
     
     def __init__(self):
         super().__init__()
@@ -196,7 +197,10 @@ class ModelWorker(QObject):
             self.logMessage.emit("Error: Core library not loaded")
             return
             
-        self.logMessage.emit(f"Starting async dataset load...")
+        import os
+        abs_img_path = os.path.abspath(images_path)
+        abs_lbl_path = os.path.abspath(labels_path)
+        self.logMessage.emit(f"Loading dataset from:\n  Images: {abs_img_path}\n  Labels: {abs_lbl_path}")
         
         # Create and start loader thread
         self._loader_thread = LoaderThread(images_path, labels_path)
@@ -243,7 +247,16 @@ class ModelWorker(QObject):
 
         if not self.model:
             self._initialize_model(config)
+            
+        # Log Full Configuration
+        import json
+        self.logMessage.emit("=== Training Configuration ===")
+        self.logMessage.emit(json.dumps(config, indent=4))
+        self.logMessage.emit("================================")
 
+        # Store config for later save
+        self._last_config = config
+        
         # Create training configuration
         train_config = self._create_training_config(config)
 
@@ -263,12 +276,12 @@ class ModelWorker(QObject):
             
         self._train_thread.start()
     
-    def _on_training_finished(self, history):
+    
+    def _on_training_finished(self):
         """Handle training completion."""
         self._training_active = False
         self.modelStatusChanged.emit(False)
         self.logMessage.emit("=== Training Session End ===")
-        self.logMessage.emit(f"Training completed! Total epochs: {len(history)}")
         self.trainingFinished.emit()
         self._train_thread = None
     
@@ -302,6 +315,117 @@ class ModelWorker(QObject):
         if hasattr(self, "_train_thread") and self._train_thread:
             self._train_thread.stop()
             self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
+
+    @pyqtSlot(str)
+    def storeModel(self, folder_path):
+        """Store the current model and its configuration to the specified folder."""
+        if not self.model:
+            self.logMessage.emit("Error: No model to store.")
+            return
+
+        self.logMessage.emit(f"Storing model to: {folder_path} ...")
+        self.modelStatusChanged.emit(True)
+        try:
+            import json
+            from pathlib import Path
+            
+            folder = Path(folder_path)
+            folder.mkdir(parents=True, exist_ok=True)
+            
+            # Store weights using C++ model.store()
+            success = self.model.store(str(folder))
+            
+            # Also save configuration if we have it
+            if success and hasattr(self, '_last_config'):
+                config_file = folder / "model_config.json"
+                with open(config_file, 'w') as f:
+                    json.dump(self._last_config, f, indent=4)
+                self.logMessage.emit(f"Configuration saved to: {config_file}")
+            
+            if success:
+                self.logMessage.emit("Model stored successfully.")
+            else:
+                self.logMessage.emit("Failed to store model.")
+                
+        except Exception as e:
+            self.logMessage.emit(f"Error storing model: {e}")
+            import traceback
+            traceback.print_exc()
+        self.modelStatusChanged.emit(False)
+
+    @pyqtSlot(str)
+    def loadModel(self, file_path):
+        """Load model parameters from the specified file.
+        
+        This function will:
+        1. Look for model_config.json in the same directory
+        2. Initialize the model architecture using the config
+        3. Load the weights from the specified file
+        """
+        from pathlib import Path
+        import json
+        
+        self.logMessage.emit(f"Loading model from: {file_path} ...")
+        self.modelStatusChanged.emit(True)
+        
+        try:
+            # Find the config file in the same directory
+            model_file = Path(file_path)
+            
+            if model_file.is_dir():
+                # If file_path is a directory, look for .bin file
+                bin_files = list(model_file.glob("model_param*.bin"))
+                if not bin_files:
+                    self.logMessage.emit("Error: No model_param*.bin file found in directory")
+                    self.modelStatusChanged.emit(False)
+                    return
+                model_file = bin_files[0]  # Use the first one
+                self.logMessage.emit(f"Found model file: {model_file}")
+            
+            config_file = model_file.parent / "model_config.json"
+            
+            # Load configuration
+            if not config_file.exists():
+                self.logMessage.emit(f"Warning: Config file not found at {config_file}")
+                self.logMessage.emit("Attempting to load weights into existing model...")
+                
+                if not self.model:
+                    self.logMessage.emit("Error: Model not initialized and no config file found.")
+                    self.logMessage.emit("Please either:")
+                    self.logMessage.emit("  1. Ensure model_config.json exists in the same directory, OR")
+                    self.logMessage.emit("  2. Initialize the model architecture first (e.g., start training)")
+                    self.modelStatusChanged.emit(False)
+                    return
+            else:
+                # Load and apply configuration
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                
+                self.logMessage.emit(f"Loaded configuration from: {config_file}")
+                self._last_config = config
+                
+                # Initialize model with this configuration
+                if self.model:
+                    self.logMessage.emit("Re-initializing model with loaded configuration...")
+                    del self.model
+                    self.model = None
+                
+                self._initialize_model(config)
+            
+            # Now load the weights
+            success = self.model.load(str(model_file))
+            
+            if success:
+                self.logMessage.emit("Model loaded successfully.")
+            else:
+                self.logMessage.emit("Failed to load model weights.")
+                
+        except Exception as e:
+            self.logMessage.emit(f"Error loading model: {e}")
+            import traceback
+            traceback.print_exc()
+            
+        self.modelStatusChanged.emit(False)
 
     @pyqtSlot(object)
     def runInference(self, qimage_obj):
@@ -367,8 +491,8 @@ class ModelWorker(QObject):
         if self._training_active:
             self.logMessage.emit(message)
     
-    @pyqtSlot(int, int, float, float, object, int, object, list, int, int)
-    def _emit_progress_from_thread(self, epoch, total_epochs, loss, accuracy, feature_maps, pred_class, q_image, probs, current_idx, layer_type):
+    @pyqtSlot(int, int, float, float, object, int, object, list, int, int, int)
+    def _emit_progress_from_thread(self, epoch, total_epochs, loss, accuracy, feature_maps, pred_class, q_image, probs, current_idx, layer_type, true_label):
         """
         Thread-safe progress/metrics emission helper.
         Called via QMetaObject.invokeMethod from C++ callback thread.
@@ -381,7 +505,7 @@ class ModelWorker(QObject):
             if is_epoch_end:
                 self.metricsUpdated.emit(loss, accuracy, epoch)
                 self.progressUpdated.emit(epoch, total_epochs)
-            
+                
             # Emit feature maps if they were updated (checked by not None)
             # Empty list [] IS valid (it means clear/unknown)
             if feature_maps is not None:
@@ -389,7 +513,7 @@ class ModelWorker(QObject):
             
             # Emit image if present (per sample)
             if q_image:
-                self.trainingPreviewReady.emit(pred_class, q_image, probs)
+                self.trainingPreviewReady.emit(pred_class, q_image, probs, true_label)
     
     # ========================================================================
     # Lifecycle Management
@@ -443,5 +567,5 @@ class ModelWorker(QObject):
         try:
             if hasattr(self, 'model') and self.model:
                 self.cleanup()
-        except:
+        except Exception:
             pass  # Avoid exceptions in destructor

@@ -1,11 +1,14 @@
 #include "model.h"
-#include "utils/store_and_load.h"
 #include <algorithm>
 #include <iomanip>
 #include <omp.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
+// C++17 filesystem
+#include <filesystem>
+namespace fs = std::filesystem;
 
 using namespace std;
 
@@ -606,8 +609,9 @@ std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
 // side effect:  The model is trained by a batch of image and its paramters are
 // updated Note:         N/A
 // Updated train_batch: Returns {total_loss, total_correct}
-std::pair<double, int> NNModel::train_batch(const vector<const image*> &batchData,
-                                            const vector<int> &trueOutput) {
+std::pair<double, int>
+NNModel::train_batch(const vector<const image *> &batchData,
+                     const vector<int> &trueOutput) {
   double total_loss = 0.0;
   int total_correct = 0;
 
@@ -1030,7 +1034,7 @@ vector<TrainingMetrics> NNModel::train_epochs(
     double train_loss_sum = 0.0;
     size_t train_samples = 0; // Tracks actual samples processed
 
-    vector<const image*> batch_images;
+    vector<const image *> batch_images;
     vector<int> batch_labels;
     batch_images.reserve(config.batch_size);
     batch_labels.reserve(config.batch_size);
@@ -1183,97 +1187,285 @@ int NNModel::getLayerType(size_t layerIndex) {
   return (int)Layers[layerIndex]->getLayerType();
 }
 
+struct ModelFileHeader {
+  uint32_t magic;      // 'NNMD'
+  uint32_t version;    // format version
+  uint32_t layerCount; // number of stored layers
+};
 
-//store all the model parameters (kernels and weights)
-//input:          folderPath (the path of the folder where the file
-//                containing the model paramters will be created)
-//output:         bool (true: operation successful, false: operation failed)
-//side effects:   the model paramters are saved in file "model_param<number>.txt" in the folder path
-//Note:           N/A
-bool NNModel::store(string &folderPath)
-{
-  string baseName = "\\model_param";
-  string extention = ".txt";
+static constexpr uint32_t MODEL_MAGIC = 0x4E4E4D44; // "NNMD"
+static constexpr uint32_t MODEL_VERSION = 1;
 
-  int counter = 0;
-
-  string path = folderPath + baseName + to_string(counter) + extention;
-
-  ifstream checker(path);
-  while (checker.good())
-  {
-    checker.close();
-    counter++;
-    path = folderPath + baseName + to_string(counter) + extention;
-    checker.open(path);
+// store all the model parameters (kernels and weights)
+// input:          folderPath (the path of the folder where the file
+//                 containing the model paramters will be created)
+// output:         bool (true: operation successful, false: operation failed)
+// side effects:   the model paramters are saved in binary file
+// "model_param<number>.bin" Note:           Creates a single binary file with
+// header + layer data
+bool NNModel::store(const std::string &folderPath) {
+  // Validate folder
+  fs::path dir(folderPath);
+  if (!fs::exists(dir) || !fs::is_directory(dir)) {
+    std::cerr << "Invalid folder path: " << folderPath << "\n";
+    return false;
   }
 
-  checker.close();
+  // Generate unique file name
+  int counter = 0;
+  fs::path filePath;
+  do {
+    filePath = dir / ("model_param" + std::to_string(counter++) + ".bin");
+  } while (fs::exists(filePath));
 
-  ofstream newFile(path);
-  newFile.close();
+  // Open file
+  std::ofstream file(filePath, std::ios::binary);
+  if (!file) {
+    std::cerr << "Failed to create model file: " << filePath << "\n";
+    return false;
+  }
 
-  for (size_t i = 1; i < Layers.size(); i++)
-  {
-    switch (Layers[i]->getLayerType())
-    {
-    case conv:
-      if (!save4DVector<double>(static_cast<convLayer *>(Layers[i])->getKernels(), path))
-      {
+  // Write header
+  ModelFileHeader header{};
+  header.magic = MODEL_MAGIC;
+  header.version = MODEL_VERSION;
+  header.layerCount = static_cast<uint32_t>(Layers.size() - 1);
+
+  file.write(reinterpret_cast<const char *>(&header), sizeof(header));
+
+  // Save each layer with type marker
+  for (size_t i = 1; i < Layers.size(); ++i) {
+    LayerType type = Layers[i]->getLayerType();
+    file.write(reinterpret_cast<const char *>(&type), sizeof(type));
+
+    switch (type) {
+    case conv: {
+      auto *layer = dynamic_cast<convLayer *>(Layers[i]);
+      if (!layer) {
+        std::cerr << "Failed to cast to convLayer\n";
         return false;
       }
+      // Write kernel dimensions and data inline
+      const auto &kernels = layer->getKernels();
+      size_t D1 = kernels.size();
+      size_t D2 = D1 ? kernels[0].size() : 0;
+      size_t D3 = D2 ? kernels[0][0].size() : 0;
+      size_t D4 = D3 ? kernels[0][0][0].size() : 0;
+
+      file.write(reinterpret_cast<const char *>(&D1), sizeof(D1));
+      file.write(reinterpret_cast<const char *>(&D2), sizeof(D2));
+      file.write(reinterpret_cast<const char *>(&D3), sizeof(D3));
+      file.write(reinterpret_cast<const char *>(&D4), sizeof(D4));
+
+      for (size_t a = 0; a < D1; a++)
+        for (size_t b = 0; b < D2; b++)
+          for (size_t c = 0; c < D3; c++)
+            file.write(reinterpret_cast<const char *>(kernels[a][b][c].data()),
+                       D4 * sizeof(double));
       break;
-    case fullyConnected:
-      if (!save2DVector<double>(static_cast<FullyConnected *>(Layers[i])->getNeurons(), path))
-      {
+    }
+
+    case fullyConnected: {
+      auto *layer = dynamic_cast<FullyConnected *>(Layers[i]);
+      if (!layer) {
+        std::cerr << "Failed to cast to FullyConnected\n";
         return false;
       }
+      // Write weight dimensions and data inline
+      const auto &neurons = layer->getNeurons();
+      size_t rows = neurons.size();
+      size_t cols = rows ? neurons[0].size() : 0;
+
+      file.write(reinterpret_cast<const char *>(&rows), sizeof(rows));
+      file.write(reinterpret_cast<const char *>(&cols), sizeof(cols));
+
+      for (size_t r = 0; r < rows; r++)
+        file.write(reinterpret_cast<const char *>(neurons[r].data()),
+                   cols * sizeof(double));
       break;
-    case output:
-      if (!save2DVector<double>(static_cast<outputLayer *>(Layers[i])->getNeurons(), path))
-      {
+    }
+
+    case output: {
+      auto *layer = dynamic_cast<outputLayer *>(Layers[i]);
+      if (!layer) {
+        std::cerr << "Failed to cast to outputLayer\n";
         return false;
       }
+      // Write weight dimensions and data inline
+      const auto &neurons = layer->getNeurons();
+      size_t rows = neurons.size();
+      size_t cols = rows ? neurons[0].size() : 0;
+
+      file.write(reinterpret_cast<const char *>(&rows), sizeof(rows));
+      file.write(reinterpret_cast<const char *>(&cols), sizeof(cols));
+
+      for (size_t r = 0; r < rows; r++)
+        file.write(reinterpret_cast<const char *>(neurons[r].data()),
+                   cols * sizeof(double));
       break;
+    }
+
+    // Layers without trainable parameters - skip them
+    case input:
+    case flatten:
+    case pooling:
+      // These layers don't have weights/kernels to save
+      break;
+
+    default:
+      std::cerr << "Unknown layer type: " << type << "\n";
+      return false;
     }
   }
 
+  file.close();
+  std::cout << "Model saved to: " << filePath << "\n";
   return true;
 }
 
-//load the model parameters (kernels and weights)
-//input:          filePath (the path of the file from which 
-//                the model paramters will be loaded)
-//output:         bool (true: operation successful, false: operation failed)
-//side effects:   the model paramters are loaded into the weights and kernels
-//Note:           N/A
-bool NNModel::load(string &filePath)
-{
-  std::streampos cursor = 0;
-  for (size_t i = 1; i < Layers.size(); i++)
-  {
-    switch (Layers[i]->getLayerType())
-    {
-    case conv:
-      if (!load4DVector<double>(static_cast<convLayer *>(Layers[i])->getKernels(), filePath, cursor))
-      {
+// load the model parameters (kernels and weights)
+// input:          filePath (the path of the file from which
+//                 the model paramters will be loaded)
+// output:         bool (true: operation successful, false: operation failed)
+// side effects:   the model paramters are loaded into the weights and kernels
+// Note:           Validates architecture compatibility before loading
+bool NNModel::load(const std::string &filePath) {
+  std::ifstream file(filePath, std::ios::binary);
+  if (!file) {
+    std::cerr << "Failed to open model file: " << filePath << "\n";
+    return false;
+  }
+
+  // Read and validate header
+  ModelFileHeader header{};
+  file.read(reinterpret_cast<char *>(&header), sizeof(header));
+
+  if (header.magic != MODEL_MAGIC) {
+    std::cerr << "Invalid model file (bad magic number)\n";
+    return false;
+  }
+
+  if (header.version != MODEL_VERSION) {
+    std::cerr << "Incompatible model version (expected " << MODEL_VERSION
+              << ", got " << header.version << ")\n";
+    return false;
+  }
+
+  if (header.layerCount != Layers.size() - 1) {
+    std::cerr << "Model architecture mismatch (expected " << (Layers.size() - 1)
+              << " layers, got " << header.layerCount << ")\n";
+    return false;
+  }
+
+  // Load each layer
+  for (size_t i = 1; i < Layers.size(); ++i) {
+    LayerType storedType;
+    file.read(reinterpret_cast<char *>(&storedType), sizeof(storedType));
+
+    if (storedType != Layers[i]->getLayerType()) {
+      std::cerr << "Layer type mismatch at index " << i << "\n";
+      return false;
+    }
+
+    switch (storedType) {
+    case conv: {
+      auto *layer = dynamic_cast<convLayer *>(Layers[i]);
+      if (!layer) {
+        std::cerr << "Failed to cast to convLayer\n";
         return false;
       }
-      break;
-    case fullyConnected:
-      if (!load2DVector<double>(static_cast<FullyConnected *>(Layers[i])->getNeurons(), filePath, cursor))
-      {
+
+      // Read kernel dimensions
+      size_t D1, D2, D3, D4;
+      file.read(reinterpret_cast<char *>(&D1), sizeof(D1));
+      file.read(reinterpret_cast<char *>(&D2), sizeof(D2));
+      file.read(reinterpret_cast<char *>(&D3), sizeof(D3));
+      file.read(reinterpret_cast<char *>(&D4), sizeof(D4));
+
+      // Get reference to kernels and verify dimensions
+      auto &kernels = layer->getKernels();
+      if (kernels.size() != D1 || (D1 && kernels[0].size() != D2) ||
+          (D2 && kernels[0][0].size() != D3) ||
+          (D3 && kernels[0][0][0].size() != D4)) {
+        std::cerr << "Kernel dimension mismatch at layer " << i << "\n";
         return false;
       }
+
+      // Read kernel data
+      for (size_t a = 0; a < D1; a++)
+        for (size_t b = 0; b < D2; b++)
+          for (size_t c = 0; c < D3; c++)
+            file.read(reinterpret_cast<char *>(kernels[a][b][c].data()),
+                      D4 * sizeof(double));
       break;
-    case output:
-      if (!load2DVector<double>(static_cast<outputLayer *>(Layers[i])->getNeurons(), filePath, cursor))
-      {
+    }
+
+    case fullyConnected: {
+      auto *layer = dynamic_cast<FullyConnected *>(Layers[i]);
+      if (!layer) {
+        std::cerr << "Failed to cast to FullyConnected\n";
         return false;
       }
+
+      // Read weight dimensions
+      size_t rows, cols;
+      file.read(reinterpret_cast<char *>(&rows), sizeof(rows));
+      file.read(reinterpret_cast<char *>(&cols), sizeof(cols));
+
+      // Get reference to neurons and verify dimensions
+      auto &neurons = layer->getNeurons();
+      if (neurons.size() != rows || (rows && neurons[0].size() != cols)) {
+        std::cerr << "Weight dimension mismatch at layer " << i << "\n";
+        return false;
+      }
+
+      // Read weight data
+      for (size_t r = 0; r < rows; r++)
+        file.read(reinterpret_cast<char *>(neurons[r].data()),
+                  cols * sizeof(double));
       break;
+    }
+
+    case output: {
+      auto *layer = dynamic_cast<outputLayer *>(Layers[i]);
+      if (!layer) {
+        std::cerr << "Failed to cast to outputLayer\n";
+        return false;
+      }
+
+      // Read weight dimensions
+      size_t rows, cols;
+      file.read(reinterpret_cast<char *>(&rows), sizeof(rows));
+      file.read(reinterpret_cast<char *>(&cols), sizeof(cols));
+
+      // Get reference to neurons and verify dimensions
+      auto &neurons = layer->getNeurons();
+      if (neurons.size() != rows || (rows && neurons[0].size() != cols)) {
+        std::cerr << "Weight dimension mismatch at output layer\n";
+        return false;
+      }
+
+      // Read weight data
+      for (size_t r = 0; r < rows; r++)
+        file.read(reinterpret_cast<char *>(neurons[r].data()),
+                  cols * sizeof(double));
+      break;
+    }
+
+    // Layers without trainable parameters - skip them
+    case input:
+    case flatten:
+    case pooling:
+      // These layers don't have weights/kernels to load
+      break;
+
+    default:
+      std::cerr << "Unknown layer type: " << storedType << "\n";
+      return false;
     }
   }
 
+  file.close();
+  std::cout << "Model loaded from: " << filePath << "\n";
   return true;
 }

@@ -431,6 +431,13 @@ def kill_zombie_processes():
         except Exception:
             pass
 
+    # Also kill by Window Title for the Python GUI "CGROOT++ Neural Network Trainer"
+    try:
+        subprocess.run('taskkill /F /FI "WINDOWTITLE eq CGROOT++ Neural Network Trainer"', shell=True,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
+
 import time
 
 def clean_build_dir():
@@ -1117,6 +1124,78 @@ def run_tests_only(config):
          print(f"{RED}ERROR: test_diagnostics executable not found.{RESET}")
          print(f"Please build the project first using --build.")
 
+def run_full_cycle():
+    """
+    Executes the full CI/CD-like pipeline:
+    1. Kill zombie processes
+    2. Clean build directory
+    3. Run full build (Release)
+    4. Install PyInstaller if missing
+    5. Package application
+    6. Run the packaged executable
+    """
+    print()
+    print(f"{CYAN}================================================{RESET}")
+    print(f"{CYAN}           STARTING FULL BUILD CYCLE{RESET}")
+    print(f"{CYAN}================================================{RESET}")
+    print()
+
+    # 1. Kill Zombie Processes
+    kill_zombie_processes()
+
+    # 2. Clean Build Directory
+    clean_build_dir()
+
+    # Detect compiler automatically for headless run
+    available = detect_compilers()
+    if not available:
+        print(f"{RED}ERROR: No compilers found.{RESET}")
+        sys.exit(1)
+    
+    # Use first available compiler
+    first_key = list(available.keys())[0]
+    compiler_name, cmake_cmd = available[first_key]
+    print(f"{GREEN}Auto-selected compiler: {compiler_name}{RESET}")
+
+    # 3. Run Full Build (Release)
+    success = build_configuration(cmake_cmd, "Release", compiler_name)
+    if not success:
+        print(f"{RED}Build failed. Aborting full cycle.{RESET}")
+        sys.exit(1)
+
+    # 4. Check/Install PyInstaller
+    if not shutil.which("pyinstaller"):
+        print(f"{YELLOW}PyInstaller not found. Installing...{RESET}")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+        except subprocess.CalledProcessError:
+            print(f"{RED}Failed to install PyInstaller. Please install manually.{RESET}")
+            sys.exit(1)
+
+    # 5. Package Application
+    package_script = project_root / "scripts" / "package_app.py"
+    if not package_script.exists():
+         print(f"{RED}Packaging script not found at {package_script}{RESET}")
+         sys.exit(1)
+
+    print(f"{BLUE}Running packaging script...{RESET}")
+    try:
+        subprocess.check_call([sys.executable, str(package_script)])
+    except subprocess.CalledProcessError:
+        print(f"{RED}Packaging failed.{RESET}")
+        sys.exit(1)
+
+    # 6. Run the Packaged Executable
+    print(f"{GREEN}Running packaged application...{RESET}")
+    dist_exe = project_root / "dist" / "CGROOT_Trainer" / "CGROOT_Trainer.exe"
+    if dist_exe.exists():
+        try:
+            subprocess.run(str(dist_exe))
+        except Exception as e:
+             print(f"{RED}Failed to run executable: {e}{RESET}")
+    else:
+        print(f"{RED}Packaged executable not found at {dist_exe}{RESET}")
+
 def main():
     while True:
         available = detect_compilers()
@@ -1140,7 +1219,26 @@ def main():
             break
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        run_tests_only("Release")
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--test":
+            run_tests_only("Release")
+        elif sys.argv[1] == "--full":
+            run_full_cycle()
+        elif "--gui" in sys.argv:
+            # Launch GUI directly
+            gui_script = project_root / "src" / "gui_py" / "main.py"
+            if gui_script.exists():
+                print(f"{GREEN}Launching GUI script...{RESET}")
+                try:
+                    if get_os_type() == "windows":
+                        subprocess.run(f'python "{gui_script}"', shell=True)
+                    else:
+                        subprocess.run(["python3", str(gui_script)])
+                except Exception as e:
+                    print(f"{RED}Error running GUI: {e}{RESET}")
+            else:
+                print(f"{RED}GUI script not found at {gui_script}{RESET}")
+        elif "--build" or "--clean" in sys.argv:
+            main()
     else:
         main()

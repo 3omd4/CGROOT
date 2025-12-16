@@ -145,6 +145,8 @@ void bind_model(py::module &m) {
       .def("getProbabilities", &NNModel::getProbabilities)
       .def("getLayerFeatureMaps", &NNModel::getLayerFeatureMaps)
       .def("getLayerType", &NNModel::getLayerType)
+      .def("store", &NNModel::store)
+      .def("load", &NNModel::load)
 
       // --- FIX STARTS HERE ---
       .def(

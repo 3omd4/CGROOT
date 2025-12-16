@@ -198,7 +198,7 @@ class ConfigurationWidget(QWidget):
         
         self.epochs = QSpinBox()
         self.epochs.setRange(1, 10000)
-        self.epochs.setValue(10)
+        self.epochs.setValue(5)
         self.epochs.setToolTip(
             "Number of complete passes through the entire training dataset.\n\n"
             "Each epoch processes all training samples once.\n"
@@ -411,7 +411,8 @@ class ConfigurationWidget(QWidget):
                 if len(d) == 2:
                     try:
                         kernel_dims_list.append((int(d[0]), int(d[1])))
-                    except: pass
+                    except  Exception:
+                        pass
             
         # Parse Pooling Intervals
         try:
@@ -577,8 +578,15 @@ class ConfigurationWidget(QWidget):
                 if 'validation_split' in config: self.validation_split.setValue(config['validation_split'])
                 if 'use_validation' in config: self.use_validation.setChecked(config['use_validation'])
                 
+                # GUI Settings
+                if 'show_preview' in config: self.show_preview_cb.setChecked(config['show_preview'])
+                if 'map_frequency' in config: self.fm_freq_combo.setCurrentText(config['map_frequency'])
+                if 'auto_scroll' in config: self.auto_scroll_cb.setChecked(config['auto_scroll'])
+                if 'chart_animations' in config: self.chart_anim_cb.setChecked(config['chart_animations'])
+                
                 self.blockSignals(False)
                 self.on_parameter_changed()
+                self.on_viz_setting_changed()
                 QMessageBox.information(self, "Config Loaded", f"Configuration loaded from:\n{path}")
                 
             except Exception as e:
@@ -599,6 +607,8 @@ class ConfigurationWidget(QWidget):
         try:
             # Get current parameters (parsed)
             params = self.get_training_parameters()
+            # Include GUI settings
+            params.update(self.get_gui_settings())
             
             with open(full_path, 'w') as f:
                 json.dump(params, f, indent=4)

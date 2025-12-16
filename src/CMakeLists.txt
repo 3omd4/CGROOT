@@ -105,6 +105,12 @@ else()
     message(WARNING "OpenMP NOT found — parallelization disabled")
 endif()
 
+# Link filesystem library (required for C++17 <filesystem> on some compilers)
+# On MSVC, this is typically not needed, but on older GCC/Clang it might be stdc++fs
+if(NOT MSVC)
+    target_link_libraries(cgroot_lib PRIVATE stdc++fs)
+endif()
+
 
 # Create the main executable (only if main.cpp exists)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)

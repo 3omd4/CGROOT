@@ -80,7 +80,19 @@ class InferenceWidget(QWidget):
         main_layout.addWidget(results_group, 1)
 
     def on_load_image(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Load Fashion-MNIST Image", "", 
+        # Start at src/data/samples if exists
+        import os
+        from pathlib import Path
+        
+        # We assume we are in src/gui_py/widgets/
+        # Project root is ../../../
+        current_dir = Path(__file__).parent
+        project_root = current_dir.parent.parent.parent
+        samples_dir = project_root / "src" / "data" / "samples"
+        
+        start_dir = str(samples_dir) if samples_dir.exists() else ""
+        
+        path, _ = QFileDialog.getOpenFileName(self, "Load Fashion-MNIST/MNIST Image", start_dir, 
                                             "Image Files (*.png *.jpg *.jpeg *.bmp);;All Files (*.*)")
         if path:
             image = QImage(path)
@@ -104,13 +116,15 @@ class InferenceWidget(QWidget):
         if not image.isNull():
             self.image_viewer.displayImage(image)
             
-        if 0 <= predicted_class < len(self.class_names):
-            name = self.class_names[predicted_class]
-            self.pred_label.setText(f"Predicted: {name}")
+        from dataset_utils import get_class_name
+        
+        # We default to generic or update if we know dataset
+        name = get_class_name("generic", predicted_class)
+        self.pred_label.setText(f"Predicted: {name}")
             
-            if probabilities and predicted_class < len(probabilities):
-                conf = probabilities[predicted_class]
-                self.conf_label.setText(f"Confidence: {conf*100:.2f}%")
+        if probabilities and predicted_class < len(probabilities):
+            conf = probabilities[predicted_class]
+            self.conf_label.setText(f"Confidence: {conf*100:.2f}%")
                 
         self.update_probabilities(probabilities)
         self.inference_finished() # Hide progress
@@ -119,16 +133,18 @@ class InferenceWidget(QWidget):
         self.prob_list.clear()
         if not probabilities: return
         
+        from dataset_utils import get_class_name
+        
         # Pair index with prob
         indexed_probs = [(i, p) for i, p in enumerate(probabilities)]
         # Sort desc by prob
         indexed_probs.sort(key=lambda x: x[1], reverse=True)
         
         for idx, prob in indexed_probs:
-            if idx < len(self.class_names):
-                text = f"{self.class_names[idx]}: {prob*100:.2f}%"
-                item = QListWidgetItem(text)
-                self.prob_list.addItem(item)
+            name = get_class_name("generic", idx) # Improve detection later
+            text = f"{name}: {prob*100:.2f}%"
+            item = QListWidgetItem(text)
+            self.prob_list.addItem(item)
 
     def inference_finished(self):
         self.run_btn.setEnabled(True)

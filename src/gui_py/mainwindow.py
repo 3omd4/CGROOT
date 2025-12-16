@@ -26,6 +26,9 @@ class MainWindow(QMainWindow):
         self.setup_statusbar()
         self.create_connections()
         
+        self.log_message(f"Application Initialized. Logs saving to: src/data/logs/")
+        self.log_message(f"Starting in Full Screen Mode.")
+        
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -76,6 +79,7 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu("&File")
         
         load_dataset_act = QAction("&Load Dataset...", self)
+        load_dataset_act.setShortcut("Ctrl+O")
         load_dataset_act.triggered.connect(self.on_load_dataset)
         file_menu.addAction(load_dataset_act)
         
@@ -91,15 +95,20 @@ class MainWindow(QMainWindow):
         about_act = QAction("&About", self)
         about_act.triggered.connect(self.show_about)
         help_menu.addAction(about_act)
+        
+        how_to_act = QAction("&How to Use", self)
+        how_to_act.setShortcut("F1")
+        how_to_act.triggered.connect(self.show_how_to_use)
+        help_menu.addAction(how_to_act)
 
     def on_load_dataset(self):
         from PyQt6.QtWidgets import QFileDialog
+        from utils.paths import get_datasets_dir
         import os
         
         # Default path
-        start_dir = "src/data/datasets"
-        if not os.path.exists(start_dir):
-            start_dir = "."
+        datasets_dir = get_datasets_dir()
+        start_dir = str(datasets_dir) if datasets_dir.exists() else "."
             
         images_path, _ = QFileDialog.getOpenFileName(
             self, "Select MNIST Images File", start_dir,
@@ -161,9 +170,12 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(toolbar)
         
-        # Quick actions could go here
-        toolbar.addAction("Start Training", self.training_tab.on_start_clicked)
-        toolbar.addAction("Stop Training", self.training_tab.on_stop_clicked)
+        # Quick actions with shortcuts
+        start_action = toolbar.addAction("Start Training (Ctrl+T)", self.training_tab.on_start_clicked)
+        start_action.setShortcut("Ctrl+T")
+        
+        stop_action = toolbar.addAction("Stop Training (Ctrl+S)", self.training_tab.on_stop_clicked)
+        stop_action.setShortcut("Ctrl+S")
 
     def setup_statusbar(self):
         self.status_bar = QStatusBar()
@@ -228,6 +240,7 @@ class MainWindow(QMainWindow):
         self.spinner.stop()
         
     def log_message(self, msg):
+        print(msg) # Ensure console output
         self.log_output.append(msg)
         if hasattr(self, 'auto_scroll_logs') and self.auto_scroll_logs:
             scrollbar = self.log_output.verticalScrollBar()
@@ -260,23 +273,112 @@ class MainWindow(QMainWindow):
         self.metrics_tab.set_animations(animations_enabled)
         
     def show_about(self):
-        QMessageBox.about(self, "About", 
-                          "CGROOT++ Neural Network Trainer\n\n"
-                          "Python Implementation (PyQt6)\n"
-                          "Replicated from C++ Reference GUI")
+        about_text = """
+        <h2 style='color: #2196F3;'>CGROOT++ Neural Network Trainer</h2>
+        <p>A powerful, Python-based GUI for the CGROOT++ Neural Network framework.</p>
+        <p>This application provides an intuitive interface for training, monitoring, and testing neural networks with real-time visualization.</p>
+        
+        <h3>👨‍💻 <b>Team Members</b></h3>
+        <ul>
+            <li><b>Mohamed Emad-Eldeen</b></li>
+            <li><b>George Esmat</b></li>
+            <li><b>Ziad Khalid</b></li>
+            <li><b>Ahmed Hasan</b></li>
+            <li><b>Mohamed Amgd</b></li>
+            <li><b>Antony Ghayes</b></li>
+        </ul>
+        
+        <p><i>Replicated from C++ Reference GUI. Built with PyQt6.</i></p>
+        """
+        QMessageBox.about(self, "About CGROOT++", about_text)
+
+    def show_how_to_use(self):
+        content = """
+        <h2 style='color: #2196F3;'>How to Use CGROOT++</h2>
+        
+        <h3>1. Setup & Data Loading</h3>
+        <ul>
+            <li>Go to <b>File > Load Dataset</b>.</li>
+            <li>Select your MNIST-format <b>images</b> file (e.g., <i>train-images.idx3-ubyte</i>).</li>
+            <li>The corresponding <b>labels</b> file will be auto-detected if located in the same directory.</li>
+        </ul>
+        
+        <h3>2. Training</h3>
+        <ul>
+            <li>Navigate to the <b>Training</b> tab.</li>
+            <li>Click <b>Start Training</b> to begin the learning process.</li>
+            <li><b>Store Model</b>: Save your current model weights to a folder.</li>
+            <li><b>Load Model</b>: Load previously saved weights to resume training or for inference.</li>
+            <li>Visualize real-time progress in the preview window.</li>
+        </ul>
+        
+        <h3>3. Configuration</h3>
+        <ul>
+            <li>Go to the <b>Configuration</b> tab to adjust hyperparameters:</li>
+            <li><b>Epochs</b>, <b>Learning Rate</b>, <b>Batch Size</b>.</li>
+            <li>Select standard (SGD) or advanced (Adam) optimizers.</li>
+        </ul>
+        
+        <h3>4. Inference</h3>
+        <ul>
+            <li>Switch to the <b>Inference</b> tab to test the model.</li>
+            <li>Click <b>Load Image</b> (default samples in <i>src/data/samples</i>).</li>
+            <li>Click <b>Run Inference</b> to see the model's prediction and confidence scores.</li>
+        </ul>
+        
+        <h3>5. Metrics</h3>
+        <ul>
+            <li>Monitor <b>Loss</b> and <b>Accuracy</b> charts in the <b>Metrics</b> tab.</li>
+            <li>Toggle animations in Configuration settings for smoother visualization.</li>
+        </ul>
+        
+        <p><i>Tip: Use the Log Output panel at the bottom to check status messages and debug info.</i></p>
+        """
+        
+        # Use a creating a larger dialog if needed, but QMessageBox.about handles rich text well enough for this length.
+        # However, for "Full" walkthrough, scrolling is key. QMessageBox.about usually scrolls.
+        QMessageBox.about(self, "CGROOT++ User Guide", content)
     
     def closeEvent(self, event):
         """
-        Override closeEvent to ensure graceful shutdown.
+        Override closeEvent to ensure graceful shutdown and log saving.
         
         Shutdown sequence:
-        1. Stop training
-        2. Wait for worker thread
-        3. Cleanup worker resources
-        4. Accept close event
+        1. Save logs to src/data/logs/
+        2. Stop training
+        3. Wait for worker thread
+        4. Cleanup worker resources
+        5. Accept close event
         """
         self.log_message("=== Application Shutdown Initiated ===")
         
+        # 0. Save Logs
+        try:
+            import os
+            from datetime import datetime
+            
+            # Determine log dir relative to project root (assuming we are in src/gui_py)
+            # Or just use relative path if CWD is correct (which it should be if run via manager)
+            # But let's be robust
+            from pathlib import Path
+            script_dir = Path(__file__).parent
+            project_root = script_dir.parent.parent
+            log_dir = project_root / "src" / "data" / "logs"
+            
+            if not log_dir.exists():
+                log_dir.mkdir(parents=True, exist_ok=True)
+                
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = log_dir / f"session_{timestamp}.txt"
+            
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write(self.log_output.toPlainText())
+            
+            print(f"Logs saved to: {log_file}") # Print to console as UI is closing
+            
+        except Exception as e:
+            print(f"Failed to save logs: {e}")
+
         # 1. Request training stop
         self.controller.requestStop.emit()
         
@@ -303,6 +405,11 @@ class MainWindow(QMainWindow):
         
         # 4. Accept the close event
         event.accept()
+        
+        # Force Kill Process (Zombie prevention)
+        import os
+        print("Forcing process exit...")
+        os._exit(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

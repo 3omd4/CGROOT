@@ -1,11 +1,13 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QProgressBar, QLabel, QGroupBox, QGridLayout, QScrollArea, QSpinBox, QSizePolicy)
+                             QProgressBar, QLabel, QGroupBox, QGridLayout, QScrollArea, QSpinBox, QSizePolicy, QFileDialog)
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, qRgb
 from PyQt6.QtCore import Qt, pyqtSignal
 
 class TrainingWidget(QWidget):
     startTrainingRequested = pyqtSignal()
     stopTrainingRequested = pyqtSignal()
+    loadModelRequested = pyqtSignal(str) # Path to model file
+    storeModelRequested = pyqtSignal(str) # Path to folder
 
     def __init__(self, controller):
         super().__init__()
@@ -17,6 +19,8 @@ class TrainingWidget(QWidget):
         
         self.init_ui()
         self.connect_signals()
+
+
         
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -25,8 +29,8 @@ class TrainingWidget(QWidget):
 
 
         # Preview Group
-        preview_group = QGroupBox() # Title moved inside
-        preview_layout = QVBoxLayout(preview_group)
+        self.preview_group = QGroupBox() # Title moved inside
+        preview_layout = QVBoxLayout(self.preview_group)
 
         preview_header_layout = QHBoxLayout()
         
@@ -52,6 +56,12 @@ class TrainingWidget(QWidget):
         
         self.image_scroll_area.setWidget(self.image_label)
         preview_layout.addWidget(self.image_scroll_area)
+        
+        # Info Label (e.g. "True: 5 | Pred: 5")
+        self.preview_info_label = QLabel()
+        self.preview_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_info_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 5px;")
+        preview_layout.addWidget(self.preview_info_label)
 
         # Feature Maps Preview
         self.fm_group = QGroupBox() # Title moved inside
@@ -93,7 +103,7 @@ class TrainingWidget(QWidget):
         
         # Top Row (Preview + Feature Maps)
         top_row = QHBoxLayout()
-        top_row.addWidget(preview_group, 1) # 50%
+        top_row.addWidget(self.preview_group, 1) # 50%
         top_row.addWidget(self.fm_group, 1) # 50%
         
         main_layout.addLayout(top_row)
@@ -112,12 +122,26 @@ class TrainingWidget(QWidget):
         self.start_btn.clicked.connect(self.on_start_clicked)
         self.stop_btn.clicked.connect(self.on_stop_clicked)
         
+        # Save/Load Model Buttons
+        self.load_model_btn = QPushButton("Load Model")
+        self.load_model_btn.setStyleSheet("QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 10px; }")
+        self.load_model_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.store_model_btn = QPushButton("Store Model")
+        self.store_model_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 10px; }")
+        self.store_model_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.load_model_btn.clicked.connect(self.on_load_model_clicked)
+        self.store_model_btn.clicked.connect(self.on_store_model_clicked)
+        
         # Status Label
         self.status_label = QLabel("Ready to start training")
         self.status_label.setStyleSheet("QLabel { font-weight: bold; padding: 5px; }")
         
         btn_layout.addWidget(self.start_btn)
         btn_layout.addWidget(self.stop_btn)
+        btn_layout.addWidget(self.load_model_btn)
+        btn_layout.addWidget(self.store_model_btn)
         btn_layout.addStretch()
         btn_layout.addWidget(self.status_label)
         
@@ -130,7 +154,10 @@ class TrainingWidget(QWidget):
     def connect_signals(self):
         # Allow external control/updates via controller signals if needed
         pass
-        
+        # Connect internal signals to controller slots
+        self.loadModelRequested.connect(self.controller.requestLoadModel)
+        self.storeModelRequested.connect(self.controller.requestStoreModel)
+
     def on_start_clicked(self):
         # We emit signal, main window orchestrates call to controller
         self.startTrainingRequested.emit()
@@ -139,6 +166,35 @@ class TrainingWidget(QWidget):
     def on_stop_clicked(self):
         self.stopTrainingRequested.emit()
         self.set_training_state(False)
+        
+    def _get_model_dir(self):
+        from pathlib import Path
+        # src/gui_py/widgets
+        script_dir = Path(__file__).parent
+        # Go up 3 levels to project root
+        project_root = script_dir.parent.parent.parent
+        model_dir = project_root / "src" / "data" / "trained-model"
+        
+        # Ensure it exists
+        if not model_dir.exists():
+             try:
+                 model_dir.mkdir(parents=True, exist_ok=True)
+             except Exception:
+                 pass
+                 
+        return str(model_dir) if model_dir.exists() else ""
+
+    def on_load_model_clicked(self):
+        start_dir = self._get_model_dir()
+        path, _ = QFileDialog.getOpenFileName(self, "Load Model Weights", start_dir, "Model Files (*.bin *.dat);;All Files (*.*)")
+        if path:
+            self.loadModelRequested.emit(path)
+        
+    def on_store_model_clicked(self):
+        start_dir = self._get_model_dir()
+        folder = QFileDialog.getExistingDirectory(self, "Select Directory to Store Model", start_dir)
+        if folder:
+            self.storeModelRequested.emit(folder)
         
     def on_layer_changed(self, val):
         self.fm_title_label.setText(f"Feature Maps (Layer {val})")
@@ -164,18 +220,17 @@ class TrainingWidget(QWidget):
         self.viz_show_preview = settings.get('show_preview', True)
         self.viz_map_frequency = settings.get('map_frequency', "Every Epoch")
         
-        # Feedback for Disabled Preview
-        if not self.viz_show_preview:
-            self.image_label.clear()
-            self.image_label.setText("Preview Disabled")
-            self.image_label.setStyleSheet("QLabel { background-color: #333; color: #888; font-style: italic; }")
-        else:
-            # Reset style (or keep it waiting)
+        # Toggle Visibility
+        if self.preview_group:
+            self.preview_group.setVisible(self.viz_show_preview)
+            
+        # Reset text if re-enabled and empty
+        if self.viz_show_preview:
              if not self.image_label.pixmap():
                  self.image_label.setText("Waiting for training data...")
                  self.image_label.setStyleSheet("QLabel { background-color: #222; color: #white; }")
 
-    def display_image(self, predicted_class, q_img, probs):
+    def display_image(self, predicted_class, q_img, probs, true_label=-1):
         if not self.viz_show_preview:
             return
 
@@ -189,7 +244,36 @@ class TrainingWidget(QWidget):
             pixmap = QPixmap.fromImage(q_img)
             scaled_pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.image_label.setPixmap(scaled_pixmap)
-            self.image_label.setText("") # Clear text
+            
+            # Update Info Label with True vs Pred
+            from dataset_utils import get_class_name
+            
+            # Simple heuristic to guess dataset type or just default to showing index/name
+            # For now we pass "fashion" as default? No, better to generic or detect.
+            # But we don't know dataset here.
+            # Let's show "Label: X"
+            
+            true_name = get_class_name("generic", true_label)
+            # If we want detailed names, we need to know if it's Fashion MNIST. 
+            # Controller or Worker knows. But for now let's just show "Label: X"
+            
+            text = f"True: {true_label}"
+            if predicted_class != -1:
+                 text += f" | Pred: {predicted_class}"
+                 
+            # Note: We need a place to show this text. The image_label displays pixmap OR text.
+            # We should probably set it as a tooltip or overlay. 
+            # Or assume we added a separate label.
+            # Let's try setting setToolTip for now to be safe without changing layout structure drastically in this step.
+            self.image_label.setToolTip(text)
+            
+            # Also, if we want to show it visibly, we might need a separate label.
+            # I will modify init_ui in next step to add 'self.preview_info_label'
+            if hasattr(self, 'preview_info_label'):
+                self.preview_info_label.setText(text)
+            else:
+                 pass # Fallback
+            
         
         if probs:
             # Optional: Show confidence of current sample (passed as probs)

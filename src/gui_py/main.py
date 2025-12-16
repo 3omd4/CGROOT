@@ -47,7 +47,7 @@ def main():
     apply_dark_theme(app)
     
     window = MainWindow()
-    window.show()
+    window.showMaximized()
     
     sys.exit(app.exec())
 

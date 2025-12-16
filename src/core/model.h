@@ -201,7 +201,7 @@ public:
   //output:         bool (true: operation successful, false: operation failed)
   //side effects:   the model paramters are saved in file "model_param<number>.txt" in the folder path
   //Note:           N/A
-  bool store(string& folderPath);
+  bool store(const string& folderPath);
 
   //load the model parameters (kernels and weights)
   //input:          filePath (the path of the file from which 
@@ -209,7 +209,7 @@ public:
   //output:         bool (true: operation successful, false: operation failed)
   //side effects:   the model paramters are loaded into the weights and kernels
   //Note:           N/A
-  bool load(string& filePath);
+  bool load(const string& filePath);
   
 };
 
