@@ -444,9 +444,9 @@ def clean_build_dir():
     # Attempt to kill potential locking processes first
     kill_zombie_processes()
 
+    print(f"{YELLOW}Cleaning build directory...{RESET}")
+
     if build_dir.exists() and build_dir.is_dir():
-        print(f"{YELLOW}Cleaning build directory...{RESET}")
-        
         # Retry logic for persistent locks
         max_retries = 3
         for i in range(max_retries):
@@ -454,7 +454,7 @@ def clean_build_dir():
                 shutil.rmtree(build_dir, onerror=remove_readonly)
                 print(f"{GREEN}SUCCESS: Build directory cleaned!{RESET}")
                 log(f"Build directory cleaned successfully")
-                return
+                break
             except Exception as e:
                 is_last_attempt = (i == max_retries - 1)
                 if is_last_attempt:
@@ -467,6 +467,28 @@ def clean_build_dir():
     else:
         print(f"{YELLOW}Build directory does not exist.{RESET}")
         log("Build directory did not exist")
+
+    # Remove all __pycache__ directories
+    print(f"{YELLOW}Cleaning __pycache__ directories...{RESET}")
+    pycache_cleaned_count = 0
+    try:
+        for pycache in project_root.rglob("__pycache__"):
+            try:
+                if pycache.is_dir():
+                    shutil.rmtree(pycache, onerror=remove_readonly)
+                    pycache_cleaned_count += 1
+            except Exception as e:
+                print(f"{RED}Failed to remove {pycache}: {e}{RESET}")
+        
+        if pycache_cleaned_count > 0:
+            print(f"{GREEN}Removed {pycache_cleaned_count} __pycache__ directories.{RESET}")
+            log(f"Removed {pycache_cleaned_count} __pycache__ directories")
+        else:
+            print(f"{GREEN}No __pycache__ directories found.{RESET}")
+
+    except Exception as e:
+        print(f"{RED}Error finding/removing __pycache__: {e}{RESET}")
+    pause()
 
 def build_configuration(cmake_path, config, compiler_name):
     clear_screen()

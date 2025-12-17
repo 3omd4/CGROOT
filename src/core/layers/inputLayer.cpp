@@ -26,10 +26,12 @@ inputLayer::inputLayer(size_t imageHeight, size_t imageWidth,
 // the next layers
 // input:        -inputImage (3D unsigned char vector)
 // output:       N/A
-// side effect:  the normalizedImage matrix is initialzied by the image after normalization 
-// Note:         N/A
+// side effect:  the normalizedImage matrix is initialzied by the image after
+// normalization Note:         N/A
 void inputLayer::start(const image &inputImage) {
   // stor the inputImage in the normlized Image matrix
+  std::cout << "DEBUG: inputLayer::start. NormSize: " <<
+  normalizedImage.size() << " InputSize: " << inputImage.size() << std::endl;
   for (size_t i = 0; i < normalizedImage.size(); i++) {
     for (size_t j = 0; j < normalizedImage[i].size(); j++) {
       for (size_t k = 0; k < normalizedImage[i][j].size(); k++) {
@@ -40,4 +42,3 @@ void inputLayer::start(const image &inputImage) {
     }
   }
 }
-
