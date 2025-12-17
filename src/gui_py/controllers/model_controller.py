@@ -11,6 +11,11 @@ class ModelController(QObject):
     modelStatusChanged = pyqtSignal(bool) # isTraining
     featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
     trainingPreviewReady = pyqtSignal(int, object, list, int) # NEW
+    configurationLoaded = pyqtSignal(dict) # NEW: Propagate config loaded signal
+    metricsCleared = pyqtSignal() # Signal to clear metrics graph
+    metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
+    datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
+
     
     # Signals to Worker
     requestLoadDataset = pyqtSignal(str, str)
@@ -18,7 +23,9 @@ class ModelController(QObject):
     requestStop = pyqtSignal()
     requestInference = pyqtSignal(object)
     setTargetLayer = pyqtSignal(int)
-    requestStoreModel = pyqtSignal(str) # folderPath
+    setTargetLayer = pyqtSignal(int)
+    requestStoreModel = pyqtSignal(str, dict) # folderPath, configuration
+    requestLoadModel = pyqtSignal(str) # filePath
     requestLoadModel = pyqtSignal(str) # filePath
     setVisualizationsEnabled = pyqtSignal(bool) # NEW: Toggle visualizations
 
@@ -38,6 +45,11 @@ class ModelController(QObject):
         self.worker.trainingFinished.connect(self.trainingFinished)
         self.worker.modelStatusChanged.connect(self.modelStatusChanged)
         self.worker.featureMapsReady.connect(self.featureMapsReady)
+        self.worker.configurationLoaded.connect(self.configurationLoaded) # Connect Worker -> Controller
+        self.worker.metricsCleared.connect(self.metricsCleared)
+        self.worker.metricsSetEpoch.connect(self.metricsSetEpoch)
+        self.worker.datasetInfoLoaded.connect(self.datasetInfoLoaded)
+
         
         # Connect Controller -> Worker
         self.requestLoadDataset.connect(self.worker.loadDataset)
@@ -45,7 +57,9 @@ class ModelController(QObject):
         self.requestStop.connect(self.worker.stopTraining)
         self.requestInference.connect(self.worker.runInference)
         self.setTargetLayer.connect(self.worker.setTargetLayer)
+        self.setTargetLayer.connect(self.worker.setTargetLayer)
         self.requestStoreModel.connect(self.worker.storeModel)
+        self.requestLoadModel.connect(self.worker.loadModel)
         self.requestLoadModel.connect(self.worker.loadModel)
         self.setVisualizationsEnabled.connect(self.worker.setVisualizationsEnabled)
         

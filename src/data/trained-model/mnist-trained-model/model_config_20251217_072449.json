@@ -38,5 +38,9 @@
     "pooling_intervals": [
         2,
         2
-    ]
+    ],
+    "show_preview": false,
+    "map_frequency": "Never",
+    "auto_scroll": false,
+    "chart_animations": false
 }

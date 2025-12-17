@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
             
         images_path, _ = QFileDialog.getOpenFileName(
             self, "Select MNIST Images File", start_dir,
-            "MNIST Images (*.idx3-ubyte);;All Files (*.*)"
+            "MNIST Images (*.idx3-ubyte);;MNIST Images (*.idx4-ubyte);;All Files (*.*)"
         )
         
         if not images_path:
@@ -131,10 +131,13 @@ class MainWindow(QMainWindow):
         if 'images' in base_name:
             labels_name = base_name.replace('images', 'labels')
             # Fix: Also replace idx3 with idx1 to handle standard MNIST extensions
-            labels_name = labels_name.replace('idx3', 'idx1')
+            labels_name = labels_name.replace('idx3', 'idx1') 
+            labels_name = labels_name.replace('idx4', 'idx1') 
+
         else:
             # Fallback check for common patterns if 'images' string not explicit or different case
             labels_name = base_name.replace('idx3', 'idx1') 
+            labels_name = labels_name.replace('idx4', 'idx1') 
 
         guess_labels_path = os.path.join(dir_name, labels_name)
         
@@ -161,6 +164,8 @@ class MainWindow(QMainWindow):
             dataset_type = "KMNIST"
         elif "mnist" in lower_path:
             dataset_type = "MNIST"
+        elif "cifar" in lower_path:
+            dataset_type = "CIFAR-10"
             
         # Log details
         self.log_message(f"Selected Dataset Type: {dataset_type}")
@@ -211,6 +216,10 @@ class MainWindow(QMainWindow):
         self.controller.trainingPreviewReady.connect(self.training_tab.display_image) # UPDATED
         
         self.controller.featureMapsReady.connect(self.training_tab.display_feature_maps)
+        self.controller.configurationLoaded.connect(self.config_tab.load_parameters) # Update UI with config
+        self.controller.metricsCleared.connect(self.metrics_tab.clear)
+        self.controller.metricsSetEpoch.connect(self.metrics_tab.set_total_epochs)
+        self.controller.datasetInfoLoaded.connect(self.on_dataset_info_loaded)
         
         self.config_tab.vizSettingsChanged.connect(self.on_gui_settings_changed)
         
@@ -229,6 +238,23 @@ class MainWindow(QMainWindow):
         # Widget -> Controller/MainWindow
         self.training_tab.startTrainingRequested.connect(self.start_training)
         self.training_tab.stopTrainingRequested.connect(self.stop_training)
+        self.training_tab.storeModelRequested.connect(self.on_store_model_requested) # New handler
+
+    def on_store_model_requested(self, folder_path):
+        # Gather full configuration (Training + Architecture + GUI)
+        train_params = self.config_tab.get_training_parameters()
+        arch_params = self.config_tab.get_architecture_parameters()
+        gui_params = self.config_tab.get_gui_settings()
+        
+        gui_params = self.config_tab.get_gui_settings()
+        
+        full_config = {**train_params, **arch_params, **gui_params}
+        
+        # Add full logs from UI to configuration payload (transient, not for config file)
+        if hasattr(self, 'log_output'):
+            full_config['_full_logs'] = self.log_output.toPlainText()
+        
+        self.controller.requestStoreModel.emit(folder_path, full_config)
         
     def start_training(self):
         # Get params from configuration
@@ -436,3 +462,9 @@ class MainWindow(QMainWindow):
     def on_dataset_load_finish(self):
          self.spinner.stop()
          self.status_label.setText("Dataset Loaded")
+
+    def on_dataset_info_loaded(self, num, w, h, d):
+        """Update Configuration with dataset properties."""
+        self.log_message(f"Updating Configuration: Input {w}x{h}x{d}")
+        self.config_tab.set_image_dimensions(w, h, d)
+

@@ -30,7 +30,8 @@ using namespace std;
 //               single model(object) and so is the architecture of a single
 //               model (object)
 NNModel::NNModel(architecture modelArch, size_t numOfClasses,
-                 size_t imageHeight, size_t imageWidth, size_t imageDepth) {
+                 size_t imageHeight, size_t imageWidth, size_t imageDepth)
+    : imageHeight(imageHeight), imageWidth(imageWidth), imageDepth(imageDepth) {
 
   // ========== PARAMETER VALIDATION ==========
   // Validate basic parameters
@@ -338,20 +339,30 @@ static double calculate_loss_from_probs(const vector<double> &probs,
 // Helper function to convert MNIST flat pixels to image format
 // [depth][height][width]
 static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
-                                           size_t height = 28,
-                                           size_t width = 28) {
-  image image_data(1); // Single depth channel
-  for (size_t y = 0; y < height; y++) {
-    vector<unsigned char> row;
-    for (size_t x = 0; x < width; x++) {
-      size_t idx = y * width + x;
-      if (idx < flat_pixels.size()) {
-        row.push_back(static_cast<unsigned char>(flat_pixels[idx]));
-      } else {
-        row.push_back(0);
+                                           size_t height, size_t width,
+                                           size_t depth) {
+  image image_data(depth); // Variable depth
+
+  // Calculate size per channel
+  size_t channel_size = height * width;
+
+  for (size_t d = 0; d < depth; ++d) {
+    image_data[d].resize(height);
+    for (size_t y = 0; y < height; ++y) {
+      image_data[d][y].reserve(width);
+      for (size_t x = 0; x < width; ++x) {
+        // Assume planar format (CHW) as per our generic loader/script decision
+        // Pixel index = (d * height * width) + (y * width) + x
+        size_t idx = (d * channel_size) + (y * width) + x;
+
+        if (idx < flat_pixels.size()) {
+          image_data[d][y].push_back(
+              static_cast<unsigned char>(flat_pixels[idx]));
+        } else {
+          image_data[d][y].push_back(0);
+        }
       }
     }
-    image_data[0].push_back(row);
   }
   return image_data;
 }
@@ -968,16 +979,16 @@ vector<TrainingMetrics> NNModel::train_epochs(
     const TrainingConfig &config, ProgressCallback progress_callback,
     LogCallback log_callback, std::atomic<bool> *stop_requested) {
 
-  vector<TrainingMetrics> history;
+  vector<TrainingMetrics> new_metrics;
 
   // ... [Keep your existing validation checks for Layers, output layer, etc.]
   // ...
   if (Layers.empty() || Layers.back()->getLayerType() != output)
-    return history;
+    return new_metrics;
 
   size_t num_images = dataset.num_images;
   if (num_images == 0)
-    return history;
+    return new_metrics;
 
   // =========================================================
   // OPTIMIZATION 1: Cache Image Conversion
@@ -990,8 +1001,8 @@ vector<TrainingMetrics> NNModel::train_epochs(
 
   // Convert all images ONCE
   for (const auto &img_obj : dataset.images) {
-    cached_images.push_back(
-        convert_mnist_to_image_format(img_obj.pixels, 28, 28));
+    cached_images.push_back(convert_mnist_to_image_format(
+        img_obj.pixels, imageHeight, imageWidth, imageDepth));
   }
 
   if (log_callback)
@@ -1006,13 +1017,19 @@ vector<TrainingMetrics> NNModel::train_epochs(
     train_size = num_images - val_size;
   }
 
+  size_t start_epoch = trainingHistory.size();
+  size_t total_target_epochs = start_epoch + config.epochs;
+
+  // Initialize random number generator
   std::mt19937 rng(config.random_seed);
 
   for (size_t epoch = 0; epoch < config.epochs; epoch++) {
+    size_t current_epoch_num = start_epoch + epoch + 1;
+
     if (stop_requested && stop_requested->load())
       break;
     if (log_callback)
-      log_callback("Epoch " + std::to_string(epoch + 1));
+      log_callback("Epoch " + std::to_string(current_epoch_num));
 
     // Shuffle indices
     vector<size_t> all_indices(num_images);
@@ -1084,8 +1101,8 @@ vector<TrainingMetrics> NNModel::train_epochs(
           // Emit progress frequently (e.g. every sample or small batch to show
           // animation) The user wants "every sample".
           if (progress_callback) {
-            progress_callback(epoch + 1, config.epochs, current_loss,
-                              current_acc, static_cast<int>(idx));
+            progress_callback(current_epoch_num, total_target_epochs,
+                              current_loss, current_acc, static_cast<int>(idx));
           }
         }
       }
@@ -1128,16 +1145,22 @@ vector<TrainingMetrics> NNModel::train_epochs(
 
     // Store & Log
     TrainingMetrics metrics;
-    metrics.epoch = epoch + 1;
+    metrics.epoch = current_epoch_num;
     metrics.train_loss = train_loss;
     metrics.train_accuracy = train_acc;
     metrics.val_loss = val_loss;
     metrics.val_accuracy = val_acc;
-    history.push_back(metrics);
+    metrics.val_loss = val_loss;
+    metrics.val_accuracy = val_acc;
+
+    // Append to global history
+    trainingHistory.push_back(metrics);
+    // Append to local result
+    new_metrics.push_back(metrics);
 
     if (log_callback) {
       std::ostringstream msg;
-      msg << "Epoch " << (epoch + 1) << " - Train: Acc=" << std::fixed
+      msg << "Epoch " << current_epoch_num << " - Train: Acc=" << std::fixed
           << std::setprecision(2) << (train_acc * 100) << "%"
           << " | Train: Loss=" << std::fixed << std::setprecision(4)
           << train_loss;
@@ -1151,13 +1174,13 @@ vector<TrainingMetrics> NNModel::train_epochs(
     if (progress_callback) {
       // Pass -1 or similar as index to indicate end of epoch or no specific
       // image
-      progress_callback(epoch + 1, config.epochs,
+      progress_callback(current_epoch_num, total_target_epochs,
                         config.use_validation ? val_loss : train_loss,
                         config.use_validation ? val_acc : train_acc, -1);
     }
   }
 
-  return history;
+  return new_metrics;
 }
 
 vector<vector<vector<double>>> NNModel::getLayerFeatureMaps(size_t layerIndex) {
@@ -1298,6 +1321,14 @@ bool NNModel::store(const std::string &folderPath) {
     }
   }
 
+  // Save Training History
+  uint32_t historySize = static_cast<uint32_t>(trainingHistory.size());
+  file.write(reinterpret_cast<const char *>(&historySize), sizeof(historySize));
+  if (historySize > 0) {
+    file.write(reinterpret_cast<const char *>(trainingHistory.data()),
+               historySize * sizeof(TrainingMetrics));
+  }
+
   file.close();
   std::cout << "Model saved to: " << filePath << "\n";
   return true;
@@ -1388,6 +1419,27 @@ bool NNModel::load(const std::string &filePath) {
       std::cerr << "Unknown layer type: " << storedType << "\n";
       return false;
     }
+  }
+
+  // Load Training History (Optional - check for EOF)
+  // Since this is appended at the end, if file ends here (old format), we
+  // shouldn't crash. We check if there are bytes remaining.
+  if (file.peek() != EOF) {
+    uint32_t historySize = 0;
+    file.read(reinterpret_cast<char *>(&historySize), sizeof(historySize));
+
+    if (file.good() && historySize > 0) {
+      trainingHistory.resize(historySize);
+      file.read(reinterpret_cast<char *>(trainingHistory.data()),
+                historySize * sizeof(TrainingMetrics));
+    } else {
+      // If read failed or size 0, clear
+      if (!file.good())
+        trainingHistory.clear();
+    }
+  } else {
+    // Old format, no history
+    trainingHistory.clear();
   }
 
   file.close();

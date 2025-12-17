@@ -43,16 +43,32 @@ MNISTLoader::load_dataset(const std::string &images_path,
     return nullptr;
   }
 
-  // Read and validate images header
-  if (!validate_header(images_file, images_magic)) {
-    std::cerr << "Error: Invalid images file header" << std::endl;
+  // Read images metadata
+  uint32_t magic = read_int32(images_file);
+
+  // Validate magic number (2051 for 3D, 2052 for 4D/Color)
+  if (magic != images_magic && magic != 2052) {
+    std::cerr << "Error: Invalid images file header. Magic: " << magic
+              << ". Expected: " << images_magic << " or 2052" << std::endl;
     return nullptr;
   }
 
-  // Read images metadata
   uint32_t num_images = read_int32(images_file);
-  uint32_t rows = read_int32(images_file);
-  uint32_t cols = read_int32(images_file);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  uint32_t depth = 1;
+
+  if (magic == 2052) {
+    // IDX4: Num, Depth, Rows, Cols
+    depth = read_int32(images_file);
+    rows = read_int32(images_file);
+    cols = read_int32(images_file);
+  } else {
+    // IDX3: Num, Rows, Cols
+    rows = read_int32(images_file);
+    cols = read_int32(images_file);
+  }
 
   // Read and validate labels header
   if (!validate_header(labels_file, labels_magic)) {
@@ -71,27 +87,26 @@ MNISTLoader::load_dataset(const std::string &images_path,
     return nullptr;
   }
 
-  if (rows != 28 || cols != 28) {
-    std::cerr << "Error: Expected 28x28 images, got " << rows << "x" << cols
-              << std::endl;
-    return nullptr;
-  }
+  // We support arbitrary sizes now.
+  // if (rows != 28 || cols != 28) { ... }
 
   // Set dataset properties
   dataset->num_images = num_images;
   dataset->image_width = cols;
   dataset->image_height = rows;
+  dataset->depth = depth;
   dataset->images.reserve(num_images);
 
   // Read images and labels
+  // Read images and labels
+  size_t image_size = rows * cols * depth;
   for (uint32_t i = 0; i < num_images; ++i) {
     MNISTImage image;
-    image.pixels.resize(rows * cols);
+    image.pixels.resize(image_size);
 
     // Read image pixels
-    images_file.read(reinterpret_cast<char *>(image.pixels.data()),
-                     rows * cols);
-    if (images_file.gcount() != static_cast<std::streamsize>(rows * cols)) {
+    images_file.read(reinterpret_cast<char *>(image.pixels.data()), image_size);
+    if (images_file.gcount() != static_cast<std::streamsize>(image_size)) {
       std::cerr << "Error: Failed to read image " << i << std::endl;
       return nullptr;
     }

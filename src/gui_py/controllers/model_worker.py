@@ -94,14 +94,35 @@ class TrainingThread(QThread):
                                     # Or loop setPixel if that's safer/easier given the format.
                                     # Flattened list of ints.
                                     
-                                    q_img = QImage(width, height, QImage.Format.Format_Grayscale8)
+                                    # Infer depth
+                                    pixel_count = len(img_data_vec)
+                                    area = width * height
+                                    depth = pixel_count // area
                                     
-                                    
-                                    for y in range(height):
-                                        for x in range(width):
-                                            idx_pixel = y * width + x
-                                            val = int(img_data_vec[idx_pixel])
-                                            q_img.setPixel(x, y, qRgb(val, val, val))
+                                    if depth == 1:
+                                        q_img = QImage(width, height, QImage.Format.Format_Grayscale8)
+                                        for y in range(height):
+                                            for x in range(width):
+                                                idx_pixel = y * width + x
+                                                val = int(img_data_vec[idx_pixel])
+                                                q_img.setPixel(x, y, qRgb(val, val, val))
+                                    elif depth == 3:
+                                        q_img = QImage(width, height, QImage.Format.Format_RGB888)
+                                        # Data is CHW (Planar)
+                                        r_start = 0
+                                        g_start = area
+                                        b_start = 2 * area
+                                        
+                                        for y in range(height):
+                                            for x in range(width):
+                                                offset = y * width + x
+                                                r = int(img_data_vec[r_start + offset])
+                                                g = int(img_data_vec[g_start + offset])
+                                                b = int(img_data_vec[b_start + offset])
+                                                q_img.setPixel(x, y, qRgb(r, g, b))
+                                    else:
+                                        # Fallback or error
+                                        q_img = None
                                     
                                     preview_img_data = q_img
                             else:
@@ -144,8 +165,8 @@ class TrainingThread(QThread):
                 log_callback,
                 stop_check
             )
-            if not self._stop_requested:
-                self.finished.emit()
+            # if not self._stop_requested:
+            #     self.finished.emit() # Removed to prevent double emission (QThread emits finished automatically)
         except Exception as e:
             self.log.emit(f"Training error: {e}")
 
@@ -184,6 +205,10 @@ class ModelWorker(QObject):
     trainingFinished = pyqtSignal()
     inferenceFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool)
+    configurationLoaded = pyqtSignal(dict) # New signal for config
+    metricsCleared = pyqtSignal() # Signal to clear metrics graph
+    metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
+    datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
     
     # Internal signals for thread-safe callback emissions
     _internal_log = pyqtSignal(str)
@@ -203,6 +228,17 @@ class ModelWorker(QObject):
         self._internal_log.connect(self._emit_log_from_thread)
         self._internal_progress.connect(self._emit_progress_from_thread)
         
+        # Log Buffer
+        self.log_buffer = [] 
+        
+        # Connect logMessage to internal buffer capture so all logs are saved
+        self.logMessage.connect(self._capture_log)
+        
+    def _capture_log(self, message):
+        """Capture all log messages to the buffer."""
+        if hasattr(self, 'log_buffer'):
+            self.log_buffer.append(message) 
+        
     
     @pyqtSlot(str, str)
     def loadDataset(self, images_path, labels_path):
@@ -221,25 +257,35 @@ class ModelWorker(QObject):
         self._loader_thread.log.connect(self.logMessage.emit)
         self._loader_thread.error.connect(self._on_loader_error)
         self._loader_thread.loaded.connect(self._on_dataset_loaded)
+        self._loader_thread.finished.connect(self._on_loader_finished)
+        self._loader_thread.finished.connect(self._loader_thread.deleteLater)
         self._loader_thread.start()
     
+    @pyqtSlot()
+    def _on_loader_finished(self):
+        """Cleanup loader thread reference safely."""
+        self._loader_thread = None
+
     @pyqtSlot(object)
     def _on_dataset_loaded(self, dataset):
         """Handle successful dataset loading."""
         self.dataset = dataset
         if self.dataset:
-            self.logMessage.emit(f"Dataset loaded successfully: {self.dataset.num_images} images")
+            # Use getattr with default 1 for depth since binding might not be updated during runtime immediately without recompile
+            d = getattr(self.dataset, 'depth', 1) 
+            self.logMessage.emit(f"Dataset loaded successfully: {self.dataset.num_images} images, {self.dataset.image_width}x{self.dataset.image_height}x{d}")
+            self.datasetInfoLoaded.emit(self.dataset.num_images, self.dataset.image_width, self.dataset.image_height, d)
         else:
             self.logMessage.emit("Failed to load dataset (returned None)")
         
-        # Clean up thread
-        self._loader_thread = None
+        # Thread cleanup handled by finished signal
+
 
     @pyqtSlot(str)
     def _on_loader_error(self, error_msg):
         """Handle dataset loading error."""
         self.logMessage.emit(error_msg)
-        self._loader_thread = None
+        # Thread cleanup handled by finished signal
 
 
 
@@ -268,6 +314,9 @@ class ModelWorker(QObject):
             return
 
         if not self.model:
+            # Debug: print config types
+            # msg = "Config Types: " + ", ".join([f"{k}: {type(v).__name__}" for k, v in config.items()])
+            # self.logMessage.emit(msg)
             self._initialize_model(config)
             
         # Log Full Configuration
@@ -278,6 +327,13 @@ class ModelWorker(QObject):
 
         # Store config for later save
         self._last_config = config
+        
+        # Reset Log Buffer
+        self.log_buffer = []
+        
+        # Start Time
+        import time
+        self._start_time = time.time()
         
         # Create training configuration
         train_config = self._create_training_config(config)
@@ -304,6 +360,17 @@ class ModelWorker(QObject):
     def _on_training_finished(self):
         """Handle training completion."""
         self._training_active = False
+        
+        # Calculate duration
+        if hasattr(self, '_start_time'):
+            import time
+            duration = time.time() - self._start_time
+            # Format duration
+            hours, rem = divmod(duration, 3600)
+            minutes, seconds = divmod(rem, 60)
+            time_str = "{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds)
+            self.logMessage.emit(f"Total Training Time: {time_str}")
+            
         self.modelStatusChanged.emit(False)
         self.logMessage.emit("=== Training Session End ===")
         self.trainingFinished.emit()
@@ -340,8 +407,8 @@ class ModelWorker(QObject):
             self._train_thread.stop()
             self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
 
-    @pyqtSlot(str)
-    def storeModel(self, folder_path):
+    @pyqtSlot(str, dict)
+    def storeModel(self, folder_path, config=None):
         """Store the current model and its configuration to the specified folder."""
         if not self.model:
             self.logMessage.emit("Error: No model to store.")
@@ -362,17 +429,39 @@ class ModelWorker(QObject):
             success = self.model.store(str(folder))
             
             # Also save configuration with the same timestamp
-            if success and hasattr(self, '_last_config'):
+            # Use passed config if available, else fallback to last known
+            config_to_save = config if config else (getattr(self, '_last_config', None))
+            
+            if success and config_to_save:
                 # Generate timestamp in the same format as C++ (YYYYMMDD_HHMMSS)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 config_file = folder / f"model_config_{timestamp}.json"
                 
+                # Cleanup: Remove transient keys like _full_logs before saving JSON
+                clean_config = config_to_save.copy()
+                if '_full_logs' in clean_config:
+                    del clean_config['_full_logs']
+                
                 with open(config_file, 'w') as f:
-                    json.dump(self._last_config, f, indent=4)
+                    json.dump(clean_config, f, indent=4)
                 self.logMessage.emit(f"Configuration saved to: {config_file}")
             
             if success:
                 self.logMessage.emit("Model stored successfully.")
+                
+                # Save Log Buffer to .txt
+                log_file = folder / f"model_log_{timestamp}.txt"
+                try:
+                    with open(log_file, 'w') as f:
+                        # Prefer full logs passed from UI
+                        if config and '_full_logs' in config:
+                            f.write(config['_full_logs'])
+                        else:
+                            f.write("\n".join(self.log_buffer))
+                    self.logMessage.emit(f"Log saved to: {log_file}")
+                except Exception as e:
+                    self.logMessage.emit(f"Error saving log file: {e}")
+
             else:
                 self.logMessage.emit("Failed to store model.")
                 
@@ -448,8 +537,10 @@ class ModelWorker(QObject):
                 with open(config_file, 'r') as f:
                     config = json.load(f)
                 
+                
                 self.logMessage.emit(f"Loaded configuration from: {config_file}")
                 self._last_config = config
+                self.configurationLoaded.emit(config) # Emit signal for UI update
                 
                 # Initialize model with this configuration
                 if self.model:
@@ -464,6 +555,33 @@ class ModelWorker(QObject):
             
             if success:
                 self.logMessage.emit("Model loaded successfully.")
+                
+                # Restore Metrics Graph from History
+                if hasattr(self.model, "getTrainingHistory"):
+                    history = self.model.getTrainingHistory()
+                    if history:
+                        self.metricsCleared.emit() # Clear existing graph data before restoring
+                        self.metricsSetEpoch.emit(len(history) + 1) # Set total epochs for metrics graph
+                        self.logMessage.emit(f"Restoring {len(history)} epochs of history...")
+                        
+                        # # Debug: Log first and last history item
+                        # if len(history) > 0:
+
+                        #     first = history[0]
+                        #     last = history[-1]
+                        #     self.logMessage.emit(f"  First: Epoch {first.epoch}, Loss {first.train_loss:.4f}, Acc {first.train_accuracy:.2f}")
+                        #     self.logMessage.emit(f"  Last:  Epoch {last.epoch}, Loss {last.train_loss:.4f}, Acc {last.train_accuracy:.2f}")
+
+                        for m in history:
+                            # m is TrainingMetrics object (bound from C++)
+                            # emit metricsUpdated signal
+                            # We emit one by one to populate graph
+                            # Note: graph might need 'epoch' index 1-based or 0-based.
+                            # MetricsUpdated(loss, acc, epoch)
+                            self.metricsUpdated.emit(m.train_loss, m.train_accuracy, m.epoch)
+                    else:
+                         self.logMessage.emit("Model loaded but no training history found (legacy format or empty).")
+
             else:
                 self.logMessage.emit("Failed to load model weights.")
                 

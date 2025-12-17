@@ -76,13 +76,23 @@ class ConfigurationWidget(QWidget):
             "Common sizes: 28 (MNIST), 32 (CIFAR), 224 (ImageNet), 299 (Inception).\n"
             "All training images will be resized to this dimension."
         )
+
+        self.image_depth = QSpinBox()
+        self.image_depth.setRange(1, 100)
+        self.image_depth.setValue(1)
+        self.image_depth.setToolTip(
+            "Number of color channels.\n"
+            "1 = Grayscale (MNIST)\n"
+            "3 = RGB (CIFAR-10, ImageNet)"
+        )
         
         layout.addRow("Number of Classes:", self.num_classes)
         layout.addRow("Image Width:", self.image_width)
         layout.addRow("Image Height:", self.image_height)
+        layout.addRow("Image Depth:", self.image_depth)
         
         # Connect signals
-        for w in [self.num_classes, self.image_width, self.image_height]:
+        for w in [self.num_classes, self.image_width, self.image_height, self.image_depth]:
             w.valueChanged.connect(self.on_parameter_changed)
             
         scroll.setWidget(widget)
@@ -425,6 +435,7 @@ class ConfigurationWidget(QWidget):
             'num_classes': self.num_classes.value(),
             'image_width': self.image_width.value(),
             'image_height': self.image_height.value(),
+            'image_depth': self.image_depth.value(),
             'num_conv_layers': self.num_conv_layers.value(),
             'num_fc_layers': self.num_fc_layers.value(),
             'neurons_per_fc_layer': neurons,
@@ -488,6 +499,7 @@ class ConfigurationWidget(QWidget):
         self.num_classes.setValue(10)
         self.image_width.setValue(28)
         self.image_height.setValue(28)
+        self.image_depth.setValue(1)
         
         self.optimizer_combo.setCurrentIndex(2) # Adam
         self.learning_rate.setValue(0.01)
@@ -528,70 +540,79 @@ class ConfigurationWidget(QWidget):
                 with open(path, 'r') as f:
                     config = json.load(f)
                 
-                # Apply configuration to UI elements
-                # Block signals to prevent multiple updates
-                self.blockSignals(True)
-                
-                if 'num_classes' in config: self.num_classes.setValue(config['num_classes'])
-                if 'image_width' in config: self.image_width.setValue(config['image_width'])
-                if 'image_height' in config: self.image_height.setValue(config['image_height'])
-                
-                if 'num_conv_layers' in config: self.num_conv_layers.setValue(config['num_conv_layers'])
-                if 'kernels_per_layer' in config: 
-                    val = config['kernels_per_layer']
-                    if isinstance(val, list): val = ", ".join(map(str, val))
-                    self.kernels_per_layer.setText(str(val))
-                if 'kernel_dims' in config:
-                    # Convert list of lists/tuples back to string "HxW, HxW"
-                    val = config['kernel_dims']
-                    if isinstance(val, list):
-                        strs = []
-                        for item in val:
-                            if isinstance(item, (list, tuple)) and len(item) >= 2:
-                                strs.append(f"{item[0]}x{item[1]}")
-                        self.kernel_dims.setText(", ".join(strs))
-                    else:
-                        self.kernel_dims.setText(str(val))
-                        
-                if 'pooling_type' in config: self.pooling_type.setCurrentText(config['pooling_type'])
-                if 'pooling_intervals' in config:
-                    val = config['pooling_intervals']
-                    if isinstance(val, list): val = ", ".join(map(str, val))
-                    self.pooling_intervals.setText(str(val))
-
-                if 'num_fc_layers' in config: self.num_fc_layers.setValue(config['num_fc_layers'])
-                if 'neurons_per_fc_layer' in config:
-                    val = config['neurons_per_fc_layer']
-                    if isinstance(val, list): val = ", ".join(map(str, val))
-                    self.neurons_fc_input.setText(str(val))
-
-                if 'optimizer' in config: self.optimizer_combo.setCurrentText(config['optimizer'])
-                if 'learning_rate' in config: self.learning_rate.setValue(config['learning_rate'])
-                if 'weight_decay' in config: self.weight_decay.setValue(config['weight_decay'])
-                if 'momentum' in config: self.momentum.setValue(config['momentum'])
-                if 'beta1' in config: self.beta1.setValue(config['beta1'])
-                if 'beta2' in config: self.beta2.setValue(config['beta2'])
-                if 'beta' in config: self.beta.setValue(config['beta'])
-                if 'epsilon' in config: self.epsilon.setValue(config['epsilon'])
-                if 'epochs' in config: self.epochs.setValue(config['epochs'])
-                if 'batch_size' in config: self.batch_size.setValue(config['batch_size'])
-                if 'validation_split' in config: self.validation_split.setValue(config['validation_split'])
-                if 'use_validation' in config: self.use_validation.setChecked(config['use_validation'])
-                
-                # GUI Settings
-                if 'show_preview' in config: self.show_preview_cb.setChecked(config['show_preview'])
-                if 'map_frequency' in config: self.fm_freq_combo.setCurrentText(config['map_frequency'])
-                if 'auto_scroll' in config: self.auto_scroll_cb.setChecked(config['auto_scroll'])
-                if 'chart_animations' in config: self.chart_anim_cb.setChecked(config['chart_animations'])
-                
-                self.blockSignals(False)
-                self.on_parameter_changed()
-                self.on_viz_setting_changed()
+                self.load_parameters(config)
                 QMessageBox.information(self, "Config Loaded", f"Configuration loaded from:\n{path}")
                 
             except Exception as e:
-                self.blockSignals(False)
                 QMessageBox.critical(self, "Load Error", f"Failed to load config: {e}")
+
+    def load_parameters(self, config):
+        """Populate UI with values from config dictionary."""
+        try:
+            # Block signals to prevent multiple updates
+            self.blockSignals(True)
+            
+            if 'num_classes' in config: self.num_classes.setValue(config['num_classes'])
+            if 'image_width' in config: self.image_width.setValue(config['image_width'])
+            if 'image_height' in config: self.image_height.setValue(config['image_height'])
+            if 'image_depth' in config: self.image_depth.setValue(config['image_depth'])
+            
+            if 'num_conv_layers' in config: self.num_conv_layers.setValue(config['num_conv_layers'])
+            if 'kernels_per_layer' in config: 
+                val = config['kernels_per_layer']
+                if isinstance(val, list): val = ", ".join(map(str, val))
+                self.kernels_per_layer.setText(str(val))
+            if 'kernel_dims' in config:
+                # Convert list of lists/tuples back to string "HxW, HxW"
+                val = config['kernel_dims']
+                if isinstance(val, list):
+                    strs = []
+                    for item in val:
+                        if isinstance(item, (list, tuple)) and len(item) >= 2:
+                            strs.append(f"{item[0]}x{item[1]}")
+                    self.kernel_dims.setText(", ".join(strs))
+                else:
+                    self.kernel_dims.setText(str(val))
+                    
+            if 'pooling_type' in config: self.pooling_type.setCurrentText(config['pooling_type'])
+            if 'pooling_intervals' in config:
+                val = config['pooling_intervals']
+                if isinstance(val, list): val = ", ".join(map(str, val))
+                self.pooling_intervals.setText(str(val))
+
+            if 'num_fc_layers' in config: self.num_fc_layers.setValue(config['num_fc_layers'])
+            if 'neurons_per_fc_layer' in config:
+                val = config['neurons_per_fc_layer']
+                if isinstance(val, list): val = ", ".join(map(str, val))
+                self.neurons_fc_input.setText(str(val))
+
+            if 'optimizer' in config: self.optimizer_combo.setCurrentText(config['optimizer'])
+            if 'learning_rate' in config: self.learning_rate.setValue(config['learning_rate'])
+            if 'weight_decay' in config: self.weight_decay.setValue(config['weight_decay'])
+            if 'momentum' in config: self.momentum.setValue(config['momentum'])
+            if 'beta1' in config: self.beta1.setValue(config['beta1'])
+            if 'beta2' in config: self.beta2.setValue(config['beta2'])
+            if 'beta' in config: self.beta.setValue(config['beta'])
+            if 'epsilon' in config: self.epsilon.setValue(config['epsilon'])
+            if 'epochs' in config: self.epochs.setValue(config['epochs'])
+            if 'batch_size' in config: self.batch_size.setValue(config['batch_size'])
+            if 'validation_split' in config: self.validation_split.setValue(config['validation_split'])
+            if 'use_validation' in config: self.use_validation.setChecked(config['use_validation'])
+            
+            # GUI Settings
+            if 'show_preview' in config: self.show_preview_cb.setChecked(config['show_preview'])
+            if 'map_frequency' in config: self.fm_freq_combo.setCurrentText(config['map_frequency'])
+            if 'auto_scroll' in config: self.auto_scroll_cb.setChecked(config['auto_scroll'])
+            if 'chart_animations' in config: self.chart_anim_cb.setChecked(config['chart_animations'])
+            
+            self.blockSignals(False)
+            self.on_parameter_changed()
+            self.on_viz_setting_changed()
+            
+        except Exception as e:
+            self.blockSignals(False)
+            logging.error(f"Error applying config: {e}")
+            raise e
 
     def on_save_config(self):
         # Ensure config directory exists
@@ -638,3 +659,12 @@ class ConfigurationWidget(QWidget):
         # Merge with architecture params (which are correctly parsed)
         params.update(self.get_architecture_parameters())
         return params
+
+    def set_image_dimensions(self, width, height, depth):
+        """Programmatically set image dimensions."""
+        self.blockSignals(True)
+        self.image_width.setValue(width)
+        self.image_height.setValue(height)
+        self.image_depth.setValue(depth)
+        self.blockSignals(False)
+        self.on_parameter_changed()

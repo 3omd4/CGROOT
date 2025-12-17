@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-
 #include <memory>
 #include <string>
 #include <vector>
@@ -43,8 +42,10 @@ public:
     size_t num_images;
     size_t image_width;
     size_t image_height;
+    size_t depth;
 
-    MNISTDataset() : num_images(0), image_width(28), image_height(28) {}
+    MNISTDataset()
+        : num_images(0), image_width(28), image_height(28), depth(1) {}
   };
 
   /**

@@ -162,7 +162,9 @@ class TrainingWidget(QWidget):
         pass
         # Connect internal signals to controller slots
         self.loadModelRequested.connect(self.controller.requestLoadModel)
-        self.storeModelRequested.connect(self.controller.requestStoreModel)
+        # Connect internal signals to controller slots
+        self.loadModelRequested.connect(self.controller.requestLoadModel)
+        # self.storeModelRequested.connect(self.controller.requestStoreModel) # Removed: Managed by MainWindow to inject config
 
     def on_start_clicked(self):
         # We emit signal, main window orchestrates call to controller

@@ -99,8 +99,15 @@ class NNModel {
 private:
   vector<Layer *> Layers;
   image data;
+  size_t imageHeight;
+  size_t imageWidth;
+  size_t imageDepth;
+  vector<TrainingMetrics> trainingHistory;
 
 public:
+  // Get the training history
+  vector<TrainingMetrics> getTrainingHistory() const { return trainingHistory; }
+
   // the NNModel constructor
   // input:        -modelArch (contains all the necessary information about the
   //               architecture of the model)

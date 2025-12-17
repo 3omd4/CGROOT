@@ -126,7 +126,8 @@ void bind_mnist_loader(py::module &m) {
       .def_readwrite("image_width",
                      &cgroot::data::MNISTLoader::MNISTDataset::image_width)
       .def_readwrite("image_height",
-                     &cgroot::data::MNISTLoader::MNISTDataset::image_height);
+                     &cgroot::data::MNISTLoader::MNISTDataset::image_height)
+      .def_readwrite("depth", &cgroot::data::MNISTLoader::MNISTDataset::depth);
 
   // Bind MNISTLoader static methods
   py::class_<cgroot::data::MNISTLoader>(m, "MNISTLoader")
@@ -147,6 +148,7 @@ void bind_model(py::module &m) {
       .def("getLayerType", &NNModel::getLayerType)
       .def("store", &NNModel::store)
       .def("load", &NNModel::load)
+      .def("getTrainingHistory", &NNModel::getTrainingHistory)
 
       // --- FIX STARTS HERE ---
       .def(
@@ -265,6 +267,10 @@ NNModel *create_model(py::dict config) {
     if (config.contains("image_width"))
       img_w = config["image_width"].cast<int>();
 
+    int img_d = 1;
+    if (config.contains("image_depth"))
+      img_d = config["image_depth"].cast<int>();
+
     // Use std::vector<size_t> for internal storage as per struct definition
     std::vector<size_t> neurons_list_sz;
     for (int n : neurons_list)
@@ -318,7 +324,8 @@ NNModel *create_model(py::dict config) {
 
     // A. Conv Kernels
 
-    size_t current_depth = 1; // Start with image depth (grayscale)
+    size_t current_depth =
+        img_d; // Start with image depth (1 for MNIST, 3 for CIFAR)
 
     for (int i = 0; i < num_conv_layers; ++i) {
       convKernels ck;
@@ -336,7 +343,6 @@ NNModel *create_model(py::dict config) {
         ck.kernel_width = kernel_dims_list[i].second;
       } else {
         ck.kernel_height = 5; // Default
-        ck.kernel_width = 5;
       }
 
       // CRITICAL FIX: Set kernel depth to match input depth (previous layer
@@ -431,8 +437,8 @@ NNModel *create_model(py::dict config) {
     validate_config_cpp(num_fc_layers, neurons_list, arch, img_h, img_w,
                         num_classes);
 
-    // Note: hardcoded depth 1 for now as per Python code
-    return new NNModel(arch, num_classes, img_h, img_w, 1);
+    // Pass variable depth
+    return new NNModel(arch, num_classes, img_h, img_w, img_d);
 
   } catch (const std::exception &e) {
     throw std::runtime_error(std::string("C++ create_model failed: ") +

@@ -179,16 +179,28 @@ class MetricsWidget(QWidget):
         self.acc_axis_x.setRange(0, 10)
 
     def set_total_epochs(self, total_epochs):
-        """Sets the X-axis range for charts to match the total number of epochs."""
-        # Ensure we have at least a small range so the chart isn't empty/broken
+        """Sets the X-axis range for charts to ensure integer alignment."""
         if total_epochs < 1:
             total_epochs = 1
             
-        self.loss_axis_x.setRange(0, total_epochs + 1)
-        self.acc_axis_x.setRange(0, total_epochs + 1)
-        # Assuming label format is integer, this helps tick count look nice if needed
-        self.loss_axis_x.setTickCount(min(total_epochs + 1, 6)) 
-        self.acc_axis_x.setTickCount(min(total_epochs + 1, 6)) 
+        # Range should be exactly 0 to total_epochs to include the last epoch on the axis
+        self.loss_axis_x.setRange(0, total_epochs)
+        self.acc_axis_x.setRange(0, total_epochs)
+        
+        # Smart Tick Count for Integers
+        # If we have a small number of epochs, show every integer
+        if total_epochs <= 20:
+            count = total_epochs + 1 # +1 for zero
+            self.loss_axis_x.setTickCount(count)
+            self.acc_axis_x.setTickCount(count)
+        else:
+            # For larger ranges, pick a number that divides somewhat cleanly or default to ~6-10
+            # e.g. 50 epochs -> 0, 10, 20... (6 ticks: 0, 10, 20, 30, 40, 50)
+            target_ticks = 6
+            # Try to find a tick count that produces integer steps? 
+            # Basic fallback is fine for large ranges
+            self.loss_axis_x.setTickCount(target_ticks)
+            self.acc_axis_x.setTickCount(target_ticks)
 
     def updateMetrics(self, loss, accuracy, epoch):
         self.loss_series.append(epoch, loss)
@@ -209,9 +221,11 @@ class MetricsWidget(QWidget):
         self.best_acc_lbl.setText(f"Best Accuracy: {self.best_accuracy*100:.2f}%")
         
         # Rescale X axis if we exceed initial estimate (just in case)
-        if epoch > self.loss_axis_x.max():
-             self.loss_axis_x.setMax(epoch * 1.2)
-             self.acc_axis_x.setMax(epoch * 1.2)
+        current_max = self.loss_axis_x.max()
+        if epoch > current_max:
+             new_max = max(epoch, current_max * 1.5)
+             self.set_total_epochs(int(new_max))
+
         
         # Auto scale loss Y
         if self.loss_series.count() > 0:
