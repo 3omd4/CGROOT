@@ -130,66 +130,52 @@ convLayer::kernelType convLayer::initKernel(const convKernels &kernelConfig,
 // side effect:  this layer (output) feature maps is filled
 // Note:         N/A
 void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
-  // 1. Validate Basic Integrity
-  if (kernels.size() != kernel_info.numOfKerenels ||
-      featureMaps.size() != kernel_info.numOfKerenels) {
-    std::cerr << "Critical Error: Kernel/FeatureMap size mismatch" << std::endl;
-    exit(1);
-  }
-
-  // 2. Initialize Output Feature Maps with Bias (Move this OUTSIDE the 'd'
-  // loop) This ensures the map is cleared and ready even if input channels are
-  // skipped
-  for (size_t k = 0; k < kernel_info.numOfKerenels; k++) {
-    for (size_t r = 0; r < featureMaps[k].size(); r++) {
-      std::fill(featureMaps[k][r].begin(), featureMaps[k][r].end(), bias[k]);
-    }
-  }
-
-  // 3. Perform Convolution
+  // do the same convolution operation using every kernel where each kernel
+  // will result in a different feature map, iterate using "krnl"
   for (size_t krnl = 0; krnl < kernel_info.numOfKerenels; krnl++) {
+
+    // iterate on every channel (depth) using 'd', where 'd' is the depth
+    // corrisponding of the kernel depth and the input feature map depth
     for (size_t d = 0; d < kernel_info.kernel_depth; d++) {
+      // moving on the 2D feature map the length to be moved is fm_dim -
+      // krnl_dim + 1
 
-      // Skip invalid inputs safely
-      if (d >= inputFeatureMaps.size() || inputFeatureMaps[d].empty())
-        continue;
+      // move along the rows of the input feature map using 'i'
+      for (size_t i = 0;
+           i < (inputFeatureMaps[d].size() - kernel_info.kernel_height + 1);
+           i++) {
+        // reset the output feature maps with zeros on the first channel of the
+        // input feature map for each kernel
+        if (d == 0) {
+          fill(featureMaps[krnl][i].begin(), featureMaps[krnl][i].end(),
+               bias[krnl]);
+        }
+        // move along the columns of the input feature map using 'j'
+        for (size_t j = 0;
+             j < (inputFeatureMaps[d][i].size() - kernel_info.kernel_width + 1);
+             j++) {
+          // do the convolution
+          //"k1" is row iterator and "k2" is the column iterator
+          for (size_t k1 = i; k1 < (i + kernel_info.kernel_height); k1++) {
+            for (size_t k2 = j; k2 < (j + kernel_info.kernel_width); k2++) {
+              // the convolutio is done by doing element-wise multiplication of
+              // the input feature map and the kernel infront of this part of
+              // the feature map this is done for every channel of the input
+              // feature map and then stored in the corrisponding entry in the
+              // output feature map
 
-      size_t inputH = inputFeatureMaps[d].size();
-      if (inputH < kernel_info.kernel_height)
-        continue;
-
-      // Calculate output limits
-      size_t h_limit = inputH - kernel_info.kernel_height + 1;
-      if (h_limit > featureMaps[krnl].size())
-        h_limit = featureMaps[krnl].size();
-
-      for (size_t i = 0; i < h_limit; i++) {
-        size_t inputW = inputFeatureMaps[d][i].size();
-        if (inputW < kernel_info.kernel_width)
-          continue;
-
-        size_t w_limit = inputW - kernel_info.kernel_width + 1;
-        if (w_limit > featureMaps[krnl][i].size())
-          w_limit = featureMaps[krnl][i].size();
-
-        for (size_t j = 0; j < w_limit; j++) {
-          // Optimized inner loop
-          double val = 0.0;
-          for (size_t k1 = 0; k1 < kernel_info.kernel_height; k1++) {
-            // Pre-calculate row index
-            size_t in_row = i + k1;
-
-            const auto &row_vec = inputFeatureMaps[d][in_row];
-            const auto &kernel_row = kernels[krnl][d][k1];
-
-            for (size_t k2 = 0; k2 < kernel_info.kernel_width; k2++) {
-              // Bounds check optimization: k2+j is col index
-              if ((j + k2) < row_vec.size()) {
-                val += row_vec[j + k2] * kernel_row[k2];
-              }
+              //"krnl" indexes which kernel and its output feature map
+              //'d' is the depth of both the kernel and the input feature map
+              //"k1" and "k2" are the indexs of the row and column of which the
+              // the kernel is positioned, respectively, thsi position is the
+              // top-left corner of the kernel the result of the differnt
+              // channels of the same kernel are added to the corrisponding
+              // entry in the output feature map when the depth iterator 'd' is
+              // changed
+              featureMaps[krnl][i][j] += inputFeatureMaps[d][k1][k2] *
+                                         kernels[krnl][d][k1 - i][k2 - j];
             }
           }
-          featureMaps[krnl][i][j] += val;
         }
       }
     }
@@ -200,8 +186,8 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
 // by first applying the convolution and then the activation functions
 // input:        inputFeatureMaps
 // output:       N/A
-// side effect:  the feature maps are filled with the forward propagation
-// values note:         N/A
+// side effect:  the feature maps are filled with the forward propagation values
+// note:         N/A
 void convLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
   // apply the convolution
   convolute(inputFeatureMaps);
@@ -231,8 +217,8 @@ void convLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
 //                       -thisLayerGrad
 // output:               N/A
 // side effect:          the prevLayerGrad is filled with the error to be
-// propagated Note:                 This function works with SGD or for
-// updating after a single
+// propagated Note:                 This function works with SGD or for updating
+// after a single
 void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
                              vector<featureMapType> &thisLayerGrad) {
   for (auto &depth : prevLayerGrad) {
@@ -265,26 +251,24 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
     }
   }
 
-  // Calculate Bias Gradients (dB) -> sum over height and width for each
-  // kernel
+  // Calculate Bias Gradients (dB) -> sum over height and width for each kernel
   for (int k = 0; k < (int)kernel_info.numOfKerenels; k++) {
     double sum = 0.0;
     for (int d = 0; d < (int)kernel_info.kernel_depth; d++) {
       // Bias is per kernel (per output feature map), usually summed over one
       // depth channel? Wait, convLayer bias: one bias per kernel. The kernel
       // output is 2D (HxW) per kernel (since we sum over depth). The output
-      // feature map 'k' has dimensions HxW. bias[k] is added to every pixel
-      // in featureMaps[k]. So d_bias[k] = sum_{h,w} thisLayerGrad[k][h][w].
-      // But thisLayerGrad has dimensions [depth][height][width]. Wait,
-      // backwardProp inputs: `vector<featureMapType> &thisLayerGrad`.
-      // `thisLayerGrad` corresponds to output of THIS layer. `featureMaps`
-      // (output) has dim [numOfKernels][height][width]. (Wait, verify
-      // `featureMaps` dim). In `layers.h`: `vector<featureMapType>
-      // featureMaps;` In `convolute`: `featureMaps[krnl][i][j]`. So dimension
-      // 0 is Kernel Index. In `backwardProp` signature: `thisLayerGrad`. In
-      // `backwardProp` body using `thisLayerGrad`: Loop d over `fm.FM_depth`
-      // (which should be equal to numOfKernels). So `thisLayerGrad[d]`
-      // corresponds to kernel `d`.
+      // feature map 'k' has dimensions HxW. bias[k] is added to every pixel in
+      // featureMaps[k]. So d_bias[k] = sum_{h,w} thisLayerGrad[k][h][w]. But
+      // thisLayerGrad has dimensions [depth][height][width]. Wait, backwardProp
+      // inputs: `vector<featureMapType> &thisLayerGrad`. `thisLayerGrad`
+      // corresponds to output of THIS layer. `featureMaps` (output) has dim
+      // [numOfKernels][height][width]. (Wait, verify `featureMaps` dim). In
+      // `layers.h`: `vector<featureMapType> featureMaps;` In `convolute`:
+      // `featureMaps[krnl][i][j]`. So dimension 0 is Kernel Index. In
+      // `backwardProp` signature: `thisLayerGrad`. In `backwardProp` body using
+      // `thisLayerGrad`: Loop d over `fm.FM_depth` (which should be equal to
+      // numOfKernels). So `thisLayerGrad[d]` corresponds to kernel `d`.
 
       for (int h = 0; h < fm.FM_height; h++) {
         for (int w = 0; w < fm.FM_width; w++) {
@@ -295,8 +279,8 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
     // Correct logic: we iterate k=0..numOfKernels.
     // However, `thisLayerGrad` is indexed by [d][h][w] where d is
     // 0..fm.FM_depth. fm.FM_depth should match numOfKernels! In constructor:
-    // `fm.FM_depth = modelArch.kernelsPerconvLayers[i].numOfKerenels;` (seen
-    // in model.cpp). So yes, d in loop corresponds to k.
+    // `fm.FM_depth = modelArch.kernelsPerconvLayers[i].numOfKerenels;` (seen in
+    // model.cpp). So yes, d in loop corresponds to k.
     d_bias[k] = sum;
   }
 
@@ -354,8 +338,8 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
 //                       -thisLayerGrad
 // output:               N/A
 // side effect:          the prevLayerGrad is filled with the error to be
-// propagated Note:                 This function works with BGD or for
-// updating after a whole batch
+// propagated Note:                 This function works with BGD or for updating
+// after a whole batch
 void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
                                    vector<featureMapType> &thisLayerGrad) {
   for (auto &depth : prevLayerGrad) {
@@ -451,8 +435,8 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
 // input:          N/A
 // ouput:          N/A
 // side effect:    the kernel is updated with new values and the kernel
-// gradients are reseted Note:           This function works for single
-// samples, for a batch, use upadate_batch()
+// gradients are reseted Note:           This function works for single samples,
+// for a batch, use upadate_batch()
 void convLayer::update() {
 #pragma omp parallel for
   for (int krnl = 0; krnl < static_cast<int>(kernels.size()); krnl++) {
