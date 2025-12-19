@@ -7,10 +7,8 @@
 #include "utils/mnist_loader.h"
 #include <atomic>
 #include <functional>
-#include <mutex>
 #include <random>
 #include <vector>
-
 
 using cgroot::data::MNISTLoader;
 using std::vector;
@@ -105,7 +103,6 @@ private:
   size_t imageWidth;
   size_t imageDepth;
   vector<TrainingMetrics> trainingHistory;
-  mutable std::mutex modelMutex;
 
 public:
   // Get the training history

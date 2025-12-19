@@ -44,7 +44,7 @@ poolingLayer::poolingLayer(poolKernel &kernelConfig, featureMapDim &FM_Dim,
 void poolingLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
   size_t out_FM_height_Iter = 0; // iterates the rows of the output feature map
   size_t out_FM_width_Iter = 0;  // iterates the columns of the output feature
-                                // map
+                                 // map
 
   // iterate on every channel (depth) using 'd', where 'd' is the depth
   // corrisponding of the kernel depth and the input feature map depth, and
