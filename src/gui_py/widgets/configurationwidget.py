@@ -44,9 +44,6 @@ class ConfigurationWidget(QWidget):
         button_layout.addStretch()
         
         main_layout.addLayout(button_layout)
-        
-        # Ensure consistent defaults on startup
-        self.on_reset_defaults()
 
     def setup_model_tab(self):
         scroll = QScrollArea()
@@ -121,7 +118,7 @@ class ConfigurationWidget(QWidget):
         self.learning_rate = QDoubleSpinBox()
         self.learning_rate.setDecimals(5)
         self.learning_rate.setRange(0.0, 10.0)
-        self.learning_rate.setValue(0.001)
+        self.learning_rate.setValue(0.01)
         self.learning_rate.setToolTip(
             "Controls how much weights change per update (step size).\n\n"
             "Typical values:\n"
@@ -299,10 +296,7 @@ class ConfigurationWidget(QWidget):
         self.training_layout = layout
         
         # Initialize parameter visibility (must be after tab is added)
-        # Initialize parameter visibility (must be after tab is added)
         self.on_optimizer_changed(self.optimizer_combo.currentText())
-        
-
 
     def setup_network_tab(self):
         scroll = QScrollArea()
@@ -316,8 +310,8 @@ class ConfigurationWidget(QWidget):
         self.num_conv_layers.setToolTip("Number of Convolutional layers.")
         layout.addRow("Number of Conv Layers:", self.num_conv_layers)
 
-        self.kernels_per_layer = QLineEdit("32, 64")
-        self.kernels_per_layer.setPlaceholderText("e.g. 32, 64")
+        self.kernels_per_layer = QLineEdit("3, 3")
+        self.kernels_per_layer.setPlaceholderText("e.g. 3, 3")
         self.kernels_per_layer.setToolTip("Comma separated number of kernels for each Conv layer.")
         layout.addRow("Kernels per Layer:", self.kernels_per_layer)
 
@@ -332,9 +326,9 @@ class ConfigurationWidget(QWidget):
         self.pooling_type.setCurrentIndex(0) # Default to Max
         layout.addRow("Pooling Type:", self.pooling_type)
 
-        self.pooling_intervals = QLineEdit("1, 1")
-        self.pooling_intervals.setPlaceholderText("e.g. 1, 1")
-        self.pooling_intervals.setToolTip("Number of Conv layers before each Pooling layer. e.g. '1' means every conv.")
+        self.pooling_intervals = QLineEdit("2, 2")
+        self.pooling_intervals.setPlaceholderText("e.g. 2, 2")
+        self.pooling_intervals.setToolTip("Number of Conv layers before each Pooling layer. e.g. '2' means every 2 convs.")
         layout.addRow("Pooling Intervals:", self.pooling_intervals)
         
         # FC Layers Config
@@ -343,7 +337,7 @@ class ConfigurationWidget(QWidget):
         self.num_fc_layers.setValue(2)
         layout.addRow("Number of FC Layers:", self.num_fc_layers)
         
-        self.neurons_fc_input = QLineEdit("256, 10")
+        self.neurons_fc_input = QLineEdit("64, 10")
         self.neurons_fc_input.setPlaceholderText("comma separated, e.g. 256, 128, 10")
         layout.addRow("Neurons per FC Layer:", self.neurons_fc_input)
         
@@ -508,8 +502,8 @@ class ConfigurationWidget(QWidget):
         self.image_depth.setValue(1)
         
         self.optimizer_combo.setCurrentIndex(2) # Adam
-        self.learning_rate.setValue(0.001)
-        self.weight_decay.setValue(1e-4) # Slight increase for regularization
+        self.learning_rate.setValue(0.01)
+        self.weight_decay.setValue(0.01)
         self.momentum.setValue(0.9)
         self.beta1.setValue(0.9)
         self.beta2.setValue(0.999)
@@ -520,15 +514,15 @@ class ConfigurationWidget(QWidget):
         self.use_validation.setChecked(False)
         self.validation_split.setValue(0.0)
         
-        # Architecture Defaults (Improved for general usage including CIFAR)
+        # Better default architecture for MNIST
+        self.num_fc_layers.setValue(2)
+        self.neurons_fc_input.setText("64, 10")  # Larger first layer
+
         self.num_conv_layers.setValue(2)
-        self.kernels_per_layer.setText("32, 64")
+        self.kernels_per_layer.setText("3, 3")
         self.kernel_dims.setText("3x3, 3x3")
         self.pooling_type.setCurrentIndex(0) # Max
-        self.pooling_intervals.setText("1, 1") # Pool after each
-        
-        self.num_fc_layers.setValue(2)
-        self.neurons_fc_input.setText("256, 10") # Increased capacity
+        self.pooling_intervals.setText("2, 2")
 
 
         
