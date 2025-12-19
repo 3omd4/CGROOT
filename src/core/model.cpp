@@ -397,7 +397,7 @@ featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight,
 // are updated Note:         N/A
 // Updated train: Returns {loss, is_correct}
 std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
-  std::lock_guard<std::mutex> lock(modelMutex);
+  // std::lock_guard<std::mutex> lock(modelMutex);
   this->data = imgData;
 
   // 1. Forward Pass
@@ -626,7 +626,7 @@ std::pair<double, int> NNModel::train(const image &imgData, int trueOutput) {
 std::pair<double, int>
 NNModel::train_batch(const vector<const image *> &batchData,
                      const vector<int> &trueOutput) {
-  std::lock_guard<std::mutex> lock(modelMutex);
+  // std::lock_guard<std::mutex> lock(modelMutex);
   double total_loss = 0.0;
   int total_correct = 0;
 
@@ -1188,7 +1188,7 @@ vector<TrainingMetrics> NNModel::train_epochs(
 }
 
 vector<vector<vector<double>>> NNModel::getLayerFeatureMaps(size_t layerIndex) {
-  std::lock_guard<std::mutex> lock(modelMutex);
+  // std::lock_guard<std::mutex> lock(modelMutex);
   if (layerIndex >= Layers.size()) {
     return {};
   }
