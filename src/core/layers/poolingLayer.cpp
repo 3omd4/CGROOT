@@ -50,95 +50,49 @@ void poolingLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
   // corrisponding of the kernel depth and the input feature map depth, and
   // output feature map depth
   for (size_t d = 0; d < kernel_info.filter_depth; d++) {
-    if (d >= inputFeatureMaps.size())
-      continue;
-
     // moving on the 2D feature map the length to be moved is fm_dim - krnl_dim
     // + 1
-    size_t inputH = inputFeatureMaps[d].size();
-
-    // Safety check: if input is smaller than filter, skip or handle gracefully
-    if (inputH < kernel_info.filter_height) {
-      continue;
-    }
-
-    size_t h_limit = inputH - kernel_info.filter_height + 1;
 
     // move along the rows of the input feature map using 'i', and jump with
     // amount "stride"
-    for (size_t i = 0; i < h_limit; i += kernel_info.stride) {
-      if (i >= inputFeatureMaps[d].size())
-        break; // Safety
-
-      // Safety check for width
-      size_t inputW = inputFeatureMaps[d][i].size();
-      if (inputW < kernel_info.filter_width) {
-        continue;
-      }
-
-      size_t w_limit = inputW - kernel_info.filter_width + 1;
-
+    for (size_t i = 0;
+         i < (inputFeatureMaps[d].size() - kernel_info.filter_height + 1);
+         i += kernel_info.stride) {
       // move along the columns of the input feature map using 'j', and jump
       // with amount "stride"
-      for (size_t j = 0; j < w_limit; j += kernel_info.stride) {
-        // Ensure output indices don't exceed allocated featureMaps size
-        if (out_FM_height_Iter >= featureMaps[d].size() ||
-            out_FM_width_Iter >= featureMaps[d][out_FM_height_Iter].size()) {
-          continue; // Skip out of bounds writes
-        }
-
+      for (size_t j = 0;
+           j < (inputFeatureMaps[d][i].size() - kernel_info.filter_width + 1);
+           j += kernel_info.stride) {
         // choose the method of pooling based on the pooling type
         switch (poolingType) {
         case maxPooling: {
           // max pooling works by comparing each entry of the overlapped part of
           // the filter and the input feature map and take the max and put it in
           // the output feature map
-          double max = -1e9; // Initialize to very small number
-          bool initialized = false;
-
+          double max = inputFeatureMaps[d][i][j];
           for (size_t k1 = i; k1 < (i + kernel_info.filter_height); k1++) {
             for (size_t k2 = j; k2 < (j + kernel_info.filter_width); k2++) {
-              if (k1 < inputFeatureMaps[d].size() &&
-                  k2 < inputFeatureMaps[d][k1].size()) {
-                double val = inputFeatureMaps[d][k1][k2];
-                if (!initialized || val > max) {
-                  max = val;
-                  initialized = true;
-                }
+              if (inputFeatureMaps[d][k1][k2] > max) {
+                max = inputFeatureMaps[d][k1][k2];
               }
             }
           }
 
-          if (initialized)
-            featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = max;
-          else
-            featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = 0.0;
-
+          featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = max;
           break;
         }
         case averagePooling: {
           // average pooling works by averaging each entry of the overlapped
           // part of the filter and  the input feature map
-          double average = 0.0;
-          int count = 0;
+          double average = inputFeatureMaps[d][i][j];
           for (size_t k1 = i; k1 < (i + kernel_info.filter_height); k1++) {
             for (size_t k2 = j; k2 < (j + kernel_info.filter_width); k2++) {
-              if (k1 < inputFeatureMaps[d].size() &&
-                  k2 < inputFeatureMaps[d][k1].size()) {
-                average += inputFeatureMaps[d][k1][k2];
-                count++;
-              }
+              average += inputFeatureMaps[d][k1][k2];
             }
           }
 
-          // average /=
-          // static_cast<double>(kernel_info.filter_height*kernel_info.filter_width);
-          // Better to average over valid pixels only if padded? But here we do
-          // strict? Sticking to original logic: valid theoretical area
-          if (count > 0)
-            average /= static_cast<double>(kernel_info.filter_height *
-                                           kernel_info.filter_width);
-
+          average /= static_cast<double>(kernel_info.filter_height *
+                                         kernel_info.filter_width);
           featureMaps[d][out_FM_height_Iter][out_FM_width_Iter] = average;
           break;
         }

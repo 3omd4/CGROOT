@@ -1078,8 +1078,8 @@ vector<TrainingMetrics> NNModel::train_epochs(
           std::pair<double, int> result;
 
           if (batch_images.size() > 1) {
-            std::cout << "DEBUG: Calling train_batch with "
-                      << batch_images.size() << " images" << std::endl;
+            // std::cout << "DEBUG: Calling train_batch with "
+            //           << batch_images.size() << " images" << std::endl;
             result = train_batch(batch_images, batch_labels);
           } else {
             result = train(*batch_images[0], batch_labels[0]);

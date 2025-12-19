@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
                              QStatusBar, QGroupBox, QTextEdit, QMenu, QToolBar, 
-                             QLabel, QProgressBar, QMessageBox, QApplication, QSplitter)
+                             QLabel, QProgressBar, QMessageBox, QApplication, QSplitter, QPushButton)
 from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtGui import QAction, QKeySequence, QFont
 
@@ -66,6 +66,11 @@ class MainWindow(QMainWindow):
         # self.log_output.setMaximumHeight(150) 
         self.log_output.setFont(QFont("Consolas", 10))
         log_layout.addWidget(self.log_output)
+        
+        # Clear Logs Button
+        # self.clear_logs_btn = QPushButton("Clear Logs")
+        # self.clear_logs_btn.clicked.connect(self.log_output.clear)
+        # log_layout.addWidget(self.clear_logs_btn)
         
         splitter.addWidget(log_group)
         
@@ -217,6 +222,7 @@ class MainWindow(QMainWindow):
         
         self.controller.featureMapsReady.connect(self.training_tab.display_feature_maps)
         self.controller.configurationLoaded.connect(self.config_tab.load_parameters) # Update UI with config
+        self.controller.configurationLoaded.connect(self.on_configuration_loaded) # Propagate to TrainingWidget via Main
         self.controller.metricsCleared.connect(self.metrics_tab.clear)
         self.controller.metricsSetEpoch.connect(self.metrics_tab.set_total_epochs)
         self.controller.datasetInfoLoaded.connect(self.on_dataset_info_loaded)
@@ -440,9 +446,9 @@ class MainWindow(QMainWindow):
         event.accept()
         
         # Force Kill Process (Zombie prevention)
-        import os
-        print("Forcing process exit...")
-        os._exit(0)
+        # import os
+        # print("Forcing process exit...")
+        # os._exit(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -465,6 +471,34 @@ class MainWindow(QMainWindow):
 
     def on_dataset_info_loaded(self, num, w, h, d):
         """Update Configuration with dataset properties."""
-        self.log_message(f"Updating Configuration: Input {w}x{h}x{d}")
-        self.config_tab.set_image_dimensions(w, h, d)
+        self.log_message(f"Updating Configuration: Input {w} x {h} x {d} (width, height, depth)")
+        self.config_tab.set_image_dimensions(w, h, d) 
+
+    def on_configuration_loaded(self, config):
+        """Handle side effects of config loading that affect other tabs."""
+        # Update Training Tab Layer Limits
+        if 'num_conv_layers' in config:
+             # Total layers in viewer = Input + Flatten + ConvLayers + Pooling + FC + Output
+             # This logic depends on architecture. 
+             # Safe upper bound? 100 is fine, but cleaner to set exact?
+             # Let's just assume 100 max is set by default, but we can lower or specific.
+             pass
+        
+        # Actually, simpler: just call on_start or something. 
+        # But wait, the user asked: "Update the layer_spin.setMaximum() dynamically... based on the configuration."
+        
+        # We need to calculate total layers.
+        # Conv layers depend on pool intervals.
+        num_conv = config.get('num_conv_layers', 0)
+        num_fc = config.get('num_fc_layers', 0)
+        
+        # Approximate: Input(1) + Conv(N) + Pool(N or less) + Flatten(1) + FC(N) + Output(1)
+        # It's hard to get exact count without instantiating model.
+        # But we can set a safe upper bound or try to calc.
+        # Let's just pass 50 for now, or if we want exact:
+        # Core model knows. Getting it from C++ model would be ideal but async.
+        
+        # For now, let's just make sure it's not 100 if we only have 5 layers.
+        total_est = 1 + num_conv * 2 + 1 + num_fc # Generous estimate
+        self.training_tab.update_layer_limits(total_est + 5) 
 

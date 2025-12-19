@@ -32,6 +32,7 @@ class TrainingWidget(QWidget):
         self.viz_checkbox.setChecked(True)
         self.viz_checkbox.toggled.connect(self.on_viz_toggled)
         self.viz_checkbox.setToolTip("Disabling visualizations significantly improves training speed by reducing data transfer overhead.")
+        self.viz_checkbox.setEnabled(False)
         main_layout.addWidget(self.viz_checkbox)
 
         # Preview Group
@@ -162,8 +163,6 @@ class TrainingWidget(QWidget):
         pass
         # Connect internal signals to controller slots
         self.loadModelRequested.connect(self.controller.requestLoadModel)
-        # Connect internal signals to controller slots
-        self.loadModelRequested.connect(self.controller.requestLoadModel)
         # self.storeModelRequested.connect(self.controller.requestStoreModel) # Removed: Managed by MainWindow to inject config
 
     def on_start_clicked(self):
@@ -232,16 +231,30 @@ class TrainingWidget(QWidget):
         if not checked:
              self.status_label.setText("Visualizations Disabled - Training runs at maximum speed")
         else:
-             self.status_label.setText("Visualizations Enabled - Training runs at normal speed")    
+             self.status_label.setText("Visualizations Enabled - Training runs at normal speed")
+
+    # Dynamic limits for layer spinner
+    def update_layer_limits(self, max_layers):
+        self.layer_spin.setMaximum(max_layers)    
 
     # Visualization Settings Slot
     def set_visualization_settings(self, settings):
+        if 'viz_enabled' in settings:
+             self.viz_checkbox.setChecked(settings.get('viz_enabled'))
+             
         self.viz_show_preview = settings.get('show_preview', True)
         self.viz_map_frequency = settings.get('map_frequency', "Every Epoch")
         
         # Toggle Visibility
+        is_globally_enabled = self.viz_checkbox.isChecked()
         if self.preview_group:
-            self.preview_group.setVisible(self.viz_show_preview)
+            # Only show if globally enabled AND preview enabled
+            self.preview_group.setVisible(is_globally_enabled and self.viz_show_preview)
+            self.preview_group.setEnabled(is_globally_enabled)
+            
+        if self.fm_group:
+             self.fm_group.setVisible(is_globally_enabled)
+             self.fm_group.setEnabled(is_globally_enabled)
             
         # Reset text if re-enabled and empty
         if self.viz_show_preview:
@@ -264,15 +277,11 @@ class TrainingWidget(QWidget):
             scaled_pixmap = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.image_label.setPixmap(scaled_pixmap)
             
-            # Update Info Label with True vs Pred
-            from dataset_utils import get_class_name
+            # Decoupled: Removed import dataset_utils
+            # Use layer_type or generic label for now.
+            # Ideally Controller should pass the decoded class name if it knows the dataset
             
-            # Simple heuristic to guess dataset type or just default to showing index/name
-            # For now we pass "fashion" as default? No, better to generic or detect.
-            # But we don't know dataset here.
-            # Let's show "Label: X"
-            
-            true_name = get_class_name("generic", true_label)
+            # true_name = get_class_name("generic", true_label)
             # If we want detailed names, we need to know if it's Fashion MNIST. 
             # Controller or Worker knows. But for now let's just show "Label: X"
             
@@ -360,14 +369,25 @@ class TrainingWidget(QWidget):
                 r = d // cols
                 c = d % cols
                 
-                # Normalize map data 0-255
-                # Find max/min for this map
+            # Global Min/Max for the ENTIRE layer (all maps)
+            # This ensures relative activation strength is visible
+            all_values = []
+            for d in range(depth):
+                all_values.extend([val for row in maps[d] for val in row])
+            
+            if not all_values:
+                 return
+
+            min_v = min(all_values)
+            max_v = max(all_values)
+            range_v = max_v - min_v if max_v != min_v else 1.0
+            
+            for d in range(depth):
+                r = d // cols
+                c = d % cols
+                
+                # Normalize map data using GLOBAL min/max
                 fmap = maps[d]
-                # Flatten to find min/max
-                flat = [val for row in fmap for val in row]
-                min_v = min(flat)
-                max_v = max(flat)
-                range_v = max_v - min_v if max_v != min_v else 1.0
                 
                 # Create QImage for this map
                 # We need 8-bit grayscale

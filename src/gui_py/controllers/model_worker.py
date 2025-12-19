@@ -224,6 +224,10 @@ class ModelWorker(QObject):
         self._train_thread = None
         self._loader_thread = None
         
+        self.last_viz_update = 0
+        self.viz_interval = 0.1 # Max 10 updates per second
+
+        
         # Connect internal signals (these are thread-safe automatically)
         self._internal_log.connect(self._emit_log_from_thread)
         self._internal_progress.connect(self._emit_progress_from_thread)
@@ -666,6 +670,10 @@ class ModelWorker(QObject):
         if self._training_active:
 
             is_epoch_end = (current_idx == -1)
+            current_time = time.time()
+            
+            # Helper to check if we should emit heavy data
+            should_emit_viz = (current_time - self.last_viz_update > self.viz_interval) or is_epoch_end
 
             if is_epoch_end:
                 self.metricsUpdated.emit(loss, accuracy, epoch)
@@ -673,12 +681,15 @@ class ModelWorker(QObject):
                 
             # Emit feature maps if they were updated (checked by not None)
             # Empty list [] IS valid (it means clear/unknown)
-            if feature_maps is not None:
+            if feature_maps is not None and should_emit_viz:
                  self.featureMapsReady.emit(feature_maps, layer_type, is_epoch_end)
             
             # Emit image if present (per sample)
-            if q_image:
+            if q_image and should_emit_viz:
                 self.trainingPreviewReady.emit(pred_class, q_image, probs, true_label)
+            
+            if should_emit_viz:
+                self.last_viz_update = current_time
     
     # ========================================================================
     # Lifecycle Management
@@ -705,10 +716,20 @@ class ModelWorker(QObject):
         self._progress_callback_ref = None
         self._log_callback_ref = None
         
+        # 2b. Stop thread if running
+        if hasattr(self, "_train_thread") and self._train_thread:
+            self.stopTraining() # sets flag and waits
+
         # 3. Destroy C++ model object
         if self.model:
             self.logMessage.emit("Destroying C++ model...")
             try:
+                # Extra check: wait again if needed? stopTraining already waits.
+                if hasattr(self, "_train_thread") and self._train_thread:
+                     if self._train_thread.isRunning():
+                         self.logMessage.emit("Warning: Training thread still running during model destruction!")
+                         self._train_thread.wait() # Force wait
+
                 del self.model
                 self.model = None
             except Exception as e:

@@ -96,10 +96,6 @@ private:
   activationFunction act_Funct;         // activation function type
 
   vector<vector<vector<Optimizer *>>> kernelOptimizers;
-  Optimizer *biasOptimizer; // One optimizer for the bias vector
-
-  vector<double> bias;   // Bias for each kernel (one per feature map)
-  vector<double> d_bias; // Gradient for each bias
 
 public:
   // the convolution layer constructor
@@ -111,7 +107,7 @@ public:
   // ouput:        N/A
   // side effect:  the convolution layer is constructed
   // Note:         N/A
-  convLayer(const convKernels &kernelConfig, activationFunction actFunc,
+  convLayer(convKernels &kernelConfig, activationFunction actFunc,
             initFunctions initFunc, distributionType distType,
             featureMapDim &FM_Dim, OptimizerConfig optConfig);
 
@@ -122,7 +118,7 @@ public:
   // output:       kernelType (the initialized kernel)
   // side effect:  N/A
   // Note:         N/A
-  kernelType initKernel(const convKernels &kernelConfig, initFunctions initFunc,
+  kernelType initKernel(convKernels &kernelConfig, initFunctions initFunc,
                         distributionType distType);
 
   // a set of getters to get the dimensions of the feature maps
