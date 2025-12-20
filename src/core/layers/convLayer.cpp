@@ -12,8 +12,20 @@
 // Note:         N/A
 convLayer::convLayer(convKernels &kernelConfig, activationFunction actFunc,
                      initFunctions initFunc, distributionType distType,
-                     featureMapDim &FM_Dim, OptimizerConfig optConfig)
-    : kernel_info(kernelConfig), fm(FM_Dim), act_Funct(actFunc) {
+                     featureMapDim &inputFM_Dim, OptimizerConfig optConfig)
+    : kernel_info(kernelConfig), act_Funct(actFunc) 
+{
+
+
+  //a check to make sure that the stride isn't zero so no error occur from division by 0
+  kernelConfig.stride = (kernelConfig.stride != 0)? kernelConfig.stride : 1;
+  kernel_info.stride = kernelConfig.stride;
+
+  //calculate the dimensions of the output feature maps
+  fm.FM_depth = kernelConfig.numOfKerenels;
+  fm.FM_height = ((inputFM_Dim.FM_height - kernelConfig.kernel_height + 2*kernelConfig.padding)/kernelConfig.stride)  + 1;
+  fm.FM_width = ((inputFM_Dim.FM_width - kernelConfig.kernel_width + 2*kernelConfig.padding)/kernelConfig.stride)  + 1;
+
 
   d_kernels.resize(kernelConfig.numOfKerenels); // Resize gradients vector
   kernelOptimizers.resize(kernelConfig.numOfKerenels);
@@ -21,8 +33,7 @@ convLayer::convLayer(convKernels &kernelConfig, activationFunction actFunc,
   for (size_t i = 0; i < kernelConfig.numOfKerenels; i++) {
     kernels.emplace_back(initKernel(kernelConfig, initFunc, distType));
 
-    d_kernels[i].resize(
-        kernelConfig.kernel_depth); // Resize gradient structure for this kernel
+    d_kernels[i].resize(kernelConfig.kernel_depth); // Resize gradient structure for this kernel
 
     kernelOptimizers[i].resize(kernelConfig.kernel_depth);
     for (size_t d = 0; d < kernelConfig.kernel_depth; d++) {
@@ -32,8 +43,7 @@ convLayer::convLayer(convKernels &kernelConfig, activationFunction actFunc,
           kernelConfig.kernel_height); // Resize gradient depth
       for (size_t h = 0; h < kernelConfig.kernel_height; h++) {
         kernelOptimizers[i][d][h] = createOptimizer(optConfig);
-        d_kernels[i][d][h].assign(kernelConfig.kernel_width,
-                                  0.0); // Init gradients to 0.0
+        d_kernels[i][d][h].assign(kernelConfig.kernel_width,0.0); // Init gradients to 0.0
       }
     }
   }
@@ -44,21 +54,31 @@ convLayer::convLayer(convKernels &kernelConfig, activationFunction actFunc,
     for (size_t j = 0; j < fm.FM_height; j++) {
       map[j].assign(fm.FM_width, 0.0); // make and initialzie each row to zeros
     }
-    featureMaps.emplace_back(
-        map); // store the feature map in the feature maps vector
+    featureMaps.emplace_back(map); // store the feature map in the feature maps vector
   }
 
-  size_t inputHeight = fm.FM_height + kernelConfig.kernel_height - 1;
-  size_t inputWidth = fm.FM_width + kernelConfig.kernel_width - 1;
-  size_t inputDepth = kernelConfig.kernel_depth;
-
-  prevLayerGrad.resize(inputDepth);
-  for (size_t i = 0; i < inputDepth; i++) {
-    prevLayerGrad[i].resize(inputHeight);
-    for (size_t j = 0; j < inputHeight; j++) {
-      prevLayerGrad[i][j].assign(inputWidth, 0.0);
+  prevLayerGrad.resize(inputFM_Dim.FM_depth);
+  for (size_t i = 0; i < inputFM_Dim.FM_depth; i++) {
+    prevLayerGrad[i].resize(inputFM_Dim.FM_height);
+    for (size_t j = 0; j < inputFM_Dim.FM_height; j++) {
+      prevLayerGrad[i][j].assign(inputFM_Dim.FM_width, 0.0);
     }
   }
+
+   //initialze the biases
+    //because of the Dying ReLU problem, if the activation function is ReLU then
+    //initialize with 0.01, else initialize with zero
+    if(actFunc == RelU)
+    {
+        bias.assign(kernelConfig.numOfKerenels, 0.01);
+    }
+    else
+    {
+        bias.assign(kernelConfig.numOfKerenels, 0.0);
+    }
+
+    d_bias.assign(kernelConfig.numOfKerenels, 0.0);
+    biasOptimizer = createOptimizer(optConfig);
 }
 
 // initialize a kernel
@@ -128,18 +148,14 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
       // krnl_dim + 1
 
       // move along the rows of the input feature map using 'i'
-      for (size_t i = 0;
-           i < (inputFeatureMaps[d].size() - kernel_info.kernel_height + 1);
-           i++) {
+      for (size_t i = 0; i < fm.FM_height; i += kernel_info.stride) {
         // reset the output feature maps with zeros on the first channel of the
         // input feature map for each kernel
         if (d == 0) {
           fill(featureMaps[krnl][i].begin(), featureMaps[krnl][i].end(), 0.0);
         }
         // move along the columns of the input feature map using 'j'
-        for (size_t j = 0;
-             j < (inputFeatureMaps[d][i].size() - kernel_info.kernel_width + 1);
-             j++) {
+        for (size_t j = 0; j < fm.FM_width; j += kernel_info.stride) {
           // do the convolution
           //"k1" is row iterator and "k2" is the column iterator
           for (size_t k1 = i; k1 < (i + kernel_info.kernel_height); k1++) {
@@ -161,6 +177,10 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
               featureMaps[krnl][i][j] += inputFeatureMaps[d][k1][k2] *
                                          kernels[krnl][d][k1 - i][k2 - j];
             }
+          }
+          if(d == (kernel_info.kernel_depth-1))
+          {
+            featureMaps[krnl][i][j] += bias[krnl];
           }
         }
       }
@@ -364,7 +384,8 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
 // side effect:    the kernel is updated with new values and the kernel
 // gradients are reseted Note:           This function works for single samples,
 // for a batch, use upadate_batch()
-void convLayer::update() {
+void convLayer::update()
+{
 #pragma omp parallel for
   for (int krnl = 0; krnl < static_cast<int>(kernels.size()); krnl++) {
     for (int d = 0; d < static_cast<int>(kernels[krnl].size()); d++) {
@@ -378,6 +399,10 @@ void convLayer::update() {
       }
     }
   }
+
+  //update biases
+  biasOptimizer->update(bias, d_bias);
+  fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
 // update the kernels
@@ -407,6 +432,10 @@ void convLayer::update_batch(int numOfExamples) {
       }
     }
   }
+
+   //update biases
+  biasOptimizer->update(bias, d_bias);
+  fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
 convLayer::~convLayer() {

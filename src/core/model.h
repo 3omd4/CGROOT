@@ -129,20 +129,7 @@ public:
   NNModel(struct architecture, size_t numOfClasses, size_t imageVerDim,
           size_t imageHorDim, size_t imageDepDim);
 
-  // NNModel constructor helper function:
-  // calculates the dimension of the output feature map of each convolution
-  // layer
-  // input:         -current layer kernel height (size_t kernelHeight)
-  //               -current layer kernel width (size_t kernelWidth)
-  //               -the input feature map height (size_t inputHeight)
-  //               -the input feature map width (size_t inputWidth)
-  // output:       -a featureMapDim struct that carries information about the
-  //               dimensions of the current output feature map (featureMapDim)
-  // side effect:  N/A
-  // Note:         the function also sets the data member featureMapDim.FM_depth
-  //               to 0, so it must setted later
-  featureMapDim calcFeatureMapDim(size_t kernelHeight, size_t kernelWidth,
-                                  size_t inputHeight, size_t inputWidth);
+
 
   // train the model with a single image
   // input:        -data (an image)

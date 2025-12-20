@@ -60,6 +60,8 @@ struct convKernels {
   size_t kernel_width;
   size_t kernel_height;
   size_t kernel_depth;
+  size_t stride = 1;
+  size_t padding = 0;
 };
 
 // The specification of the pooling layer kernel

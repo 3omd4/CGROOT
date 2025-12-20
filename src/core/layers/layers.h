@@ -86,6 +86,8 @@ public:
 private:
   vector<kernelType> kernels;   // 4D: [Kernel][Depth][Row][Col]
   vector<kernelType> d_kernels; // Gradients for weights
+  vector<double> bias;  //bias for each kernel
+  vector<double> d_bias; //gradients for biases
   convKernels kernel_info;      // number and dimensions of each kernel
   LayerType type = conv;        // layer type
 
@@ -96,6 +98,7 @@ private:
   activationFunction act_Funct;         // activation function type
 
   vector<vector<vector<Optimizer *>>> kernelOptimizers;
+  Optimizer* biasOptimizer;
 
 public:
   // the convolution layer constructor
@@ -109,7 +112,7 @@ public:
   // Note:         N/A
   convLayer(convKernels &kernelConfig, activationFunction actFunc,
             initFunctions initFunc, distributionType distType,
-            featureMapDim &FM_Dim, OptimizerConfig optConfig);
+            featureMapDim &inputFM_Dim, OptimizerConfig optConfig);
 
   // initialize a kernel
   // input:        -kernelConfig (contains all the information about the kernel)
@@ -132,6 +135,9 @@ public:
   size_t getFeatureMapDepth() const {
     return fm.FM_depth;
   } // get the feature map depth
+
+  //get the dimensions of this layer feature map (will be used by the model constructor)
+  featureMapDim& getFeatureMapDim() {return fm;} 
 
   // get the type of the activation function
   activationFunction getActivationFunctionType() const { return act_Funct; }
@@ -249,6 +255,9 @@ public:
     return fm.FM_depth;
   } // get the feature map depth
 
+  //get the dimensions of this layer feature map (will be used by the model constructor)
+  featureMapDim& getFeatureMapDim() {return fm;} 
+
   void backwardProp(vector<featureMapType> &inputFeatureMaps,
                     vector<featureMapType> &thisLayerGrad);
 
@@ -280,8 +289,7 @@ private:
   vector<double> prevLayerGrad; // gradients to be used by the previous layer in
                                 // backward propagation
 
-  vector<Optimizer *>
-      neuronOptimizers; // One optimizer per neuron (weight vector)
+  vector<Optimizer *> neuronOptimizers; // One optimizer per neuron (weight vector)
   Optimizer *biasOptimizer;
 
   activationFunction act_Funct;    // the type of the activation function

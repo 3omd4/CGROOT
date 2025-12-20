@@ -93,56 +93,6 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   }
   // ========== END VALIDATION ==========
 
-  // Debug logging to understand the architecture before model creation
-  // // std::cout << "================ Architecture Debug Info ================"
-  //           << std::endl;
-  // // std::cout << "Number of Conv Layers: " << modelArch.numOfConvLayers
-  //           << std::endl;
-  // // std::cout << "Number of FC Layers: " << modelArch.numOfFCLayers <<
-  // std::endl; // std::cout << "Neurons per FC Layer: " <<
-  // modelArch.neuronsPerFCLayer.size()
-  //           << std::endl;
-  // // std::cout << "Convolutional layers kernels: "
-  //           << modelArch.kernelsPerconvLayers.size() << std::endl;
-  // // std::cout << "Fully connected layers neurons: "
-  //           << modelArch.neuronsPerFCLayer.size() << std::endl;
-  // // std::cout << "Convolutional layers activation functions: "
-  //           << modelArch.convLayerActivationFunc.size() << std::endl;
-  // // std::cout << "Fully connected layers activation functions: "
-  //           << modelArch.FCLayerActivationFunc.size() << std::endl;
-  // // std::cout << "Convolutional layers init functions: "
-  //           << modelArch.convInitFunctionsType.size() << std::endl;
-  // // std::cout << "Fully connected layers init functions: "
-  //           << modelArch.FCInitFunctionsType.size() << std::endl;
-  // // std::cout << "Pooling layers interval: "
-  //           << modelArch.poolingLayersInterval.size() << std::endl;
-  // // std::cout << "Pooling layers type: ";
-  // for (size_t i = 0; i < modelArch.poolingtype.size(); i++) {
-  //   // std::cout << static_cast<int>(modelArch.poolingtype[i]);
-  //   if (i < modelArch.poolingtype.size() - 1)
-  //     // std::cout << ", ";
-  // }
-  // // std::cout << std::endl;
-  // // std::cout << "Pooling layers kernels: " << std::endl;
-  // for (size_t i = 0; i < modelArch.kernelsPerPoolingLayer.size(); i++) {
-  //   // std::cout << "depth X height X width: ";
-  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_depth;
-  //   // std::cout << "x";
-  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_height;
-  //   // std::cout << "x";
-  //   // std::cout << modelArch.kernelsPerPoolingLayer[i].filter_width;
-  //   if (i < modelArch.kernelsPerPoolingLayer.size() - 1)
-  //     // std::cout << ",\n";
-  // }
-  // // std::cout << std::endl;
-  // // std::cout << "Optimizer epsilon: " << modelArch.optConfig.epsilon
-  //           << std::endl;
-  // // std::cout <<
-  // "============================================================="
-  //           << std::endl;
-
-  // // std::cout << "zxsaceq  wq wq q 123" << std::endl;
-
   try {
     // construct the input layer
     Layers.emplace_back(new inputLayer(imageHeight, imageWidth, imageDepth));
@@ -151,13 +101,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
     throw;
   }
 
-  // // std::cout << "cascasccs123" << std::endl;
 
-  // Track current feature map dimensions
-  size_t currentHeight = imageHeight;
-  size_t currentWidth = imageWidth;
-  size_t currentDepth = imageDepth;
-
+  featureMapDim inputFmDim  = {imageHeight, imageWidth, imageDepth};
   // poolCount is used to count the number of convolution layers after which
   // a pooling layer will be inserted
   size_t poolCount = 0;
@@ -165,33 +110,22 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   // an iterator that is used to iterate the pooling layers information vectors
   size_t poolIter = 0;
 
-  // // std::cout << "cascasccs456" << std::endl;
 
   try {
     // start initializing the convolution and pooling layers
     // a pooling layer is inserted after a number of convolution layers
     for (size_t i = 0; i < modelArch.numOfConvLayers; i++) {
-      // Calculate feature map dimensions for this conv layer
-
-      // // std::cout << "cascasccs789" << std::endl;
-
-      featureMapDim fmDim =
-          calcFeatureMapDim(modelArch.kernelsPerconvLayers[i].kernel_height,
-                            modelArch.kernelsPerconvLayers[i].kernel_width,
-                            currentHeight, currentWidth);
-
+  
       // Set kernel depth to match input depth
-      modelArch.kernelsPerconvLayers[i].kernel_depth = currentDepth;
-      fmDim.FM_depth = modelArch.kernelsPerconvLayers[i].numOfKerenels;
+      modelArch.kernelsPerconvLayers[i].kernel_depth = inputFmDim.FM_depth;
 
-      // // std::cout << "cascasccs980" << std::endl;
 
       try {
         // Create convolution layer
         Layers.emplace_back(new convLayer(modelArch.kernelsPerconvLayers[i],
                                           modelArch.convLayerActivationFunc[i],
                                           modelArch.convInitFunctionsType[i],
-                                          modelArch.distType, fmDim,
+                                          modelArch.distType, inputFmDim,
                                           modelArch.optConfig));
       } catch (const std::exception &e) {
         std::cerr << "ERROR creating convolution layer " << (i + 1) << ": "
@@ -199,12 +133,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
         throw;
       }
 
-      // // std::cout << "cascasccs981" << std::endl;
-
-      // Update current dimensions
-      currentHeight = fmDim.FM_height;
-      currentWidth = fmDim.FM_width;
-      currentDepth = fmDim.FM_depth;
+      inputFmDim = static_cast<convLayer*>(Layers[Layers.size() - 1])->getFeatureMapDim();
 
       poolCount++;
 
@@ -213,33 +142,26 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
           poolCount >= modelArch.poolingLayersInterval[poolIter]) {
         // Calculate pooling output dimensions
         poolKernel &poolKern = modelArch.kernelsPerPoolingLayer[poolIter];
-        poolKern.filter_depth = currentDepth;
+        poolKern.filter_depth = inputFmDim.FM_depth;
 
-        size_t poolOutHeight =
-            (currentHeight - poolKern.filter_height) / poolKern.stride + 1;
-        size_t poolOutWidth =
-            (currentWidth - poolKern.filter_width) / poolKern.stride + 1;
-
-        featureMapDim poolFMDim{poolOutHeight, poolOutWidth, currentDepth};
 
         try {
           // Create pooling layer
           Layers.emplace_back(new poolingLayer(
-              poolKern, poolFMDim, modelArch.poolingtype[poolIter]));
+              poolKern, inputFmDim, modelArch.poolingtype[poolIter]));
         } catch (const std::exception &e) {
           std::cerr << "ERROR creating pooling layer " << (poolIter + 1) << ": "
                     << e.what() << std::endl;
           throw;
         }
-
-        // Update current dimensions
-        currentHeight = poolOutHeight;
-        currentWidth = poolOutWidth;
-        // Depth remains the same
+        
+        inputFmDim = static_cast<poolingLayer*>(Layers[Layers.size() - 1])->getFeatureMapDim();
 
         poolCount = 0;
         poolIter++;
       }
+
+
     }
   } catch (const std::exception &e) {
     std::cerr << "ERROR creating convolution and pooling layers: " << e.what()
@@ -256,7 +178,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   if (needsFlatten) {
     try {
       Layers.emplace_back(
-          new FlattenLayer(currentHeight, currentWidth, currentDepth));
+          new FlattenLayer(inputFmDim.FM_height, inputFmDim.FM_width, inputFmDim.FM_depth));
     } catch (const std::exception &e) {
       std::cerr << "ERROR creating flatten layer: " << e.what() << std::endl;
       throw;
@@ -265,7 +187,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
 
   // Build fully connected layers
   size_t fcInputSize = needsFlatten
-                           ? currentHeight * currentWidth * currentDepth
+                           ? inputFmDim.FM_height * inputFmDim.FM_width * inputFmDim.FM_depth
                            : imageHeight * imageWidth * imageDepth;
 
   // // std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
@@ -367,26 +289,7 @@ static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
   return image_data;
 }
 
-// NNModel constructor helper function:
-// calculates the dimension of the output feature map of each convolution layer
-// input:        -current layer kernel height (size_t kernelHeight)
-//               -current layer kernel width (size_t kernelWidth)
-//               -the input feature map height (size_t inputHeight)
-//               -the input feature map width (size_t inputWidth)
-// output:       -a featureMapDim struct that carries information about the
-// dimensions of the current
-//               output feature map (featureMapDim)
-// side effect:  N/A
-// Note:         the function also sets the data member featureMapDim.FM_depth
-// to 0, so it must
-//               setted later
-featureMapDim NNModel::calcFeatureMapDim(size_t kernelHeight,
-                                         size_t kernelWidth, size_t inputHeight,
-                                         size_t inputWidth) {
-  size_t outputHeight = inputHeight - kernelHeight + 1;
-  size_t outputWidth = inputWidth - kernelWidth + 1;
-  return featureMapDim{outputHeight, outputWidth, 0};
-}
+
 
 // train the model with a single image
 // input:        -data (an image)

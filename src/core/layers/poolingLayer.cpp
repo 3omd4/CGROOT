@@ -8,29 +8,34 @@
 // output:               N/A
 // side effect:          the pooling layer is constructed
 // Note:                 N/A
-poolingLayer::poolingLayer(poolKernel &kernelConfig, featureMapDim &FM_Dim,
+poolingLayer::poolingLayer(poolKernel &kernelConfig, featureMapDim &inputFM_Dim,
                            poolingLayerType &poolType)
-    : fm(FM_Dim), kernel_info(kernelConfig), poolingType(poolType) {
+    :  kernel_info(kernelConfig), poolingType(poolType)
+{
+
+  //a check to make sure that the stride isn't zero so no error occur from division by 0
+  kernelConfig.stride = (kernelConfig.stride != 0)? kernelConfig.stride : 1;
+  kernel_info.stride = kernelConfig.stride;
+
+    fm.FM_depth = inputFM_Dim.FM_depth;
+    fm.FM_height = (inputFM_Dim.FM_height - kernelConfig.filter_height)/kernelConfig.stride  + 1;
+    fm.FM_width = (inputFM_Dim.FM_width - kernelConfig.filter_width)/kernelConfig.stride  + 1;
+
+
   // initialize the feature map to all zeros
-  featureMaps.resize(FM_Dim.FM_depth);
-  for (size_t i = 0; i < FM_Dim.FM_depth; i++) {
-    featureMaps[i].resize(FM_Dim.FM_height);
-    for (size_t j = 0; j < FM_Dim.FM_height; j++) {
-      featureMaps[i][j].assign(FM_Dim.FM_width, 0.0);
+  featureMaps.resize(fm.FM_depth);
+  for (size_t i = 0; i < fm.FM_depth; i++) {
+    featureMaps[i].resize(fm.FM_height);
+    for (size_t j = 0; j < fm.FM_height; j++) {
+      featureMaps[i][j].assign(fm.FM_width, 0.0);
     }
   }
 
-  size_t inputHeight =
-      kernelConfig.filter_height + kernelConfig.stride * (fm.FM_height - 1);
-  size_t inputWidth =
-      kernelConfig.filter_width + kernelConfig.stride * (fm.FM_width - 1);
-  size_t inputDepth = kernelConfig.filter_depth;
-
-  prevLayerGrad.resize(inputDepth);
-  for (size_t i = 0; i < inputDepth; i++) {
-    prevLayerGrad[i].resize(inputHeight);
-    for (size_t j = 0; j < inputHeight; j++) {
-      prevLayerGrad[i][j].assign(inputWidth, 0.0);
+  prevLayerGrad.resize(inputFM_Dim.FM_depth);
+  for (size_t i = 0; i < inputFM_Dim.FM_depth; i++) {
+    prevLayerGrad[i].resize(inputFM_Dim.FM_height);
+    for (size_t j = 0; j < inputFM_Dim.FM_height; j++) {
+      prevLayerGrad[i][j].assign(inputFM_Dim.FM_width, 0.0);
     }
   }
 }
@@ -56,13 +61,11 @@ void poolingLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
     // move along the rows of the input feature map using 'i', and jump with
     // amount "stride"
     for (size_t i = 0;
-         i < (inputFeatureMaps[d].size() - kernel_info.filter_height + 1);
-         i += kernel_info.stride) {
+         i < fm.FM_height; i += kernel_info.stride) {
       // move along the columns of the input feature map using 'j', and jump
       // with amount "stride"
       for (size_t j = 0;
-           j < (inputFeatureMaps[d][i].size() - kernel_info.filter_width + 1);
-           j += kernel_info.stride) {
+           j < fm.FM_width; j += kernel_info.stride) {
         // choose the method of pooling based on the pooling type
         switch (poolingType) {
         case maxPooling: {
