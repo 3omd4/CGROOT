@@ -726,9 +726,9 @@ class ModelWorker(QObject):
             try:
                 # Extra check: wait again if needed? stopTraining already waits.
                 if hasattr(self, "_train_thread") and self._train_thread:
-                     if self._train_thread.isRunning():
-                         self.logMessage.emit("Warning: Training thread still running during model destruction!")
-                         self._train_thread.wait() # Force wait
+                    if self._train_thread.isRunning():
+                        self.logMessage.emit("Warning: Training thread still running during model destruction!")
+                        # self._train_thread.wait() # Force wait
 
                 del self.model
                 self.model = None
