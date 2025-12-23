@@ -49,7 +49,15 @@ def main():
     window = MainWindow()
     window.showMaximized()
     
-    sys.exit(app.exec())
+    # Enable handling of Ctrl+C
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    try:
+        sys.exit(app.exec())
+    except KeyboardInterrupt:
+        print("\nGUI execution interrupted by user.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()

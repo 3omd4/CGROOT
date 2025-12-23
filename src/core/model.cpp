@@ -122,8 +122,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
         Layers.emplace_back(new convLayer(modelArch.kernelsPerconvLayers[i],
                                           modelArch.convLayerActivationFunc[i],
                                           modelArch.convInitFunctionsType[i],
-                                          modelArch.distType, inputFmDim,
-                                          modelArch.optConfig));
+                                          modelArch.convDistributionTypes[i],
+                                          inputFmDim, modelArch.optConfig));
       } catch (const std::exception &e) {
         std::cerr << "ERROR creating convolution layer " << (i + 1) << ": "
                   << e.what() << std::endl;
@@ -208,8 +208,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
 
       Layers.emplace_back(new FullyConnected(
           modelArch.neuronsPerFCLayer[i], modelArch.FCLayerActivationFunc[i],
-          modelArch.FCInitFunctionsType[i], modelArch.distType, fcInputSize,
-          modelArch.optConfig));
+          modelArch.FCInitFunctionsType[i], modelArch.FCDistributionTypes[i],
+          fcInputSize, modelArch.optConfig));
 
       // // std::cout << "  FC layer " << (i + 1) << " created successfully"
       //           << std::endl;

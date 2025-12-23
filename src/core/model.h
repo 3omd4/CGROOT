@@ -47,8 +47,17 @@ struct architecture {
       FCInitFunctionsType; // the type of the functions which will be used to
                            // initialize each fully connected layer
 
+  // Distribution types per layer (Normal vs Uniform)
+  // Added for separation of init function from distribution
+  vector<distributionType>
+      convDistributionTypes; // distribution type for each convolution layer
+
+  vector<distributionType>
+      FCDistributionTypes; // distribution type for each FC layer
+
   distributionType
-      distType; // type of distribution to be used by all layers initializers
+      distType; // DEPRECATED: Global distribution type, use per-layer vectors
+                // above Kept for backward compatibility
 
   vector<size_t>
       poolingLayersInterval; // the number of convolution layers after which a
@@ -129,25 +138,22 @@ public:
   NNModel(struct architecture, size_t numOfClasses, size_t imageVerDim,
           size_t imageHorDim, size_t imageDepDim);
 
-
-
   // train the model with a single image
   // input:        -data (an image)
   //               -trueOutput (the value for which the model compares its
   //               output)
   // output:       N/A
-  // side effect:  The model is trained by a single image and its paramters are updated
-  // Note:         N/A
+  // side effect:  The model is trained by a single image and its paramters are
+  // updated Note:         N/A
   std::pair<double, int> train(const image &data, int trueOutput);
 
-
-// train the model with a batch of images
-// input:        -data (a vector of images)
-//               -trueOutput (a vector of the true output values)
-// output:       N/A
-// side effect:  The model is trained by a batch of image and its paramters are updated 
-// Note:         N/A
-// Updated train_batch: Returns {total_loss, total_correct}
+  // train the model with a batch of images
+  // input:        -data (a vector of images)
+  //               -trueOutput (a vector of the true output values)
+  // output:       N/A
+  // side effect:  The model is trained by a batch of image and its paramters
+  // are updated Note:         N/A Updated train_batch: Returns {total_loss,
+  // total_correct}
   std::pair<double, int> train_batch(const vector<const image *> &data,
                                      const vector<int> &trueOutput);
 

@@ -122,7 +122,7 @@ class ConfigurationWidget(QWidget):
         self.learning_rate = QDoubleSpinBox()
         self.learning_rate.setDecimals(5)
         self.learning_rate.setRange(0.0, 10.0)
-        self.learning_rate.setValue(0.0001)
+        self.learning_rate.setValue(0.001)
         self.learning_rate.setToolTip(
             "Controls how much weights change per update (step size).\n\n"
             "Typical values:\n"
@@ -598,17 +598,25 @@ class ConfigurationWidget(QWidget):
             
             # Activation Function
             activation = QComboBox()
-            activation.addItems(["ReLU", "LeakyReLU", "Tanh", "Sigmoid", "Linear"])
+            activation.addItems(["ReLU", "Tanh", "Sigmoid"])
             activation.setCurrentText("ReLU")
             activation.setToolTip(f"Activation function for conv layer {i+1}")
             layer_layout.addRow("Activation:", activation)
             
-            # Weight Initialization
-            init_type = QComboBox()
-            init_type.addItems(["Xavier", "He", "Normal", "Uniform"])
-            init_type.setCurrentText("He" if activation.currentText() == "ReLU" else "Xavier")
-            init_type.setToolTip(f"Weight initialization method for conv layer {i+1}")
-            layer_layout.addRow("Initialization:", init_type)
+            
+            # Weight Initialization Function (Xavier vs He)
+            init_function = QComboBox()
+            init_function.addItems(["Auto", "Xavier", "He"])
+            init_function.setCurrentText("Auto")
+            init_function.setToolTip(f"Init function for conv layer {i+1}. Auto selects He for ReLU, Xavier for Tanh/Sigmoid")
+            layer_layout.addRow("Init Function:", init_function)
+            
+            # Distribution Type (Normal vs Uniform)
+            distribution = QComboBox()
+            distribution.addItems(["Normal", "Uniform"])
+            distribution.setCurrentText("Normal")
+            distribution.setToolTip(f"Distribution type for weight initialization")
+            layer_layout.addRow("Distribution:", distribution)
             
             layer_group.setLayout(layer_layout)
             self.conv_layers_layout.addWidget(layer_group)
@@ -621,7 +629,8 @@ class ConfigurationWidget(QWidget):
                 'padding_value': padding_value,
                 'stride': stride,
                 'activation': activation,
-                'init_type': init_type
+                'init_function': init_function,
+                'distribution': distribution
             })
             
             # Connect signals for parameter changed
@@ -631,7 +640,8 @@ class ConfigurationWidget(QWidget):
             padding_value.valueChanged.connect(self.on_parameter_changed)
             stride.textChanged.connect(self.on_parameter_changed)
             activation.currentIndexChanged.connect(self.on_parameter_changed)
-            init_type.currentIndexChanged.connect(self.on_parameter_changed)
+            init_function.currentIndexChanged.connect(self.on_parameter_changed)
+            distribution.currentIndexChanged.connect(self.on_parameter_changed)
     
     def rebuild_pool_layer_controls(self):
         """Rebuild per-pooling-layer configuration controls."""
@@ -687,7 +697,7 @@ class ConfigurationWidget(QWidget):
             
             # Activation Function
             activation = QComboBox()
-            activation.addItems(["ReLU", "LeakyReLU", "Tanh", "Sigmoid", "Softmax", "Linear"])
+            activation.addItems(["ReLU", "Tanh", "Sigmoid"])
             # Last layer typically uses different activation
             if i == num_layers - 1:
                 activation.setCurrentText("Softmax")
@@ -696,12 +706,24 @@ class ConfigurationWidget(QWidget):
             activation.setToolTip(f"Activation function for FC layer {i+1}")
             layer_layout.addRow("Activation:", activation)
             
-            # Weight Initialization
-            init_type = QComboBox()
-            init_type.addItems(["Xavier", "He", "Normal", "Uniform"])
-            init_type.setCurrentText("He" if activation.currentText() == "ReLU" else "Xavier")
-            init_type.setToolTip(f"Weight initialization method for FC layer {i+1}")
-            layer_layout.addRow("Initialization:", init_type)
+            
+            # Weight Initialization Function (Xavier vs He)
+            init_function = QComboBox()
+            init_function.addItems(["Auto", "Xavier", "He"])
+            # Last layer can use Xavier (output layer), others Auto
+            if i == num_layers - 1:
+                init_function.setCurrentText("Xavier")
+            else:
+                init_function.setCurrentText("Auto")
+            init_function.setToolTip(f"Init function for FC layer {i+1}. Auto selects He for ReLU, Xavier for Tanh/Sigmoid")
+            layer_layout.addRow("Init Function:", init_function)
+            
+            # Distribution Type (Normal vs Uniform)
+            distribution = QComboBox()
+            distribution.addItems(["Normal", "Uniform"])
+            distribution.setCurrentText("Normal")
+            distribution.setToolTip(f"Distribution type for weight initialization")
+            layer_layout.addRow("Distribution:", distribution)
             
             layer_group.setLayout(layer_layout)
             self.fc_layers_layout.addWidget(layer_group)
@@ -709,12 +731,14 @@ class ConfigurationWidget(QWidget):
             # Store widget references
             self.fc_layer_widgets.append({
                 'activation': activation,
-                'init_type': init_type
+                'init_function': init_function,
+                'distribution': distribution
             })
             
             # Connect signals
             activation.currentIndexChanged.connect(self.on_parameter_changed)
-            init_type.currentIndexChanged.connect(self.on_parameter_changed)
+            init_function.currentIndexChanged.connect(self.on_parameter_changed)
+            distribution.currentIndexChanged.connect(self.on_parameter_changed)
     
     # =========================================================================
     # SIGNAL HANDLERS FOR DYNAMIC CONTROLS
@@ -746,7 +770,8 @@ class ConfigurationWidget(QWidget):
         conv_paddings = []
         conv_strides = []
         conv_activations = []
-        conv_init_types = []
+        conv_init_functions = []
+        conv_distributions = []
         
         for i, widgets in enumerate(self.conv_layer_widgets):
             # Kernel count
@@ -784,8 +809,11 @@ class ConfigurationWidget(QWidget):
             # Activation
             conv_activations.append(widgets['activation'].currentText())
             
-            # Init type
-            conv_init_types.append(widgets['init_type'].currentText())
+            # Init function (NEW)
+            conv_init_functions.append(widgets['init_function'].currentText())
+            
+            # Distribution (NEW)
+            conv_distributions.append(widgets['distribution'].currentText())
         
         return {
             'kernels_per_layer': kernels_list,
@@ -793,7 +821,8 @@ class ConfigurationWidget(QWidget):
             'conv_paddings': conv_paddings,
             'conv_strides': conv_strides,
             'conv_activations': conv_activations,
-            'conv_init_types': conv_init_types
+            'conv_init_functions': conv_init_functions,  # NEW
+            'conv_distributions': conv_distributions      # NEW
         }
     
     def get_pool_layer_params(self):
@@ -825,15 +854,18 @@ class ConfigurationWidget(QWidget):
     def get_fc_layer_params(self):
         """Extract FC layer parameters from dynamic controls."""
         fc_activations = []
-        fc_init_types = []
+        fc_init_functions = []  # NEW
+        fc_distributions = []    # NEW
         
         for widgets in self.fc_layer_widgets:
             fc_activations.append(widgets['activation'].currentText())
-            fc_init_types.append(widgets['init_type'].currentText())
+            fc_init_functions.append(widgets['init_function'].currentText())  # NEW
+            fc_distributions.append(widgets['distribution'].currentText())    # NEW
         
         return {
             'fc_activations': fc_activations,
-            'fc_init_types': fc_init_types
+            'fc_init_functions': fc_init_functions,  # NEW
+            'fc_distributions': fc_distributions      # NEW
         }
 
 
@@ -981,7 +1013,7 @@ class ConfigurationWidget(QWidget):
         # Typical values:
         # - SGD   → 0.01
         # - Adam  → 0.0001
-        self.learning_rate.setValue(0.0001)
+        self.learning_rate.setValue(0.001)
 
         # Weight decay (L2 regularization)
         # Helps reduce overfitting by penalizing large weights
@@ -1079,11 +1111,83 @@ class ConfigurationWidget(QWidget):
                 with open(path, 'r') as f:
                     config = json.load(f)
                 
+                # Migrate old format if needed
+                config = self.migrate_old_config(config)
+                
                 self.load_parameters(config)
                 QMessageBox.information(self, "Config Loaded", f"Configuration loaded from:\n{path}")
                 
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", f"Failed to load config: {e}")
+
+
+    def migrate_old_config(self, config):
+        """
+        Migrate old configuration format to new format.
+        
+        Old format mixed init functions with distribution types:
+          'conv_init_types': ['Xavier', 'He', 'Normal', 'Uniform']
+        
+        New format separates them:
+          'conv_init_functions': ['Xavier', 'He', 'Auto', 'Auto']
+          'conv_distributions': ['Normal', 'Normal', 'Normal', 'Uniform']
+        """
+        modified = False
+        
+        # Migrate conv layer init types
+        if 'conv_init_types' in config:
+            init_functions = []
+            distributions = []
+            
+            for old_val in config['conv_init_types']:
+                if old_val == 'Normal':
+                    init_functions.append('Auto')
+                    distributions.append('Normal')
+                elif old_val == 'Uniform':
+                    init_functions.append('Auto')
+                    distributions.append('Uniform')
+                elif old_val in ['Xavier', 'He', 'Kaiming']:
+                    init_functions.append('He' if old_val == 'Kaiming' else old_val)
+                    distributions.append('Normal')
+                else:
+                    # Unknown, default to Auto + Normal
+                    init_functions.append('Auto')
+                    distributions.append('Normal')
+            
+            config['conv_init_functions'] = init_functions
+            config['conv_distributions'] = distributions
+            del config['conv_init_types']
+            modified = True
+        
+        # Migrate FC layer init types
+        if 'fc_init_types' in config:
+            init_functions = []
+            distributions = []
+            
+            for old_val in config['fc_init_types']:
+                if old_val == 'Normal':
+                    init_functions.append('Auto')
+                    distributions.append('Normal')
+                elif old_val == 'Uniform':
+                    init_functions.append('Auto')
+                    distributions.append('Uniform')
+                elif old_val in ['Xavier', 'He', 'Kaiming']:
+                    init_functions.append('He' if old_val == 'Kaiming' else old_val)
+                    distributions.append('Normal')
+                else:
+                    # Unknown, default to Auto + Normal
+                    init_functions.append('Auto')
+                    distributions.append('Normal')
+            
+            config['fc_init_functions'] = init_functions
+            config['fc_distributions'] = distributions
+            del config['fc_init_types']
+            modified = True
+        
+        if modified:
+            print("INFO: Migrated old config format to new init function/distribution format")
+        
+        return config
 
     def load_parameters(self, config):
         """Populate UI with values from config dictionary."""
@@ -1171,8 +1275,10 @@ class ConfigurationWidget(QWidget):
                 widgets['stride'].setText(str(config['conv_strides'][i]))
             if 'conv_activations' in config and i < len(config['conv_activations']):
                 widgets['activation'].setCurrentText(config['conv_activations'][i])
-            if 'conv_init_types' in config and i < len(config['conv_init_types']):
-                widgets['init_type'].setCurrentText(config['conv_init_types'][i])
+            if 'conv_init_functions' in config and i < len(config['conv_init_functions']):
+                widgets['init_function'].setCurrentText(config['conv_init_functions'][i])
+            if 'conv_distributions' in config and i < len(config['conv_distributions']):
+                widgets['distribution'].setCurrentText(config['conv_distributions'][i])
     
     def load_pool_layer_config(self, config):
         """Load per-pooling-layer configuration from saved config."""
@@ -1185,8 +1291,10 @@ class ConfigurationWidget(QWidget):
         for i, widgets in enumerate(self.fc_layer_widgets):
             if 'fc_activations' in config and i < len(config['fc_activations']):
                 widgets['activation'].setCurrentText(config['fc_activations'][i])
-            if 'fc_init_types' in config and i < len(config['fc_init_types']):
-                widgets['init_type'].setCurrentText(config['fc_init_types'][i])
+            if 'fc_init_functions' in config and i < len(config['fc_init_functions']):
+                widgets['init_function'].setCurrentText(config['fc_init_functions'][i])
+            if 'fc_distributions' in config and i < len(config['fc_distributions']):
+                widgets['distribution'].setCurrentText(config['fc_distributions'][i])
 
     def on_save_config(self):
         # Ensure config directory exists

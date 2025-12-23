@@ -228,11 +228,32 @@ initFunctions map_init_function(const std::string &name) {
     return initFunctions::Xavier;
   if (name == "He" || name == "Kaiming")
     return initFunctions::Kaiming;
-  if (name == "Normal")
-    return initFunctions::Xavier; // Use Xavier for Normal
+  return initFunctions::Kaiming; // Default to He
+}
+
+// Helper to map distribution type string to enum
+distributionType map_distribution(const std::string &name) {
   if (name == "Uniform")
-    return initFunctions::Xavier; // Use Xavier for Uniform
-  return initFunctions::Xavier;   // Default
+    return distributionType::uniformDistribution;
+  return distributionType::normalDistribution; // Default
+}
+
+// Helper to resolve "Auto" initialization based on activation
+std::string resolve_auto_init(const std::string &init_func,
+                              const std::string &activation,
+                              std::string &log_msg) {
+  if (init_func != "Auto") {
+    return init_func; // User override
+  }
+
+  // Auto resolution
+  if (activation == "ReLU" || activation == "LeakyReLU") {
+    log_msg = "Auto -> He (activation: " + activation + ")";
+    return "He";
+  } else { // Tanh, Sigmoid, Softmax, others
+    log_msg = "Auto -> Xavier (activation: " + activation + ")";
+    return "Xavier";
+  }
 }
 
 // Helper to validate model configuration
@@ -393,9 +414,10 @@ NNModel *create_model(py::dict config) {
       arch.kernelsPerconvLayers.push_back(ck);
     }
 
-    // D. Parse per-layer Conv activations and init types (NEW)
+    // D. Parse per-layer Conv activations, init functions, and distributions
     std::vector<std::string> conv_activations;
-    std::vector<std::string> conv_init_types;
+    std::vector<std::string> conv_init_functions;
+    std::vector<std::string> conv_distributions;
 
     if (config.contains("conv_activations")) {
       try {
@@ -405,29 +427,54 @@ NNModel *create_model(py::dict config) {
       }
     }
 
-    if (config.contains("conv_init_types")) {
+    if (config.contains("conv_init_functions")) {
       try {
-        conv_init_types =
+        conv_init_functions =
+            config["conv_init_functions"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    } else if (config.contains("conv_init_types")) { // Backward compatibility
+      try {
+        conv_init_functions =
             config["conv_init_types"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    }
+
+    if (config.contains("conv_distributions")) {
+      try {
+        conv_distributions =
+            config["conv_distributions"].cast<std::vector<std::string>>();
       } catch (...) {
       }
     }
 
     // Apply per-layer or use defaults
     for (int i = 0; i < num_conv_layers; ++i) {
+      std::string act_str = "ReLU";
       if (i < conv_activations.size()) {
-        arch.convLayerActivationFunc.push_back(
-            map_activation(conv_activations[i]));
-      } else {
-        arch.convLayerActivationFunc.push_back(activationFunction::RelU);
+        act_str = conv_activations[i];
+      }
+      arch.convLayerActivationFunc.push_back(map_activation(act_str));
+
+      std::string init_str = "Auto";
+      if (i < conv_init_functions.size()) {
+        init_str = conv_init_functions[i];
       }
 
-      if (i < conv_init_types.size()) {
-        arch.convInitFunctionsType.push_back(
-            map_init_function(conv_init_types[i]));
-      } else {
-        arch.convInitFunctionsType.push_back(initFunctions::Xavier);
+      std::string log_msg;
+      std::string resolved_init = resolve_auto_init(init_str, act_str, log_msg);
+      if (!log_msg.empty()) {
+        std::cout << "[Conv Layer " << i << "] " << log_msg << std::endl;
       }
+
+      arch.convInitFunctionsType.push_back(map_init_function(resolved_init));
+
+      std::string dist_str = "Normal";
+      if (i < conv_distributions.size()) {
+        dist_str = conv_distributions[i];
+      }
+      arch.convDistributionTypes.push_back(map_distribution(dist_str));
     }
 
     // Log parsed conv configuration
@@ -496,9 +543,10 @@ NNModel *create_model(py::dict config) {
 
     // --- END CNN Configuration Parsing ---
 
-    // E. Parse per-layer FC activations and init types (NEW)
+    // E. Parse per-layer FC activations, init functions, and distributions
     std::vector<std::string> fc_activations;
-    std::vector<std::string> fc_init_types;
+    std::vector<std::string> fc_init_functions;
+    std::vector<std::string> fc_distributions;
 
     if (config.contains("fc_activations")) {
       try {
@@ -508,29 +556,57 @@ NNModel *create_model(py::dict config) {
       }
     }
 
-    if (config.contains("fc_init_types")) {
+    if (config.contains("fc_init_functions")) {
       try {
-        fc_init_types =
+        fc_init_functions =
+            config["fc_init_functions"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    } else if (config.contains("fc_init_types")) { // Backward compatibility
+      try {
+        fc_init_functions =
             config["fc_init_types"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    }
+
+    if (config.contains("fc_distributions")) {
+      try {
+        fc_distributions =
+            config["fc_distributions"].cast<std::vector<std::string>>();
       } catch (...) {
       }
     }
 
     // Apply per-layer or use defaults
     for (int i = 0; i < num_fc_layers; ++i) {
+      std::string act_str = "ReLU";
       if (i < fc_activations.size()) {
-        arch.FCLayerActivationFunc.push_back(map_activation(fc_activations[i]));
-      } else {
-        arch.FCLayerActivationFunc.push_back(activationFunction::RelU);
+        act_str = fc_activations[i];
+      }
+      arch.FCLayerActivationFunc.push_back(map_activation(act_str));
+
+      std::string init_str = "Auto";
+      if (i < fc_init_functions.size()) {
+        init_str = fc_init_functions[i];
       }
 
-      if (i < fc_init_types.size()) {
-        arch.FCInitFunctionsType.push_back(map_init_function(fc_init_types[i]));
-      } else {
-        arch.FCInitFunctionsType.push_back(initFunctions::Xavier);
+      std::string log_msg;
+      std::string resolved_init = resolve_auto_init(init_str, act_str, log_msg);
+      if (!log_msg.empty()) {
+        std::cout << "[FC Layer " << i << "] " << log_msg << std::endl;
       }
+
+      arch.FCInitFunctionsType.push_back(map_init_function(resolved_init));
+
+      std::string dist_str = "Normal";
+      if (i < fc_distributions.size()) {
+        dist_str = fc_distributions[i];
+      }
+      arch.FCDistributionTypes.push_back(map_distribution(dist_str));
     }
 
+    // Default global distribution (deprecated but kept for safety)
     arch.distType = distributionType::normalDistribution;
 
     // Optimizer Config
@@ -622,8 +698,9 @@ int classify_pixels(NNModel &model, py::buffer image_buffer, int width,
       // Safety check (might slow down, can remove if trusted)
       // if (idx >= info.size) throw std::runtime_error("Buffer overflow");
 
-      // Normalize pixel values to [0, 1] range
-      img_data[0][y][x] = static_cast<double>(ptr[idx]) / 255.0;
+      // Pass raw pixel values (0-255) as doubles
+      // Normalization happens in inputLayer now (based on user changes)
+      img_data[0][y][x] = static_cast<double>(ptr[idx]);
     }
   }
 
