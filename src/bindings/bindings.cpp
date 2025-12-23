@@ -205,6 +205,36 @@ void bind_model(py::module &m) {
   // --- FIX ENDS HERE ---
 }
 
+// Helper to map activation function string to enum
+activationFunction map_activation(const std::string &name) {
+  if (name == "ReLU")
+    return activationFunction::RelU;
+  if (name == "Sigmoid")
+    return activationFunction::Sigmoid;
+  if (name == "Tanh")
+    return activationFunction::Tanh;
+  if (name == "Softmax")
+    return activationFunction::Softmax;
+  if (name == "LeakyReLU")
+    return activationFunction::RelU; // Map to ReLU for now
+  if (name == "Linear")
+    return activationFunction::RelU; // Map to ReLU for now
+  return activationFunction::RelU;   // Default
+}
+
+// Helper to map init function string to enum
+initFunctions map_init_function(const std::string &name) {
+  if (name == "Xavier")
+    return initFunctions::Xavier;
+  if (name == "He" || name == "Kaiming")
+    return initFunctions::Kaiming;
+  if (name == "Normal")
+    return initFunctions::Xavier; // Use Xavier for Normal
+  if (name == "Uniform")
+    return initFunctions::Xavier; // Use Xavier for Uniform
+  return initFunctions::Xavier;   // Default
+}
+
 // Helper to validate model configuration
 void validate_config_cpp(int num_fc_layers,
                          const std::vector<int> &neurons_list,
@@ -240,16 +270,24 @@ void validate_config_cpp(int num_fc_layers,
 // Factory function to create NNModel from config dict
 NNModel *create_model(py::dict config) {
   try {
+    // Log received configuration for debugging
+    std::cout << "\n=== C++ create_model: Received Configuration ==="
+              << std::endl;
+
     architecture arch;
 
     // Defaults
     int num_conv_layers = 0;
-    if (config.contains("num_conv_layers"))
+    if (config.contains("num_conv_layers")) {
       num_conv_layers = config["num_conv_layers"].cast<int>();
+      std::cout << "Conv Layers: " << num_conv_layers << std::endl;
+    }
 
     int num_fc_layers = 2;
-    if (config.contains("num_fc_layers"))
+    if (config.contains("num_fc_layers")) {
       num_fc_layers = config["num_fc_layers"].cast<int>();
+      std::cout << "FC Layers: " << num_fc_layers << std::endl;
+    }
 
     std::vector<int> neurons_list = {128, 10};
     if (config.contains("neurons_per_fc_layer"))
@@ -353,33 +391,144 @@ NNModel *create_model(py::dict config) {
       current_depth = ck.numOfKerenels;
 
       arch.kernelsPerconvLayers.push_back(ck);
+    }
 
-      // Activation & Init (defaults)
-      arch.convLayerActivationFunc.push_back(activationFunction::RelU);
-      arch.convInitFunctionsType.push_back(initFunctions::Xavier);
+    // D. Parse per-layer Conv activations and init types (NEW)
+    std::vector<std::string> conv_activations;
+    std::vector<std::string> conv_init_types;
+
+    if (config.contains("conv_activations")) {
+      try {
+        conv_activations =
+            config["conv_activations"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    }
+
+    if (config.contains("conv_init_types")) {
+      try {
+        conv_init_types =
+            config["conv_init_types"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    }
+
+    // Apply per-layer or use defaults
+    for (int i = 0; i < num_conv_layers; ++i) {
+      if (i < conv_activations.size()) {
+        arch.convLayerActivationFunc.push_back(
+            map_activation(conv_activations[i]));
+      } else {
+        arch.convLayerActivationFunc.push_back(activationFunction::RelU);
+      }
+
+      if (i < conv_init_types.size()) {
+        arch.convInitFunctionsType.push_back(
+            map_init_function(conv_init_types[i]));
+      } else {
+        arch.convInitFunctionsType.push_back(initFunctions::Xavier);
+      }
+    }
+
+    // Log parsed conv configuration
+    if (num_conv_layers > 0) {
+      std::cout << "Conv Layer Activations (enum values): ";
+      for (size_t i = 0; i < arch.convLayerActivationFunc.size(); ++i) {
+        std::cout << (i > 0 ? ", " : "")
+                  << static_cast<int>(arch.convLayerActivationFunc[i]);
+      }
+      std::cout << std::endl;
+
+      std::cout << "Conv Layer Init Types (enum values): ";
+      for (size_t i = 0; i < arch.convInitFunctionsType.size(); ++i) {
+        std::cout << (i > 0 ? ", " : "")
+                  << static_cast<int>(arch.convInitFunctionsType[i]);
+      }
+      std::cout << std::endl;
     }
 
     // B. Pooling Layers
 
-    for (size_t interval : loop_intervals_list) {
-      arch.poolingLayersInterval.push_back(interval);
+    // Parse pooling strides (NEW)
+    std::vector<int> pooling_strides;
+    if (config.contains("pooling_strides")) {
+      try {
+        // Handle both int and string formats
+        auto py_strides = config["pooling_strides"];
+        if (py::isinstance<py::list>(py_strides)) {
+          for (auto item : py_strides) {
+            if (py::isinstance<py::int_>(item)) {
+              pooling_strides.push_back(item.cast<int>());
+            } else if (py::isinstance<py::str>(item)) {
+              // Parse "2x2" format - just use first number for now
+              std::string str = item.cast<std::string>();
+              try {
+                pooling_strides.push_back(std::stoi(str));
+              } catch (...) {
+                pooling_strides.push_back(2); // Default
+              }
+            }
+          }
+        }
+      } catch (...) {
+      }
+    }
+
+    for (size_t idx = 0; idx < loop_intervals_list.size(); ++idx) {
+      arch.poolingLayersInterval.push_back(loop_intervals_list[idx]);
       arch.poolingtype.push_back(pool_type);
 
-      // Default pooling kernel
+      // Pooling kernel with configurable stride
       poolKernel pk;
       pk.filter_height = 2;
       pk.filter_width = 2;
-      pk.stride = 2;
       pk.filter_depth = 1;
+
+      // Use configured stride or default
+      if (idx < pooling_strides.size() && pooling_strides[idx] > 0) {
+        pk.stride = pooling_strides[idx];
+      } else {
+        pk.stride = 2; // Default
+      }
+
       arch.kernelsPerPoolingLayer.push_back(pk);
     }
 
     // --- END CNN Configuration Parsing ---
 
-    // Defaults for FC layers
+    // E. Parse per-layer FC activations and init types (NEW)
+    std::vector<std::string> fc_activations;
+    std::vector<std::string> fc_init_types;
+
+    if (config.contains("fc_activations")) {
+      try {
+        fc_activations =
+            config["fc_activations"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    }
+
+    if (config.contains("fc_init_types")) {
+      try {
+        fc_init_types =
+            config["fc_init_types"].cast<std::vector<std::string>>();
+      } catch (...) {
+      }
+    }
+
+    // Apply per-layer or use defaults
     for (int i = 0; i < num_fc_layers; ++i) {
-      arch.FCLayerActivationFunc.push_back(activationFunction::RelU);
-      arch.FCInitFunctionsType.push_back(initFunctions::Xavier);
+      if (i < fc_activations.size()) {
+        arch.FCLayerActivationFunc.push_back(map_activation(fc_activations[i]));
+      } else {
+        arch.FCLayerActivationFunc.push_back(activationFunction::RelU);
+      }
+
+      if (i < fc_init_types.size()) {
+        arch.FCInitFunctionsType.push_back(map_init_function(fc_init_types[i]));
+      } else {
+        arch.FCInitFunctionsType.push_back(initFunctions::Xavier);
+      }
     }
 
     arch.distType = distributionType::normalDistribution;
@@ -473,7 +622,8 @@ int classify_pixels(NNModel &model, py::buffer image_buffer, int width,
       // Safety check (might slow down, can remove if trusted)
       // if (idx >= info.size) throw std::runtime_error("Buffer overflow");
 
-      img_data[0][y][x] = static_cast<double>(ptr[idx]);
+      // Normalize pixel values to [0, 1] range
+      img_data[0][y][x] = static_cast<double>(ptr[idx]) / 255.0;
     }
   }
 

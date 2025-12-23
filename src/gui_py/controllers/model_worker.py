@@ -84,6 +84,11 @@ class TrainingThread(QThread):
                                 # Access pixels from MNISTImage object
                                 # self.dataset.images is a list of MNISTImage objects
                                 # images[idx].pixels is the vector of uint8
+
+
+                                # IMPORTANT: Keep raw pixel values for visualization!
+                                # C++ classify_pixels and convert_mnist_to_image_format normalize before model
+                                # Visualization needs raw uint8 [0-255] to display correctly
                                 img_data_vec = self.dataset.images[idx].pixels
                                 preview_label = self.dataset.images[idx].label
                                 
@@ -384,6 +389,44 @@ class ModelWorker(QObject):
     def _initialize_model(self, config):
         """Initialize the neural network model with the given configuration using C++ factory."""
         self.logMessage.emit("Initializing NNModel with Config (via C++ Factory)...")
+        
+        # Log layer-specific configuration for verification
+        self.logMessage.emit("=== Layer Configuration Details ===")
+        
+        # Conv layers
+        if 'num_conv_layers' in config and config['num_conv_layers'] > 0:
+            self.logMessage.emit(f"Conv Layers: {config['num_conv_layers']}")
+            if 'kernels_per_layer' in config:
+                self.logMessage.emit(f"  Kernels: {config['kernels_per_layer']}")
+            if 'kernel_dims' in config:
+                self.logMessage.emit(f"  Kernel Dims: {config['kernel_dims']}")
+            if 'conv_activations' in config:
+                self.logMessage.emit(f"  Activations: {config['conv_activations']}")
+            if 'conv_init_types' in config:
+                self.logMessage.emit(f"  Init Types: {config['conv_init_types']}")
+            if 'conv_paddings' in config:
+                self.logMessage.emit(f"  Paddings: {config['conv_paddings']}")
+            if 'conv_strides' in config:
+                self.logMessage.emit(f"  Strides: {config['conv_strides']}")
+        
+        # Pooling layers
+        if 'pooling_intervals' in config and config['pooling_intervals']:
+            self.logMessage.emit(f"Pooling: {config['pooling_type']} at intervals {config['pooling_intervals']}")
+            if 'pooling_strides' in config:
+                self.logMessage.emit(f"  Strides: {config['pooling_strides']}")
+        
+        # FC layers
+        if 'num_fc_layers' in config:
+            self.logMessage.emit(f"FC Layers: {config['num_fc_layers']}")
+            if 'neurons_per_fc_layer' in config:
+                self.logMessage.emit(f"  Neurons: {config['neurons_per_fc_layer']}")
+            if 'fc_activations' in config:
+                self.logMessage.emit(f"  Activations: {config['fc_activations']}")
+            if 'fc_init_types' in config:
+                self.logMessage.emit(f"  Init Types: {config['fc_init_types']}")
+        
+        self.logMessage.emit("===================================")
+        
         try:
             self.model = cgroot_core.create_model(config)
             self.logMessage.emit("Model initialized successfully")

@@ -101,8 +101,7 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
     throw;
   }
 
-
-  featureMapDim inputFmDim  = {imageHeight, imageWidth, imageDepth};
+  featureMapDim inputFmDim = {imageHeight, imageWidth, imageDepth};
   // poolCount is used to count the number of convolution layers after which
   // a pooling layer will be inserted
   size_t poolCount = 0;
@@ -110,15 +109,13 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   // an iterator that is used to iterate the pooling layers information vectors
   size_t poolIter = 0;
 
-
   try {
     // start initializing the convolution and pooling layers
     // a pooling layer is inserted after a number of convolution layers
     for (size_t i = 0; i < modelArch.numOfConvLayers; i++) {
-  
+
       // Set kernel depth to match input depth
       modelArch.kernelsPerconvLayers[i].kernel_depth = inputFmDim.FM_depth;
-
 
       try {
         // Create convolution layer
@@ -133,7 +130,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
         throw;
       }
 
-      inputFmDim = static_cast<convLayer*>(Layers[Layers.size() - 1])->getFeatureMapDim();
+      inputFmDim = static_cast<convLayer *>(Layers[Layers.size() - 1])
+                       ->getFeatureMapDim();
 
       poolCount++;
 
@@ -144,7 +142,6 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
         poolKernel &poolKern = modelArch.kernelsPerPoolingLayer[poolIter];
         poolKern.filter_depth = inputFmDim.FM_depth;
 
-
         try {
           // Create pooling layer
           Layers.emplace_back(new poolingLayer(
@@ -154,14 +151,13 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
                     << e.what() << std::endl;
           throw;
         }
-        
-        inputFmDim = static_cast<poolingLayer*>(Layers[Layers.size() - 1])->getFeatureMapDim();
+
+        inputFmDim = static_cast<poolingLayer *>(Layers[Layers.size() - 1])
+                         ->getFeatureMapDim();
 
         poolCount = 0;
         poolIter++;
       }
-
-
     }
   } catch (const std::exception &e) {
     std::cerr << "ERROR creating convolution and pooling layers: " << e.what()
@@ -177,8 +173,8 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
 
   if (needsFlatten) {
     try {
-      Layers.emplace_back(
-          new FlattenLayer(inputFmDim.FM_height, inputFmDim.FM_width, inputFmDim.FM_depth));
+      Layers.emplace_back(new FlattenLayer(
+          inputFmDim.FM_height, inputFmDim.FM_width, inputFmDim.FM_depth));
     } catch (const std::exception &e) {
       std::cerr << "ERROR creating flatten layer: " << e.what() << std::endl;
       throw;
@@ -186,9 +182,10 @@ NNModel::NNModel(architecture modelArch, size_t numOfClasses,
   }
 
   // Build fully connected layers
-  size_t fcInputSize = needsFlatten
-                           ? inputFmDim.FM_height * inputFmDim.FM_width * inputFmDim.FM_depth
-                           : imageHeight * imageWidth * imageDepth;
+  size_t fcInputSize =
+      needsFlatten
+          ? inputFmDim.FM_height * inputFmDim.FM_width * inputFmDim.FM_depth
+          : imageHeight * imageWidth * imageDepth;
 
   // // std::cout << "Building FC layers. Initial fcInputSize: " << fcInputSize
   //           << std::endl;
@@ -278,8 +275,9 @@ static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
         size_t idx = (d * channel_size) + (y * width) + x;
 
         if (idx < flat_pixels.size()) {
-          image_data[d][y].push_back(
-              static_cast<unsigned char>(flat_pixels[idx]));
+          // Normalize pixel values to [0, 1] range
+          image_data[d][y].push_back(static_cast<double>(flat_pixels[idx]) /
+                                     255.0);
         } else {
           image_data[d][y].push_back(0);
         }
@@ -288,8 +286,6 @@ static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
   }
   return image_data;
 }
-
-
 
 // train the model with a single image
 // input:        -data (an image)
