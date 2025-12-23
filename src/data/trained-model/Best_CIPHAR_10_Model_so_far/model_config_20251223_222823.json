@@ -1,0 +1,50 @@
+{
+    "epochs": 20,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "optimizer": "Adam",
+    "weight_decay": 0.0001,
+    "momentum": 0.9,
+    "beta1": 0.9,
+    "beta2": 0.999,
+    "beta": 0.9,
+    "epsilon": 1e-08,
+    "validation_split": 0.0,
+    "use_validation": false,
+    "num_classes": 10,
+    "image_width": 32,
+    "image_height": 32,
+    "image_depth": 3,
+    "num_conv_layers": 3,
+    "num_fc_layers": 2,
+    "neurons_per_fc_layer": [
+        256,
+        10
+    ],
+    "kernels_per_layer": [
+        2,
+        4,
+        8
+    ],
+    "kernel_dims": [
+        [
+            3,
+            3
+        ],
+        [
+            3,
+            3
+        ],
+        [
+            3,
+            3
+        ]
+    ],
+    "pooling_type": "Max",
+    "pooling_intervals": [],
+    "viz_enabled": false,
+    "show_preview": true,
+    "map_frequency": "Every Sample",
+    "auto_scroll": true,
+    "chart_animations": true
+}
