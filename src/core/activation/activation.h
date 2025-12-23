@@ -1,7 +1,7 @@
 #ifndef _ACTIVATION_H
 #define _ACTIVATION_H
 
-#include <math.h>
+#include <cmath>
 #include <vector>
 
 using namespace std;

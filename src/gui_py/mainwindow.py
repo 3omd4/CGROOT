@@ -229,6 +229,9 @@ class MainWindow(QMainWindow):
         
         self.config_tab.vizSettingsChanged.connect(self.on_gui_settings_changed)
         
+        # Bidirectional sync: Training widget viz checkbox → Config widget
+        self.training_tab.vizToggled.connect(self.config_tab.set_viz_enabled)
+        
         # Initialize GUI Settings
         self.on_gui_settings_changed(self.config_tab.get_gui_settings())
         
@@ -385,7 +388,7 @@ class MainWindow(QMainWindow):
         Shutdown sequence:
         1. Save logs to src/data/logs/
         2. Stop training
-        3. Wait for worker thread
+        3. Wait for worker thread with progress dialog
         4. Cleanup worker resources
         5. Accept close event
         """
@@ -396,9 +399,6 @@ class MainWindow(QMainWindow):
             import os
             from datetime import datetime
             
-            # Determine log dir relative to project root (assuming we are in src/gui_py)
-            # Or just use relative path if CWD is correct (which it should be if run via manager)
-            # But let's be robust
             from pathlib import Path
             script_dir = Path(__file__).parent
             project_root = script_dir.parent.parent
@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write(self.log_output.toPlainText())
             
-            print(f"Logs saved to: {log_file}") # Print to console as UI is closing
+            print(f"Logs saved to: {log_file}")
             
         except Exception as e:
             print(f"Failed to save logs: {e}")
@@ -421,34 +421,64 @@ class MainWindow(QMainWindow):
         # 1. Request training stop
         self.controller.requestStop.emit()
         
-        # 2. Wait for worker thread to finish
+        # 2. Wait for worker thread to finish with progress indication
         if hasattr(self.controller, 'workerThread') and self.controller.workerThread:
             if self.controller.workerThread.isRunning():
+                # Create progress dialog to prevent appearing frozen
+                from PyQt6.QtWidgets import QProgressDialog
+                progress = QProgressDialog("Stopping training thread...", "Force Close", 0, 50, self)
+                progress.setWindowTitle("Closing Application")
+                progress.setWindowModality(Qt.WindowModality.WindowModal)
+                progress.setMinimumDuration(0)
+                progress.setValue(0)
+                
                 self.log_message("Waiting for worker thread to stop...")
                 self.controller.workerThread.quit()
                 
-                # Wait up to 5 seconds for graceful stop
-                if not self.controller.workerThread.wait(5000):
+                # Wait up to 10 seconds with progress updates
+                wait_time = 0
+                max_wait = 10000  # 10 seconds
+                interval = 200  # 200ms intervals
+                
+                while wait_time < max_wait and self.controller.workerThread.isRunning():
+                    QApplication.processEvents()  # Keep GUI responsive
+                    self.controller.workerThread.wait(interval)
+                    wait_time += interval
+                    progress.setValue(int((wait_time / max_wait) * 50))
+                    
+                    # Check if user clicked "Force Close"
+                    if progress.wasCanceled():
+                        self.log_message("Force close requested by user")
+                        break
+                
+                if self.controller.workerThread.isRunning():
                     self.log_message("Worker thread did not stop gracefully, terminating...")
                     self.controller.workerThread.terminate()
-                    self.controller.workerThread.wait()
+                    self.controller.workerThread.wait(1000)  # Wait 1 more second
                 else:
                     self.log_message("Worker thread stopped successfully")
+                    
+                progress.setValue(50)
+                progress.close()
         
         # 3. Cleanup worker resources
         if hasattr(self.controller, 'worker') and self.controller.worker:
             self.log_message("Cleaning up worker resources...")
-            self.controller.worker.cleanup()
+            try:
+                self.controller.worker.cleanup()
+            except Exception as e:
+                print(f"Error during cleanup: {e}")
         
         self.log_message("=== Application Shutdown Complete ===")
         
         # 4. Accept the close event
         event.accept()
         
-        # Force Kill Process (Zombie prevention)
-        # import os
-        # print("Forcing process exit...")
-        # os._exit(0)
+        # Force process exit to ensure clean shutdown
+        print("Forcing process exit...")
+        QApplication.processEvents()
+        import sys
+        sys.exit(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

@@ -8,6 +8,7 @@ class TrainingWidget(QWidget):
     stopTrainingRequested = pyqtSignal()
     loadModelRequested = pyqtSignal(str) # Path to model file
     storeModelRequested = pyqtSignal(str) # Path to folder
+    vizToggled = pyqtSignal(bool) # Signal to sync with config widget
 
     def __init__(self, controller):
         super().__init__()
@@ -32,7 +33,7 @@ class TrainingWidget(QWidget):
         self.viz_checkbox.setChecked(True)
         self.viz_checkbox.toggled.connect(self.on_viz_toggled)
         self.viz_checkbox.setToolTip("Disabling visualizations significantly improves training speed by reducing data transfer overhead.")
-        self.viz_checkbox.setEnabled(False)
+        self.viz_checkbox.setEnabled(True)  # Now enabled for user control
         main_layout.addWidget(self.viz_checkbox)
 
         # Preview Group
@@ -224,6 +225,7 @@ class TrainingWidget(QWidget):
 
     def on_viz_toggled(self, checked):
         self.controller.setVisualizationsEnabled.emit(checked)
+        self.vizToggled.emit(checked)  # Notify config widget
         self.preview_group.setEnabled(checked)
         self.fm_group.setEnabled(checked)
         self.preview_group.setVisible(checked)
@@ -240,7 +242,10 @@ class TrainingWidget(QWidget):
     # Visualization Settings Slot
     def set_visualization_settings(self, settings):
         if 'viz_enabled' in settings:
+             # Block signals to avoid circular updates
+             self.viz_checkbox.blockSignals(True)
              self.viz_checkbox.setChecked(settings.get('viz_enabled'))
+             self.viz_checkbox.blockSignals(False)
              
         self.viz_show_preview = settings.get('show_preview', True)
         self.viz_map_frequency = settings.get('map_frequency', "Every Epoch")

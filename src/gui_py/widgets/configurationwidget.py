@@ -122,7 +122,7 @@ class ConfigurationWidget(QWidget):
         self.learning_rate = QDoubleSpinBox()
         self.learning_rate.setDecimals(5)
         self.learning_rate.setRange(0.0, 10.0)
-        self.learning_rate.setValue(0.001)
+        self.learning_rate.setValue(0.0001)
         self.learning_rate.setToolTip(
             "Controls how much weights change per update (step size).\n\n"
             "Typical values:\n"
@@ -224,7 +224,7 @@ class ConfigurationWidget(QWidget):
         
         self.batch_size = QSpinBox()
         self.batch_size.setRange(1, 10000)
-        self.batch_size.setValue(64)
+        self.batch_size.setValue(256)
         self.batch_size.setToolTip(
             "Number of samples processed before updating weights.\n\n"
             "Common values: 32, 64, 128, 256\n\n"
@@ -314,69 +314,124 @@ class ConfigurationWidget(QWidget):
         
 
 
+
     def setup_network_tab(self):
         scroll = QScrollArea()
         widget = QWidget()
-        layout = QFormLayout(widget)
+        main_layout = QVBoxLayout(widget)
         
-        # Conv Layers Config
+        # =====================================================================
+        # CONVOLUTION LAYERS SECTION
+        # =====================================================================
+        conv_group = QGroupBox("Convolutional Layers")
+        conv_layout = QVBoxLayout()
+        
+        # Number of Conv Layers
+        conv_count_layout = QFormLayout()
         self.num_conv_layers = QSpinBox()
         self.num_conv_layers.setRange(0, 10)
-        self.num_conv_layers.setValue(2) # Default to 2
+        self.num_conv_layers.setValue(2)
         self.num_conv_layers.setToolTip("Number of Convolutional layers.")
-        layout.addRow("Number of Conv Layers:", self.num_conv_layers)
-
-        self.kernels_per_layer = QLineEdit("4, 9")
-        self.kernels_per_layer.setPlaceholderText("e.g. 32, 64")
-        self.kernels_per_layer.setToolTip("Comma separated number of kernels for each Conv layer.")
-        layout.addRow("Kernels per Layer:", self.kernels_per_layer)
-
-        self.kernel_dims = QLineEdit("3x3, 3x3")
-        self.kernel_dims.setPlaceholderText("e.g. 3x3, 3x3")
-        self.kernel_dims.setToolTip("Comma separated dimensions (HxW) for each Conv layer. e.g. '5x5', or '5x5, 3x3'.")
-        layout.addRow("Kernel Dimensions:", self.kernel_dims)
-
-        # Pooling Config
+        conv_count_layout.addRow("Number of Conv Layers:", self.num_conv_layers)
+        conv_layout.addLayout(conv_count_layout)
+        
+        # Container for per-layer conv controls (dynamically populated)
+        self.conv_layers_container = QWidget()
+        self.conv_layers_layout = QVBoxLayout(self.conv_layers_container)
+        self.conv_layers_layout.setContentsMargins(0, 0, 0, 0)
+        conv_layout.addWidget(self.conv_layers_container)
+        
+        conv_group.setLayout(conv_layout)
+        main_layout.addWidget(conv_group)
+        
+        # =====================================================================
+        # POOLING LAYERS SECTION
+        # =====================================================================
+        pool_group = QGroupBox("Pooling Layers")
+        pool_layout = QFormLayout()
+        
         self.pooling_type = QComboBox()
         self.pooling_type.addItems(["Max", "Average"])
-        self.pooling_type.setCurrentIndex(0) # Default to Max
-        layout.addRow("Pooling Type:", self.pooling_type)
-
+        self.pooling_type.setCurrentIndex(0)
+        self.pooling_type.setToolTip("Global pooling type for all pooling layers.")
+        pool_layout.addRow("Pooling Type:", self.pooling_type)
+        
         self.pooling_intervals = QLineEdit("1, 2")
         self.pooling_intervals.setPlaceholderText("e.g. 1, 2")
         self.pooling_intervals.setToolTip(
             "Comma-separated conv layer indices after which pooling is applied.\n"
             "Example: '1, 2' → pooling after conv layers 1 and 2."
         )
-        layout.addRow("Pooling Intervals:", self.pooling_intervals)
+        pool_layout.addRow("Pooling Intervals:", self.pooling_intervals)
         
-        # FC Layers Config
+        # Container for per-pooling-layer controls
+        self.pool_layers_container = QWidget()
+        self.pool_layers_layout = QVBoxLayout(self.pool_layers_container)
+        self.pool_layers_layout.setContentsMargins(0, 0, 0, 0)
+        pool_layout.addRow(self.pool_layers_container)
+        
+        pool_group.setLayout(pool_layout)
+        main_layout.addWidget(pool_group)
+        
+        # =====================================================================
+        # FULLY CONNECTED LAYERS SECTION
+        # =====================================================================
+        fc_group = QGroupBox("Fully Connected Layers")
+        fc_layout = QVBoxLayout()
+        
+        # Number of FC Layers
+        fc_count_layout = QFormLayout()
         self.num_fc_layers = QSpinBox()
         self.num_fc_layers.setRange(1, 10)
         self.num_fc_layers.setValue(2)
-        layout.addRow("Number of FC Layers:", self.num_fc_layers)
+        fc_count_layout.addRow("Number of FC Layers:", self.num_fc_layers)
         
         self.neurons_fc_input = QLineEdit("256, 10")
         self.neurons_fc_input.setPlaceholderText("comma separated, e.g. 256, 128, 10")
-        layout.addRow("Neurons per FC Layer:", self.neurons_fc_input)
+        fc_count_layout.addRow("Neurons per FC Layer:", self.neurons_fc_input)
         
         info_label = QLabel("Note: Ensure the last FC layer size matches the Number of Classes.")
         info_label.setStyleSheet("color: gray; font-style: italic;")
-        layout.addRow(info_label)
+        fc_count_layout.addRow(info_label)
         
-        # Connect signals
-        self.num_conv_layers.valueChanged.connect(self.on_parameter_changed)
-        self.num_fc_layers.valueChanged.connect(self.on_parameter_changed)
+        fc_layout.addLayout(fc_count_layout)
+        
+        # Container for per-layer FC controls (dynamically populated)
+        self.fc_layers_container = QWidget()
+        self.fc_layers_layout = QVBoxLayout(self.fc_layers_container)
+        self.fc_layers_layout.setContentsMargins(0, 0, 0, 0)
+        fc_layout.addWidget(self.fc_layers_container)
+        
+        fc_group.setLayout(fc_layout)
+        main_layout.addWidget(fc_group)
+        
+        main_layout.addStretch()
+        
+        # =====================================================================
+        # CONNECT SIGNALS
+        # =====================================================================
+        self.num_conv_layers.valueChanged.connect(self.on_conv_layers_changed)
+        self.num_fc_layers.valueChanged.connect(self.on_fc_layers_changed)
         self.neurons_fc_input.textChanged.connect(self.on_parameter_changed)
-        self.kernels_per_layer.textChanged.connect(self.on_parameter_changed)
-        self.kernel_dims.textChanged.connect(self.on_parameter_changed)
         self.pooling_type.currentIndexChanged.connect(self.on_parameter_changed)
-        self.pooling_intervals.textChanged.connect(self.on_parameter_changed)
+        self.pooling_intervals.textChanged.connect(self.on_pooling_intervals_changed)
         
         scroll.setWidget(widget)
         scroll.setWidgetResizable(True)
-        scroll.setWidgetResizable(True)
         self.tab_widget.addTab(scroll, "Network Architecture")
+        
+        # =====================================================================
+        # INITIALIZE DYNAMIC CONTROLS
+        # =====================================================================
+        # Storage for dynamic widgets (will be populated)
+        self.conv_layer_widgets = []
+        self.pool_layer_widgets = []
+        self.fc_layer_widgets = []
+        
+        # Populate controls for default layer counts
+        self.rebuild_conv_layer_controls()
+        self.rebuild_pool_layer_controls()
+        self.rebuild_fc_layer_controls()
 
     def setup_gui_tab(self):
         panel = QWidget()
@@ -420,6 +475,7 @@ class ConfigurationWidget(QWidget):
         
         self.tab_widget.addTab(panel, "GUI Settings")
 
+
     def get_architecture_parameters(self):
          # Parse neurons list
         try:
@@ -458,51 +514,11 @@ class ConfigurationWidget(QWidget):
         else:
             self.validation_split.setEnabled(False)
         
-        # Parse CNN params
-        try:
-            kernels_str = self.kernels_per_layer.text()
-            kernels_list = [int(x.strip()) for x in kernels_str.split(',') if x.strip()]
-            if len(kernels_list) != self.num_conv_layers.value():
-                QMessageBox.warning(
-                    self,
-                    "Architecture Warning",
-                    "Number of kernels must match number of convolutional layers."
-                )
-                kernels_list = kernels_list[:self.num_conv_layers.value()]
-        except ValueError:
-            kernels_list = []
-
-        # Parse Kernel Dims (e.g. "5x5, 3x3")
-        kernel_dims_list = []
-        dims_str = self.kernel_dims.text()
-        parts = [p.strip() for p in dims_str.split(',') if p.strip()]
-        for p in parts:
-            if 'x' in p:
-                d = p.split('x')
-                if len(d) == 2:
-                    try:
-                        kernel_dims_list.append((int(d[0]), int(d[1])))
-                    except  Exception:
-                        pass
+        # Collect per-layer conv parameters
+        conv_params = self.get_conv_layer_params()
+        pool_params = self.get_pool_layer_params()
+        fc_params = self.get_fc_layer_params()
         
-        try:
-            if len(kernel_dims_list) != self.num_conv_layers.value():
-                raise ValueError("kernel_dims count must match num_conv_layers")
-
-        except ValueError:
-            kernel_dims_list = []
-            logging.warning("Invalid kernel_dims. Using default: 3x3 per layer")
-            
-        # Parse Pooling Intervals
-        try:
-            intervals_str = self.pooling_intervals.text()
-            intervals_list = [int(x.strip()) for x in intervals_str.split(',') if x.strip()]
-            if len(intervals_list) != self.num_conv_layers.value():
-                logging.warning("Pooling intervals count mismatch, disabling pooling.")
-                intervals_list = []
-        except ValueError:
-            intervals_list = []
-            
         return {
             'num_classes': self.num_classes.value(),
             'image_width': self.image_width.value(),
@@ -511,11 +527,315 @@ class ConfigurationWidget(QWidget):
             'num_conv_layers': self.num_conv_layers.value(),
             'num_fc_layers': self.num_fc_layers.value(),
             'neurons_per_fc_layer': neurons,
+            'pooling_type': self.pooling_type.currentText(),
+            **conv_params,
+            **pool_params,
+            **fc_params
+        }
+
+    # =========================================================================
+    # DYNAMIC LAYER CONTROL REBUILD METHODS
+    # =========================================================================
+    
+    def rebuild_conv_layer_controls(self):
+        """Rebuild per-layer convolution configuration controls."""
+        # Clear existing widgets
+        while self.conv_layers_layout.count():
+            item = self.conv_layers_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        self.conv_layer_widgets = []
+        num_layers = self.num_conv_layers.value()
+        
+        for i in range(num_layers):
+            layer_group = QGroupBox(f"Conv Layer {i+1}")
+            layer_layout = QFormLayout()
+            
+            # Kernel Count  
+            kernel_count = QSpinBox()
+            kernel_count.setRange(1, 512)
+            # Progressive scaling: 2, 4, 8, 16...
+            kernel_count.setValue(2 * (2 ** i))
+            kernel_count.setToolTip(f"Number of filters/kernels for conv layer {i+1}")
+            layer_layout.addRow(f"Kernels:", kernel_count)
+            
+            # Kernel Size
+            kernel_size = QLineEdit("3x3")
+            kernel_size.setPlaceholderText("e.g. 3x3 or 5x5")
+            kernel_size.setToolTip("Kernel dimensions (HeightxWidth)")
+            layer_layout.addRow("Kernel Size:", kernel_size)
+            
+            # Padding
+            padding = QComboBox()
+            padding.addItems(["Valid", "Same", "Custom"])
+            padding.setToolTip(
+                "Padding mode:\n"
+                "• Valid: No padding\n"
+                "• Same: Pad to maintain output size\n"
+                "• Custom: Specify numeric padding"
+            )
+            layer_layout.addRow("Padding:", padding)
+            
+            # Custom Padding Value (shown only if Custom is selected)
+            padding_value = QSpinBox()
+            padding_value.setRange(0, 10)
+            padding_value.setValue(0)
+            padding_value.setEnabled(False)
+            padding_value.setToolTip("Numeric padding value (pixels)")
+            layer_layout.addRow("Padding Value:", padding_value)
+            
+            # Connect padding mode change
+            padding.currentTextChanged.connect(
+                lambda text, pv=padding_value: pv.setEnabled(text == "Custom")
+            )
+            
+            # Stride
+            stride = QLineEdit("1")
+            stride.setPlaceholderText("e.g. 1 or 2x2")
+            stride.setToolTip("Stride: integer or HxW format")
+            layer_layout.addRow("Stride:", stride)
+            
+            # Activation Function
+            activation = QComboBox()
+            activation.addItems(["ReLU", "LeakyReLU", "Tanh", "Sigmoid", "Linear"])
+            activation.setCurrentText("ReLU")
+            activation.setToolTip(f"Activation function for conv layer {i+1}")
+            layer_layout.addRow("Activation:", activation)
+            
+            # Weight Initialization
+            init_type = QComboBox()
+            init_type.addItems(["Xavier", "He", "Normal", "Uniform"])
+            init_type.setCurrentText("He" if activation.currentText() == "ReLU" else "Xavier")
+            init_type.setToolTip(f"Weight initialization method for conv layer {i+1}")
+            layer_layout.addRow("Initialization:", init_type)
+            
+            layer_group.setLayout(layer_layout)
+            self.conv_layers_layout.addWidget(layer_group)
+            
+            # Store widget references
+            self.conv_layer_widgets.append({
+                'kernel_count': kernel_count,
+                'kernel_size': kernel_size,
+                'padding': padding,
+                'padding_value': padding_value,
+                'stride': stride,
+                'activation': activation,
+                'init_type': init_type
+            })
+            
+            # Connect signals for parameter changed
+            kernel_count.valueChanged.connect(self.on_parameter_changed)
+            kernel_size.textChanged.connect(self.on_parameter_changed)
+            padding.currentIndexChanged.connect(self.on_parameter_changed)
+            padding_value.valueChanged.connect(self.on_parameter_changed)
+            stride.textChanged.connect(self.on_parameter_changed)
+            activation.currentIndexChanged.connect(self.on_parameter_changed)
+            init_type.currentIndexChanged.connect(self.on_parameter_changed)
+    
+    def rebuild_pool_layer_controls(self):
+        """Rebuild per-pooling-layer configuration controls."""
+        # Clear existing widgets
+        while self.pool_layers_layout.count():
+            item = self.pool_layers_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        self.pool_layer_widgets = []
+        
+        # Parse pooling intervals to determine how many pooling layers
+        try:
+            intervals_str = self.pooling_intervals.text()
+            intervals = [int(x.strip()) for x in intervals_str.split(',') if x.strip()]
+        except:
+            intervals = []
+        
+        for i, interval in enumerate(intervals):
+            layer_label = QLabel(f"Pooling Layer {i+1} (after Conv {interval}):")
+            layer_label.setStyleSheet("font-weight: bold;")
+            self.pool_layers_layout.addWidget(layer_label)
+            
+            stride_layout = QHBoxLayout()
+            stride_label = QLabel("Stride:")
+            stride = QLineEdit("2")
+            stride.setPlaceholderText("e.g. 2 or 2x2")
+            stride.setToolTip("Pooling stride: integer or HxW format")
+            stride_layout.addWidget(stride_label)
+            stride_layout.addWidget(stride)
+            
+            stride_widget = QWidget()
+            stride_widget.setLayout(stride_layout)
+            self.pool_layers_layout.addWidget(stride_widget)
+            
+            self.pool_layer_widgets.append({'stride': stride})
+            stride.textChanged.connect(self.on_parameter_changed)
+    
+    def rebuild_fc_layer_controls(self):
+        """Rebuild per-FC-layer configuration controls."""
+        # Clear existing widgets
+        while self.fc_layers_layout.count():
+            item = self.fc_layers_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        self.fc_layer_widgets = []
+        num_layers = self.num_fc_layers.value()
+        
+        for i in range(num_layers):
+            layer_group = QGroupBox(f"FC Layer {i+1}")
+            layer_layout = QFormLayout()
+            
+            # Activation Function
+            activation = QComboBox()
+            activation.addItems(["ReLU", "LeakyReLU", "Tanh", "Sigmoid", "Softmax", "Linear"])
+            # Last layer typically uses different activation
+            if i == num_layers - 1:
+                activation.setCurrentText("Softmax")
+            else:
+                activation.setCurrentText("ReLU")
+            activation.setToolTip(f"Activation function for FC layer {i+1}")
+            layer_layout.addRow("Activation:", activation)
+            
+            # Weight Initialization
+            init_type = QComboBox()
+            init_type.addItems(["Xavier", "He", "Normal", "Uniform"])
+            init_type.setCurrentText("He" if activation.currentText() == "ReLU" else "Xavier")
+            init_type.setToolTip(f"Weight initialization method for FC layer {i+1}")
+            layer_layout.addRow("Initialization:", init_type)
+            
+            layer_group.setLayout(layer_layout)
+            self.fc_layers_layout.addWidget(layer_group)
+            
+            # Store widget references
+            self.fc_layer_widgets.append({
+                'activation': activation,
+                'init_type': init_type
+            })
+            
+            # Connect signals
+            activation.currentIndexChanged.connect(self.on_parameter_changed)
+            init_type.currentIndexChanged.connect(self.on_parameter_changed)
+    
+    # =========================================================================
+    # SIGNAL HANDLERS FOR DYNAMIC CONTROLS
+    # =========================================================================
+    
+    def on_conv_layers_changed(self):
+        """Handle change in number of convolution layers."""
+        self.rebuild_conv_layer_controls()
+        self.on_parameter_changed()
+    
+    def on_pooling_intervals_changed(self):
+        """Handle change in pooling intervals."""
+        self.rebuild_pool_layer_controls()
+        self.on_parameter_changed()
+    
+    def on_fc_layers_changed(self):
+        """Handle change in number of FC layers."""
+        self.rebuild_fc_layer_controls()
+        self.on_parameter_changed()
+    
+    # =========================================================================
+    # PARAMETER EXTRACTION FROM DYNAMIC CONTROLS
+    # =========================================================================
+    
+    def get_conv_layer_params(self):
+        """Extract convolution layer parameters from dynamic controls."""
+        kernels_list = []
+        kernel_dims_list = []
+        conv_paddings = []
+        conv_strides = []
+        conv_activations = []
+        conv_init_types = []
+        
+        for i, widgets in enumerate(self.conv_layer_widgets):
+            # Kernel count
+            kernels_list.append(widgets['kernel_count'].value())
+            
+            # Kernel dimensions
+            try:
+                size_str = widgets['kernel_size'].text().strip()
+                if 'x' in size_str:
+                    h, w = size_str.split('x')
+                    kernel_dims_list.append([int(h), int(w)])
+                else:
+                    val = int(size_str)
+                    kernel_dims_list.append([val, val])
+            except:
+                kernel_dims_list.append([3, 3])
+            
+            # Padding
+            padding_mode = widgets['padding'].currentText()
+            if padding_mode == "Custom":
+                conv_paddings.append(widgets['padding_value'].value())
+            else:
+                conv_paddings.append(padding_mode)
+            
+            # Stride
+            try:
+                stride_str = widgets['stride'].text().strip()
+                if 'x' in stride_str:
+                    conv_strides.append(stride_str)
+                else:
+                    conv_strides.append(int(stride_str))
+            except:
+                conv_strides.append(1)
+            
+            # Activation
+            conv_activations.append(widgets['activation'].currentText())
+            
+            # Init type
+            conv_init_types.append(widgets['init_type'].currentText())
+        
+        return {
             'kernels_per_layer': kernels_list,
             'kernel_dims': kernel_dims_list,
-            'pooling_type': self.pooling_type.currentText(),
-            'pooling_intervals': intervals_list
+            'conv_paddings': conv_paddings,
+            'conv_strides': conv_strides,
+            'conv_activations': conv_activations,
+            'conv_init_types': conv_init_types
         }
+    
+    def get_pool_layer_params(self):
+        """Extract pooling layer parameters from dynamic controls."""
+        pooling_strides = []
+        
+        # Parse intervals
+        try:
+            intervals_str = self.pooling_intervals.text()
+            intervals = [int(x.strip()) for x in intervals_str.split(',') if x.strip()]
+        except:
+            intervals = []
+        
+        for widgets in self.pool_layer_widgets:
+            try:
+                stride_str = widgets['stride'].text().strip()
+                if 'x' in stride_str:
+                    pooling_strides.append(stride_str)
+                else:
+                    pooling_strides.append(int(stride_str))
+            except:
+                pooling_strides.append(2)
+        
+        return {
+            'pooling_intervals': intervals,
+            'pooling_strides': pooling_strides
+        }
+    
+    def get_fc_layer_params(self):
+        """Extract FC layer parameters from dynamic controls."""
+        fc_activations = []
+        fc_init_types = []
+        
+        for widgets in self.fc_layer_widgets:
+            fc_activations.append(widgets['activation'].currentText())
+            fc_init_types.append(widgets['init_type'].currentText())
+        
+        return {
+            'fc_activations': fc_activations,
+            'fc_init_types': fc_init_types
+        }
+
 
     def on_parameter_changed(self):
         self.parametersChanged.emit()    
@@ -608,6 +928,15 @@ class ConfigurationWidget(QWidget):
             'auto_scroll': self.auto_scroll_cb.isChecked(),
             'chart_animations': self.chart_anim_cb.isChecked()
         }
+    
+    def set_viz_enabled(self, enabled):
+        """Update viz_enabled checkbox from training widget (bidirectional sync)."""
+        # Block signals to avoid circular updates
+        self.viz_enabled_cb.blockSignals(True)
+        self.viz_enabled_cb.setChecked(enabled)
+        self.viz_enabled_cb.blockSignals(False)
+        # Manually trigger the settings changed signal
+        self.on_viz_setting_changed()
 
     def on_reset_defaults(self):
 
@@ -651,8 +980,8 @@ class ConfigurationWidget(QWidget):
         # Learning rate controls step size during weight updates
         # Typical values:
         # - SGD   → 0.01
-        # - Adam  → 0.001
-        self.learning_rate.setValue(0.001)
+        # - Adam  → 0.0001
+        self.learning_rate.setValue(0.0001)
 
         # Weight decay (L2 regularization)
         # Helps reduce overfitting by penalizing large weights
@@ -694,6 +1023,7 @@ class ConfigurationWidget(QWidget):
         self.validation_split.setEnabled(False)
 
 
+
         # ============================
         # Convolutional Neural Network Architecture
         # ============================
@@ -702,30 +1032,11 @@ class ConfigurationWidget(QWidget):
         # - CIFAR-10
         # - Small to medium image datasets
 
-        # Number of convolutional layers
-        self.num_conv_layers.setValue(2)
-
-        # Number of kernels (filters) per convolutional layer
-        # Each kernel produces one output feature map
-        # Example:
-        # Layer 1 → 32 feature maps
-        # Layer 2 → 64 feature maps
-        self.kernels_per_layer.setText("4, 9")
-
-        # Kernel spatial dimensions for each convolutional layer
-        # Format: "HxW"
-        # Example:
-        # 3x3 → small receptive field, standard for modern CNNs
-        self.kernel_dims.setText("3x3, 3x3")
-
-        # Pooling operation type
-        # 0 → Max Pooling
-        # 1 → Average Pooling
+        # Number of convolutional layers (triggers rebuild of dynamic controls)
+        self.num_conv_layers.setValue(3)
+        
+        # Pooling configuration
         self.pooling_type.setCurrentIndex(0)  # Max Pooling
-
-        # Pooling interval for each convolutional layer
-        # "2" means apply pooling after the corresponding conv layer
-        # In this case, pooling is applied after both conv layers
         self.pooling_intervals.setText("1, 2")
 
 
@@ -785,30 +1096,27 @@ class ConfigurationWidget(QWidget):
             if 'image_height' in config: self.image_height.setValue(config['image_height'])
             if 'image_depth' in config: self.image_depth.setValue(config['image_depth'])
             
+            # Network architecture - number of layers (this triggers rebuild of dynamic controls)
             if 'num_conv_layers' in config: self.num_conv_layers.setValue(config['num_conv_layers'])
-            if 'kernels_per_layer' in config: 
-                val = config['kernels_per_layer']
-                if isinstance(val, list): val = ", ".join(map(str, val))
-                self.kernels_per_layer.setText(str(val))
-            if 'kernel_dims' in config:
-                # Convert list of lists/tuples back to string "HxW, HxW"
-                val = config['kernel_dims']
-                if isinstance(val, list):
-                    strs = []
-                    for item in val:
-                        if isinstance(item, (list, tuple)) and len(item) >= 2:
-                            strs.append(f"{item[0]}x{item[1]}")
-                    self.kernel_dims.setText(", ".join(strs))
-                else:
-                    self.kernel_dims.setText(str(val))
-                    
+            if 'num_fc_layers' in config: self.num_fc_layers.setValue(config['num_fc_layers'])
             if 'pooling_type' in config: self.pooling_type.setCurrentText(config['pooling_type'])
             if 'pooling_intervals' in config:
                 val = config['pooling_intervals']
                 if isinstance(val, list): val = ", ".join(map(str, val))
                 self.pooling_intervals.setText(str(val))
+            
+            # Load per-layer convolution parameters (NEW FORMAT)
+            if 'conv_activations' in config or 'conv_init_types' in config:
+                self.load_conv_layer_config(config)
+            
+            # Load per-layer pooling parameters (NEW FORMAT)
+            if 'pooling_strides' in config:
+                self.load_pool_layer_config(config)
+            
+            # Load per-layer FC parameters (NEW FORMAT)  
+            if 'fc_activations' in config or 'fc_init_types' in config:
+                self.load_fc_layer_config(config)
 
-            if 'num_fc_layers' in config: self.num_fc_layers.setValue(config['num_fc_layers'])
             if 'neurons_per_fc_layer' in config:
                 val = config['neurons_per_fc_layer']
                 if isinstance(val, list): val = ", ".join(map(str, val))
@@ -842,6 +1150,43 @@ class ConfigurationWidget(QWidget):
             self.blockSignals(False)
             logging.error(f"Error applying config: {e}")
             raise e
+    
+    def load_conv_layer_config(self, config):
+        """Load per-layer convolution configuration from saved config."""
+        for i, widgets in enumerate(self.conv_layer_widgets):
+            if 'kernels_per_layer' in config and i < len(config['kernels_per_layer']):
+                widgets['kernel_count'].setValue(config['kernels_per_layer'][i])
+            if 'kernel_dims' in config and i < len(config['kernel_dims']):
+                dims = config['kernel_dims'][i]
+                if isinstance(dims, (list, tuple)) and len(dims) >= 2:
+                    widgets['kernel_size'].setText(f"{dims[0]}x{dims[1]}")
+            if 'conv_paddings' in config and i < len(config['conv_paddings']):
+                padding = config['conv_paddings'][i]
+                if isinstance(padding, int):
+                    widgets['padding'].setCurrentText("Custom")
+                    widgets['padding_value'].setValue(padding)
+                else:
+                    widgets['padding'].setCurrentText(str(padding))
+            if 'conv_strides' in config and i < len(config['conv_strides']):
+                widgets['stride'].setText(str(config['conv_strides'][i]))
+            if 'conv_activations' in config and i < len(config['conv_activations']):
+                widgets['activation'].setCurrentText(config['conv_activations'][i])
+            if 'conv_init_types' in config and i < len(config['conv_init_types']):
+                widgets['init_type'].setCurrentText(config['conv_init_types'][i])
+    
+    def load_pool_layer_config(self, config):
+        """Load per-pooling-layer configuration from saved config."""
+        for i, widgets in enumerate(self.pool_layer_widgets):
+            if 'pooling_strides' in config and i < len(config['pooling_strides']):
+                widgets['stride'].setText(str(config['pooling_strides'][i]))
+    
+    def load_fc_layer_config(self, config):
+        """Load per-FC-layer configuration from saved config."""
+        for i, widgets in enumerate(self.fc_layer_widgets):
+            if 'fc_activations' in config and i < len(config['fc_activations']):
+                widgets['activation'].setCurrentText(config['fc_activations'][i])
+            if 'fc_init_types' in config and i < len(config['fc_init_types']):
+                widgets['init_type'].setCurrentText(config['fc_init_types'][i])
 
     def on_save_config(self):
         # Ensure config directory exists
