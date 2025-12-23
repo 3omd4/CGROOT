@@ -36,8 +36,9 @@ void inputLayer::start(const image &inputImage) {
   for (size_t i = 0; i < normalizedImage.size(); i++) {
     for (size_t j = 0; j < normalizedImage[i].size(); j++) {
       for (size_t k = 0; k < normalizedImage[i][j].size(); k++) {
-        // Input is already normalized to [0, 1] range from bindings/conversion
-        normalizedImage[i][j][k] = inputImage[i][j][k];
+        // normalize each pixel before storage
+        normalizedImage[i][j][k] =
+            static_cast<double>(inputImage[i][j][k]) / 255.0;
       }
     }
   }

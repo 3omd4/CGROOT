@@ -275,9 +275,8 @@ static image convert_mnist_to_image_format(const vector<uint8_t> &flat_pixels,
         size_t idx = (d * channel_size) + (y * width) + x;
 
         if (idx < flat_pixels.size()) {
-          // Normalize pixel values to [0, 1] range
-          image_data[d][y].push_back(static_cast<double>(flat_pixels[idx]) /
-                                     255.0);
+          image_data[d][y].push_back(
+              static_cast<unsigned char>(flat_pixels[idx]));
         } else {
           image_data[d][y].push_back(0);
         }
