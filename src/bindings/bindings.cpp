@@ -150,6 +150,9 @@ void bind_model(py::module &m) {
       .def("load", &NNModel::load)
       .def("getTrainingHistory", &NNModel::getTrainingHistory)
 
+      .def("getInputHeight", &NNModel::getInputHeight)
+      .def("getInputWidth", &NNModel::getInputWidth)
+      .def("getInputDepth", &NNModel::getInputDepth)
       // --- FIX STARTS HERE ---
       .def(
           "train_epochs",
@@ -685,22 +688,48 @@ int classify_pixels(NNModel &model, py::buffer image_buffer, int width,
 
   uint8_t *ptr = static_cast<uint8_t *>(info.ptr);
 
+  // Validate dimensions against model expectations
+  if (width != model.getInputWidth() || height != model.getInputHeight()) {
+    std::cout << "Warning: classify_pixels received image size " << width << "x"
+              << height << " but model expects " << model.getInputWidth() << "x"
+              << model.getInputHeight() << std::endl;
+  }
+
+  int depth = model.getInputDepth();
+
   // Convert to model's image format: vector<vector<vector<double>>>
-  // Depth is 1
   image img_data;
-  img_data.resize(1);
-  img_data[0].resize(height);
+  img_data.resize(depth);
 
-  for (int y = 0; y < height; ++y) {
-    img_data[0][y].resize(width);
-    for (int x = 0; x < width; ++x) {
-      int idx = y * stride + x;
-      // Safety check (might slow down, can remove if trusted)
-      // if (idx >= info.size) throw std::runtime_error("Buffer overflow");
+  for (int d = 0; d < depth; ++d) {
+    img_data[d].resize(height);
+    for (int y = 0; y < height; ++y) {
+      img_data[d][y].resize(width);
+      for (int x = 0; x < width; ++x) {
+        // Calculate source index
+        // If grayscale (depth=1), stride is usually width (+pad)
+        // If RGB (depth=3), pixel is usually 3-byte packed or 4-byte aligned.
+        // QImage Format_RGB888 is packed 3 bytes (R,G,B).
+        // QImage Format_Grayscale8 is packed 1 byte.
+        // Stride is provided from Python as `bytesPerLine`.
 
-      // Pass raw pixel values (0-255) as doubles
-      // Normalization happens in inputLayer now (based on user changes)
-      img_data[0][y][x] = static_cast<double>(ptr[idx]);
+        // Pixel start address at row y, column x
+        size_t pixel_offset = y * stride + x * (depth == 1 ? 1 : 3);
+        // Note: Format_RGB888 is 3 bytes per pixel. Format_RGB32 is 4.
+        // Python side guarantees Format_Grayscale8 or Format_RGB888.
+
+        // Get value for current channel d
+        // For grayscale (d=0), value is ptr[offset]
+        // For RGB, value is ptr[offset + d] (0=R, 1=G, 2=B)
+
+        unsigned char val = 0;
+        if ((pixel_offset + d) < info.size) {
+          val = ptr[pixel_offset + d];
+        }
+
+        // Pass raw pixel values (0-255) as doubles
+        img_data[d][y][x] = static_cast<double>(val);
+      }
     }
   }
 

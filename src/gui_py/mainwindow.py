@@ -172,6 +172,8 @@ class MainWindow(QMainWindow):
         elif "cifar" in lower_path:
             dataset_type = "CIFAR-10"
             
+        self.dataset_type = dataset_type # Store for saving with model
+            
         # Log details
         self.log_message(f"Selected Dataset Type: {dataset_type}")
         self.log_message(f"Images File: {os.path.basename(images_path)}")
@@ -226,6 +228,7 @@ class MainWindow(QMainWindow):
         self.controller.metricsCleared.connect(self.metrics_tab.clear)
         self.controller.metricsSetEpoch.connect(self.metrics_tab.set_total_epochs)
         self.controller.datasetInfoLoaded.connect(self.on_dataset_info_loaded)
+        self.controller.modelInfoLoaded.connect(self.on_model_info_loaded)
         
         self.config_tab.vizSettingsChanged.connect(self.on_gui_settings_changed)
         
@@ -257,7 +260,9 @@ class MainWindow(QMainWindow):
         
         gui_params = self.config_tab.get_gui_settings()
         
+        
         full_config = {**train_params, **arch_params, **gui_params}
+        full_config['dataset_type'] = self.dataset_type # Save dataset type with model
         
         # Add full logs from UI to configuration payload (transient, not for config file)
         if hasattr(self, 'log_output'):
@@ -272,6 +277,7 @@ class MainWindow(QMainWindow):
         
         # Merge dictionaries
         full_config = {**config, **arch_config}
+        full_config['dataset_type'] = self.dataset_type # Include in training config
         
         self.metrics_tab.clear()
         self.metrics_tab.set_total_epochs(full_config['epochs'])
@@ -504,8 +510,36 @@ class MainWindow(QMainWindow):
         self.log_message(f"Updating Configuration: Input {w} x {h} x {d} (width, height, depth)")
         self.config_tab.set_image_dimensions(w, h, d) 
 
+    def on_model_info_loaded(self, w, h, d):
+        """Handle model info loaded -> Guess dataset type if no dataset loaded."""
+        self.log_message(f"Model Properties Detected: {w}x{h}x{d}")
+        
+        # Heuristic to guess dataset type for labels
+        dataset_type = "MNIST" # Default
+        
+        # CIFAR-10 is 32x32. 
+        # If d=3 (RGB) OR d=1 (Grayscale CIFAR), we assume CIFAR-10
+        if w == 32 and h == 32:
+            dataset_type = "CIFAR-10"
+        elif w == 28 and h == 28:
+            dataset_type = "MNIST" # Could be Fashion too, but MNIST is safer default
+        
+        self.log_message(f"Auto-setting Dataset Type (Labels) to: {dataset_type}")
+        self.inference_tab.set_dataset_type(dataset_type)
+        
+        # Also update config dimensions to match model
+        self.config_tab.set_image_dimensions(w, h, d) 
+
     def on_configuration_loaded(self, config):
         """Handle side effects of config loading that affect other tabs."""
+        
+        # Restore dataset type if present
+        if 'dataset_type' in config:
+            dt = config['dataset_type']
+            self.dataset_type = dt
+            self.inference_tab.set_dataset_type(dt)
+            self.log_message(f"Restored Dataset Type from Model: {dt}")
+        
         # Update Training Tab Layer Limits
         if 'num_conv_layers' in config:
              # Total layers in viewer = Input + Flatten + ConvLayers + Pooling + FC + Output

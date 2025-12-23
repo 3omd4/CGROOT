@@ -203,6 +203,11 @@ public:
   // output:       int (LayerType enum value)
   int getLayerType(size_t layerIndex);
 
+  // Get input dimensions
+  size_t getInputHeight() const { return imageHeight; }
+  size_t getInputWidth() const { return imageWidth; }
+  size_t getInputDepth() const { return imageDepth; }
+
   // store all the model parameters (kernels and weights)
   // input:          folderPath (the path of the folder where the file
   //                 containing the model paramters will be created)

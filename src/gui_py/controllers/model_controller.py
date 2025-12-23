@@ -15,6 +15,7 @@ class ModelController(QObject):
     metricsCleared = pyqtSignal() # Signal to clear metrics graph
     metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
     datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
+    modelInfoLoaded = pyqtSignal(int, int, int) # w, h, d (From loaded model)
 
     
     # Signals to Worker
@@ -47,6 +48,7 @@ class ModelController(QObject):
         self.worker.metricsCleared.connect(self.metricsCleared)
         self.worker.metricsSetEpoch.connect(self.metricsSetEpoch)
         self.worker.datasetInfoLoaded.connect(self.datasetInfoLoaded)
+        self.worker.modelInfoLoaded.connect(self.modelInfoLoaded)
 
         
         # Connect Controller -> Worker

@@ -214,6 +214,7 @@ class ModelWorker(QObject):
     metricsCleared = pyqtSignal() # Signal to clear metrics graph
     metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
     datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
+    modelInfoLoaded = pyqtSignal(int, int, int) # w, h, d
     
     # Internal signals for thread-safe callback emissions
     _internal_log = pyqtSignal(str)
@@ -603,6 +604,15 @@ class ModelWorker(QObject):
             if success:
                 self.logMessage.emit("Model loaded successfully.")
                 
+                # Emit model dimensions specifically to assist GUI in guessing dataset type
+                try:
+                    w = self.model.getInputWidth()
+                    h = self.model.getInputHeight()
+                    d = self.model.getInputDepth()
+                    self.modelInfoLoaded.emit(w, h, d)
+                except Exception as e:
+                    self.logMessage.emit(f"Warning: Could not get model info: {e}")
+
                 # Restore Metrics Graph from History
                 if hasattr(self.model, "getTrainingHistory"):
                     history = self.model.getTrainingHistory()
@@ -653,8 +663,16 @@ class ModelWorker(QObject):
             
         self.modelStatusChanged.emit(True)
         try:
-            # Convert QImage to 8-bit grayscale
-            img = qimage_obj.scaled(28, 28).convertToFormat(QImage.Format.Format_Grayscale8)
+            # Get expected dimensions from model
+            w = self.model.getInputWidth()
+            h = self.model.getInputHeight()
+            d = self.model.getInputDepth()
+            
+            # Format image based on depth
+            fmt = QImage.Format.Format_Grayscale8 if d == 1 else QImage.Format.Format_RGB888
+            
+            # Scale and convert
+            img = qimage_obj.scaled(w, h).convertToFormat(fmt)
             
             width = img.width()
             height = img.height()
@@ -665,7 +683,8 @@ class ModelWorker(QObject):
             bits.setsize(img.sizeInBytes())
             
             # Run Classification using C++ helper
-            self.logMessage.emit("Running inference on image (C++ optimized)...")
+            self.logMessage.emit(f"Running inference (Input: {width}x{height}x{d})...")
+            # Note: C++ classify_pixels logic must match the QImage format (RGB888 vs Grayscale8)
             predicted_class = cgroot_core.classify_pixels(self.model, bits, width, height, stride)
             
             self.logMessage.emit(f"Inference Result: {predicted_class}")

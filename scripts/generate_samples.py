@@ -101,8 +101,15 @@ def generate_samples():
                         b = b_plane[idx]
                         image.setPixel(x, y, qRgb(r, g, b))
             
+            # Mapping
+            class_names = {
+                0: "airplane", 1: "automobile", 2: "bird", 3: "cat", 4: "deer", 
+                5: "dog", 6: "frog", 7: "horse", 8: "ship", 9: "truck"
+            }
+            class_name = class_names.get(label, "unknown")
+            
             # Save
-            filename = f"sample_{target_idx}_label_{label}.png"
+            filename = f"sample_{target_idx}_label_{class_name}.png"
             full_path = os.path.join(output_dir, filename)
             image.save(full_path)
             print(f"Saved {filename}")
