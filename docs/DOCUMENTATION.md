@@ -56,16 +56,297 @@ Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abs
     * **File System:** Read MNIST Data, Write Model Weights.
 
 ### 3.2 Class Diagram
-The system follows a strict Object-Oriented architecture to ensure modularity.
-* **`Tensor`**: The core class managing the data buffer and shape. It contains a pointer to a `GradFn` object for autograd purposes.
-* **`Module` (Abstract)**: Base class for all layers.
-    * **`Linear` (Inherits Module)**: Contains weight and bias Tensors.
-    * **`Sequential` (Inherits Module)**: A container that holds a vector of Modules (Composite Pattern).
-* **`Optimizer` (Abstract)**: Base class for update algorithms.
-    * **`SGD` (Inherits Optimizer)**: Implements Stochastic Gradient Descent logic.
-* **`Graph`**: Manages the directed acyclic graph (DAG) of operations for backpropagation.
+```mermaid
+classDiagram
+    direction TB
 
-### 3.3 Sequence Diagram (Feature: Training Step)
+    %% --- Python GUI / Bindings ---
+    class ModelController {
+        + create_model(config)
+        + start_training()
+        + stop_training()
+        + requestLoadDataset(images, labels)
+        + requestTrain(config)
+        + requestInference(image)
+    }
+    style ModelController fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,stroke-dasharray: 5 5
+
+    class Bindings {
+        &lt;&lt;PyBind11&gt;&gt;
+        + create_model(dict) NNModel*
+        + classify_pixels(buffer) int
+        + bind_model(module)
+    }
+    style Bindings fill:#eceff1,stroke:#455a64,stroke-width:2px
+
+    %% --- Data Utilities ---
+    class MNISTLoader {
+        &lt;&lt;Static Utility&gt;&gt;
+        + load_training_data(images_path, labels_path) MNISTDataset
+        + load_test_data(images_path, labels_path) MNISTDataset
+        + create_batches(dataset, batch_size) vector~vector~MNISTImage~~
+    }
+    style MNISTLoader fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+
+    class MNISTDataset {
+        + vector~MNISTImage~ images
+        + size_t num_images
+        + size_t image_width
+        + size_t image_height
+    }
+    style MNISTDataset fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+
+    %% --- Core Components ---
+    class NNModel {
+        - vector~Layer*~ Layers
+        - image data
+        - size_t imageHeight
+        - size_t imageWidth
+        - size_t imageDepth
+        - vector~TrainingMetrics~ trainingHistory
+        + NNModel(architecture, ...)
+        + train(image, int) pair~double,int~
+        + train_batch(vector~image~, vector~int~) pair~double,int~
+        + train_epochs(dataset, config, ...) vector~TrainingMetrics~
+        + classify(image) int
+        + getLayerFeatureMaps(layerIndex)
+        + getLayerType(layerIndex)
+        + store(folderPath) bool
+        + load(filePath) bool
+        + getTrainingHistory()
+    }
+    style NNModel fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    class Definitions {
+        &lt;&lt;Enumeration&gt;&gt;
+        OptimizerType
+        LayerType
+        activationFunction
+        initFunctions
+        poolingLayerType
+        distributionType
+    }
+    style Definitions fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    class architecture {
+        + size_t numOfConvLayers
+        + size_t numOfFCLayers
+        + vector~convKernels~ kernelsPerconvLayers
+        + vector~size_t~ neuronsPerFCLayer
+        + vector~activationFunction~ convLayerActivationFunc
+        + vector~activationFunction~ FCLayerActivationFunc
+        + vector~initFunctions~ convInitFunctionsType
+        + vector~initFunctions~ FCInitFunctionsType
+        + distributionType distType
+        + vector~size_t~ poolingLayersInterval
+        + vector~poolingLayerType~ poolingtype
+        + vector~poolKernel~ kernelsPerPoolingLayer
+        + OptimizerConfig optConfig
+    }
+    style architecture fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    
+    class TrainingConfig {
+        + size_t epochs
+        + size_t batch_size
+        + float validation_split
+        + bool use_validation
+        + bool shuffle
+        + uint random_seed
+    }
+    style TrainingConfig fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    class TrainingMetrics {
+        + int epoch
+        + double train_loss
+        + double train_accuracy
+        + double val_loss
+        + double val_accuracy
+    }
+    style TrainingMetrics fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    %% --- Layer Hierarchy ---
+    class Layer {
+        &lt;&lt;Abstract&gt;&gt;
+        + getLayerType()* LayerType
+    }
+    style Layer fill:#fafafa,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+
+    class inputLayer {
+        - imageType normalizedImage
+        - LayerType type
+        + inputLayer(height, width, depth)
+        + start(image)
+        + getOutput() imageType
+    }
+    style inputLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class convLayer {
+        - vector~kernelType~ kernels
+        - vector~kernelType~ d_kernels
+        - vector~double~ bias
+        - vector~double~ d_bias
+        - vector~featureMapType~ featureMaps
+        - convKernels kernel_info
+        - vector~vector~vector~Optimizer*~~~ kernelOptimizers
+        - Optimizer* biasOptimizer
+        + convLayer(kernelConfig, ...)
+        + initKernel(...)
+        + forwardProp(inputFeatureMaps)
+        + backwardProp(inputFeatureMaps, grads)
+        + backwardProp_batch(inputFeatureMaps, grads)
+        + update()
+        + update_batch(n)
+        + convolute(inputFeatureMaps)
+    }
+    style convLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class poolingLayer {
+        - poolKernel kernel_info
+        - poolingLayerType poolingType
+        - vector~featureMapType~ featureMaps
+        + poolingLayer(kernelConfig, ...)
+        + forwardProp(inputFeatureMaps)
+        + backwardProp(inputFeatureMaps, grads)
+        + backwardProp_batch(inputFeatureMaps, grads)
+    }
+    style poolingLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class FullyConnected {
+        - vector~double~ inputCache
+        - vector~double~ preActivation
+        - vector~weights~ neurons
+        - vector~double~ bias
+        - vector~double~ outputData
+        - vector~Optimizer*~ neuronOptimizers
+        - Optimizer* biasOptimizer
+        + FullyConnected(numOfNeurons, ...)
+        + forwardProp(inputData)
+        + backwardProp(inputData, grads)
+        + backwardProp_batch(inputData, grads)
+        + update()
+        + update_batch(n)
+    }
+    style FullyConnected fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class FlattenLayer {
+        - vector~double~ flattened_Arr
+        + FlattenLayer(h, w, d)
+        + forwardProp(featureMaps)
+        + backwardProp(grads)
+        + backwardProp_batch(grads)
+        + flat(featureMaps)
+        + applyOptimizer(opt)
+    }
+    style FlattenLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class outputLayer {
+        - vector~weights~ neurons
+        - vector~double~ bias
+        - vector~double~ outputData
+        - vector~Optimizer*~ neuronOptimizers
+        - Optimizer* biasOptimizer
+        + outputLayer(numOfClasses, ...)
+        + forwardProp(inputData)
+        + backwardProp(inputData, correctClass)
+        + backwardProp_batch(inputData, correctClass)
+        + update()
+        + update_batch(n)
+        + getClass() int
+    }
+    style outputLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    Layer <|-- inputLayer
+    Layer <|-- convLayer
+    Layer <|-- poolingLayer
+    Layer <|-- FullyConnected
+    Layer <|-- FlattenLayer
+    Layer <|-- outputLayer
+
+    %% --- Optimizers ---
+    class Optimizer {
+        &lt;&lt;Abstract&gt;&gt;
+        # double learning_rate
+        # double weight_decay
+        + update(weights, grads)*
+    }
+    style Optimizer fill:#fafafa,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+
+    class SGD {
+        + update(weights, grads)
+    }
+    style SGD fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class SGD_Momentum {
+        - double momentum
+        - vector~double~ v
+        + update(weights, grads)
+    }
+    style SGD_Momentum fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class Adam {
+        - double beta1
+        - double beta2
+        - double epsilon
+        - int t
+        - vector~double~ m
+        - vector~double~ v
+        + update(weights, grads)
+    }
+    style Adam fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class RMSprop {
+        - double beta
+        - double epsilon
+        - vector~double~ s
+        + update(weights, grads)
+    }
+    style RMSprop fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    Optimizer <|-- SGD
+    Optimizer <|-- SGD_Momentum
+    Optimizer <|-- Adam
+    Optimizer <|-- RMSprop
+
+    %% --- Loss Functions ---
+    class MSE {
+        + compute(pred, target)$
+        + gradient(grad, pred, target)$
+    }
+    style MSE fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class BinaryCrossEntropy {
+        + compute(pred, target)$
+        + gradient(grad, pred, target)$
+    }
+    style BinaryCrossEntropy fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class CategoricalCrossEntropy {
+        + compute(pred, target)$
+        + gradient(grad, pred, target)$
+    }
+    style CategoricalCrossEntropy fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+
+    %% --- Relationships ---
+    ModelController ..> Bindings : invokes
+    Bindings ..> NNModel : creates/wraps
+    Bindings ..> MNISTLoader : uses
+    
+    MNISTLoader ..> MNISTDataset : produces
+    NNModel ..> MNISTDataset : consumes
+    
+    NNModel "1" *-- "*" Layer : contains
+    NNModel ..> architecture : uses
+    NNModel ..> TrainingConfig : uses
+    NNModel ..> TrainingMetrics : produces
+    
+    NNModel ..> Optimizer : uses
+    FullyConnected ..> Optimizer : uses
+    convLayer ..> Optimizer : uses
+    outputLayer ..> Optimizer : uses
+```
+
+### 3.3 Sequence Diagram
 ```mermaid
 sequenceDiagram
     autonumber
