@@ -139,32 +139,50 @@ convLayer::kernelType convLayer::initKernel(convKernels &kernelConfig,
 void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
   // do the same convolution operation using every kernel where each kernel
   // will result in a different feature map, iterate using "krnl"
-  for (size_t krnl = 0; krnl < kernel_info.numOfKerenels; krnl++) {
+  for (int krnl = 0; krnl < static_cast<int>(kernel_info.numOfKerenels); krnl++) {
 
     // iterate on every channel (depth) using 'd', where 'd' is the depth
     // corrisponding of the kernel depth and the input feature map depth
-    for (size_t d = 0; d < kernel_info.kernel_depth; d++) {
+    for (int d = 0; d < static_cast<int>(kernel_info.kernel_depth); d++) {
       // moving on the 2D feature map the length to be moved is fm_dim -
       // krnl_dim + 1
 
-      // move along the rows of the input feature map using 'i'
-      for (size_t i = 0; i < fm.FM_height; i += kernel_info.stride) {
+      int i_iter = -kernel_info.padding; //iterate the rows of the input feature map
+
+      // move along the rows of the output feature map using 'i'
+      for (int i = 0; i < static_cast<int>(fm.FM_height); i++) {
         // reset the output feature maps with zeros on the first channel of the
         // input feature map for each kernel
         if (d == 0) {
           fill(featureMaps[krnl][i].begin(), featureMaps[krnl][i].end(), 0.0);
         }
-        // move along the columns of the input feature map using 'j'
-        for (size_t j = 0; j < fm.FM_width; j += kernel_info.stride) {
+
+        int j_iter = -kernel_info.padding;  //iterate the columns of the input feature map
+
+       
+        // move along the columns of the ouput feature map using 'j'
+        for (int j = 0; j < static_cast<int>(fm.FM_width); j++) {
+
           // do the convolution
           //"k1" is row iterator and "k2" is the column iterator
-          for (size_t k1 = i; k1 < (i + kernel_info.kernel_height); k1++) {
-            for (size_t k2 = j; k2 < (j + kernel_info.kernel_width); k2++) {
+          for (int k1 = i_iter; k1 < (i_iter + kernel_info.kernel_height); k1++) {
+            for (int k2 = j_iter; k2 < (j_iter + kernel_info.kernel_width); k2++) {
               // the convolutio is done by doing element-wise multiplication of
               // the input feature map and the kernel infront of this part of
               // the feature map this is done for every channel of the input
               // feature map and then stored in the corrisponding entry in the
               // output feature map
+
+              double inputVal;
+              if((k1 < 0) || (k1 >= static_cast<int>(inputFeatureMaps[d].size()))
+                || (k2 < 0) || (k2 >= static_cast<int>(inputFeatureMaps[d][k1].size())))
+              {
+                  inputVal = 0.0;
+              }
+              else
+              {
+                  inputVal = inputFeatureMaps[d][k1][k2];
+              }
 
               //"krnl" indexes which kernel and its output feature map
               //'d' is the depth of both the kernel and the input feature map
@@ -174,15 +192,20 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
               // channels of the same kernel are added to the corrisponding
               // entry in the output feature map when the depth iterator 'd' is
               // changed
-              featureMaps[krnl][i][j] += inputFeatureMaps[d][k1][k2] *
-                                         kernels[krnl][d][k1 - i][k2 - j];
+              featureMaps[krnl][i][j] += inputVal * kernels[krnl][d][k1 - i_iter][k2 - j_iter];
             }
           }
           if(d == (kernel_info.kernel_depth-1))
           {
             featureMaps[krnl][i][j] += bias[krnl];
           }
+
+            //move the kernel by the stride amount above the input feature map in the horizontal direction
+          j_iter += kernel_info.stride;
         }
+
+         //move the kernel by the stride amount above the input feature map in the vertical direction
+        i_iter += kernel_info.stride;
       }
     }
   }
@@ -433,7 +456,7 @@ void convLayer::update_batch(int numOfExamples) {
     }
   }
 
-   //update biases
+  //update biases
   biasOptimizer->update(bias, d_bias);
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }

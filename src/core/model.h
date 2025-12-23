@@ -136,10 +136,18 @@ public:
   //               -trueOutput (the value for which the model compares its
   //               output)
   // output:       N/A
-  // side effect:  The model is trained by a single image and its paramters are
-  // updated Note:         N/A
+  // side effect:  The model is trained by a single image and its paramters are updated
+  // Note:         N/A
   std::pair<double, int> train(const image &data, int trueOutput);
 
+
+// train the model with a batch of images
+// input:        -data (a vector of images)
+//               -trueOutput (a vector of the true output values)
+// output:       N/A
+// side effect:  The model is trained by a batch of image and its paramters are updated 
+// Note:         N/A
+// Updated train_batch: Returns {total_loss, total_correct}
   std::pair<double, int> train_batch(const vector<const image *> &data,
                                      const vector<int> &trueOutput);
 
