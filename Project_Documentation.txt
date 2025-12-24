@@ -93,32 +93,6 @@ Visualizes classification performance.
 Utility for loading non-MNIST datasets.
 •	load_from_folder: Scans a directory structure (root/class_name/image.png), resizes images to target dimensions (e.g., 28x28), converts them to grayscale or RGB, and packs them into the C++ compatible MNISTDataset structure.
 
-7. inferencewidget.py (Inference Tab)
-Allows users to run the trained model on single images.
-•	on_load_image: Opens a file dialog to load an external image (PNG/JPG).
-•	on_run_inference: Sends the loaded image to the model for prediction and updates the results area with the predicted class and confidence scores.
-•	displayPrediction: Updates the UI with the top predicted class and a probability distribution list.
-
-8. imageviewerwidget.py (Image Viewer)
-A reusable component for displaying images while maintaining aspect ratio.
-•	displayImage: Scales and renders a QImage onto a label with smooth transformation, ensuring the image fits within the layout without distortion.
-
-9. spinner.py (Loading Indicator)
-A custom-drawn loading spinner used during long operations.
-•	paintEvent: Draws a rotating arc using QPainter to indicate activity when the main thread is waiting for a background task.
-
-10. utils/visualization_manager.py
-Handles the complex conversion of raw C++ data to PyQt images.
-•	create_preview_image: Converts flattened 1D vectors (from C++) into 2D QImages, handling both Grayscale (depth=1) and RGB (depth=3) formats, including planar-to-interleaved conversion for RGB.
-
-11. utils/paths.py
-Centralizes file path management.
-•	get_logs_dir / get_models_dir: Returns absolute paths to standard application directories, creating them if they don't exist, to ensure cross-platform compatibility.
-
-12. dark_theme.py
-Manages the application's visual style.
-•	apply_dark_theme: Configures the global QPalette with a dark color scheme (Project Fusion) and applies specific QSS stylesheets for widgets like GroupBoxes and ProgressBars.
-
 4.3.4 Controller and Worker Functions
 The GUI communicates with the C++ backend through a dedicated controller-worker thread system to prevent interface freezing:
 
@@ -139,23 +113,4 @@ Manages the lifecycle of the C++ objects and background threads.
 •	TrainingThread: Runs `model.train_epoch` in a loop, handling batching and emitting visualization data (feature maps, current image) if enabled.
 •	LoaderThread: Handles the blocking I/O of loading large binary datasets or scanning thousands of image files from folders.
 •	TestingThread: Runs `model.evaluate` on the test set and computes the confusion matrix off the main thread.
-
-4.3.5 Core C++ Utilities
-These classes handle the low-level data and file operations:
-
-1. MNISTLoader (src/core/utils/mnist_loader.cpp)
-Reads the standard IDX binary format used by the MNIST dataset.
-•	load_images: Parses the binary file header (magic number, count, rows, cols) and extracts pixel data into a vector of MnistImage objects.
-•	load_labels: Parses the label file and assigns ground truth values to the corresponding images.
-
-2. DataUtils (src/core/utils/data_utils.cpp)
-Helper functions for data manipulation.
-•	normalize: Scales pixel values from [0, 255] to [0.0, 1.0] for optimal network training.
-•	one_hot_encode: Converts integer labels (e.g., '5') into a probability vector (e.g., [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]).
-
-3. StoreAndLoad (src/core/utils/store_and_load.h)
-Manages model persistence using a custom binary format.
-•	writeModelHeader: writes the "NNMD" magic bytes and version to the file ensures validity.
-•	writeConvKernels / writeNeuronWeights: Serializes the 4D kernel tensors and 2D weight matrices to disk.
-
 
