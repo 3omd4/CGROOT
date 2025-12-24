@@ -9,52 +9,150 @@
 ## 1. Introduction
 
 ### 1.1 Problem Statement
-Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abstract away the underlying mathematical mechanics, effectively making them "black boxes" for students and novice researchers. There is a distinct lack of lightweight, educational frameworks that expose the low-level implementation of automatic differentiation and tensor operations in C++ while remaining performant enough for practical experimentation.
+Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abstract away the underlying mathematical mechanics, effectively making them "black boxes" for students and researchers. CGROOT++ addresses the lack of lightweight, educational frameworks that provide low-level implementations of automatic differentiation, convolutional operations, and optimization algorithms in C++ while remaining accessible via a user-friendly GUI.
 
 ### 1.2 Scope
 * **What the software does:**
-    * Provides a "from-scratch" C++ engine for tensor manipulation and automatic differentiation (Autograd).
-    * Implements core neural network components: Linear layers, Activation functions (ReLU, Sigmoid), and Loss functions (MSE, Cross-Entropy).
-    * Includes a Python-based GUI (PyQt6) for real-time visualization of training metrics and feature maps.
-    * Allows users to build, train, and save Sequential models on CPU.
+    * Implements core neural network layers: Convolutional (Conv2D), Pooling (Max/Average), Flatten, and Fully Connected layers.
+    * Supports multiple activation functions (ReLU, Sigmoid, Tanh, Softmax) and advanced optimizers (Adam, RMSprop, Momentum).
+    * Includes a feature-rich Python GUI (PyQt6) for interactive model configuration, real-time training visualization, feature map inspection, and image inference.
+    * Enables model persistence (saving/loading architecture and weights) for reproducible experiments.
+    * Utilizes OpenMP for multi-threaded CPU acceleration.
 * **What the software does NOT do:**
-    * It does not currently support GPU acceleration (CUDA).
-    * It does not support distributed training across multiple machines.
-    * It does not yet include complex architectural layers like Transformers or RNNs.
+    * It does not support GPU acceleration (CUDA/OpenCL).
+    * It does not support distributed training or cloud-based deployment.
 
 ### 1.3 Target Audience
-* **Students & Academics:** Those studying the internal mathematics of Deep Learning and Computational Graphs.
-* **C++ Developers:** Engineers looking to integrate lightweight Machine Learning inference into C++ applications without heavy dependencies like LibTorch.
+* **Students & Educators:** Those seeking to understand the internal mathematics and implementation of deep learning (CNNs, Backpropagation).
+
 
 ---
 
 ## 2. System Analysis
 
 ### 2.1 Functional Requirements
-* **FR-01 Data Loading:** The system shall parse and load MNIST and CSV datasets into `Tensor` objects.
-* **FR-02 Model Configuration:** The user shall be able to define a neural network architecture by stacking layers (e.g., Linear, ReLU) sequentially.
-* **FR-03 Forward Propagation:** The system shall calculate the output of the network by passing input data through the computation graph.
-* **FR-04 Automatic Differentiation:** The system must automatically calculate gradients for all learnable parameters using the chain rule (Backward Propagation).
-* **FR-05 Optimization:** The system shall update model weights using selectable optimizers (SGD, Adam, Momentum).
-* **FR-06 Visualization:** The GUI shall display a live graph of Loss vs. Epoch during the training process.
-* **FR-07 Persistence:** The system shall allow the user to save trained model weights to a file and load them for inference.
+* **FR-01 Data Loader:** The system shall parse and load MNIST-format (IDX) binary datasets (MNIST, Fashion-MNIST, CIFAR-10) and automatically pair label files with image files.
+* **FR-02 Neural Network Engine:** The system shall support complex architectures with Convolutional, Pooling (Max/Avg), Flatten, and Fully Connected layers, utilizing core activations (ReLU, Sigmoid, Tanh, Softmax) and loss functions (MSE, Cross-Entropy).
+* **FR-03 Automatic Differentiation:** The system must implement a dynamic computational graph to automatically calculate gradients for all parameters via backpropagation.
+* **FR-04 Optimization:** The system shall support advanced optimizers including SGD, SGD with Momentum, Adam, and RMSprop.
+* **FR-05 Training & Inference:** The system shall support batch training with validation splits, real-time metric tracking, model persistence (save/load), and single-image inference.
+* **FR-06 Graphical User Interface:** The Python-based GUI shall provide interactive configuration, real-time visualization of training metrics and image previews, feature map visualization, and comprehensive logging.
 
 ### 2.2 Non-Functional Requirements
-* **NFR-01 Performance:** The forward pass for a standard Multi-Layer Perceptron (MLP) on the MNIST dataset must execute in under 50ms on a standard CPU.
-* **NFR-02 Portability:** The core C++ engine must be compilable on Windows (MSVC), Linux (GCC), and macOS (Clang) using CMake.
-* **NFR-03 Reliability:** The mathematical gradient calculation must match numerical approximations within a tolerance of $1e^{-5}$.
-* **NFR-04 Usability:** The C++ API syntax should mimic PyTorch (e.g., `model.forward()`, `loss.backward()`) to lower the learning curve.
-
+* **NFR-01 Performance:** Heavy mathematical operations shall be implemented in optimized C++ utilizing OpenMP for parallelization to ensure high throughput.
+* **NFR-02 Usability:** The GUI must remain responsive during training. 
+* **NFR-03 Reliability:** Gradient calculations must be numerically verified, and the system must handle data types safely between C++ and Python.
+* **NFR-04 Extensibility:** The modular architecture (using pybind11) shall allow for easy addition of new layers and optimizers without refactoring the core engine.
+* **NFR-05 Portability:** The system must be cross-platform (Windows, Linux, macOS), buildable via CMake, and function entirely locally without external dependencies.
 ---
 
 ## 3. System Design
 
-### 3.1 Use Case Diagram
-* **Actors:** User, File System.
-* **Key Use Cases:**
-    * **User:** Load Dataset, Configure Hyperparameters (Learning Rate, Batch Size), Start Training, Visualize Feature Maps, Save Model.
-    * **File System:** Read MNIST Data, Write Model Weights.
+### 3.1 Sequence Diagram
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Main
+    participant Model as NNModel
+    participant Layers as Layer(s)
+    participant Input as InputLayer
+    participant Conv as ConvLayer
+    participant Pool as PoolingLayer
+    participant FC as FullyConnected
+    participant Output as OutputLayer
+    participant Optim as Optimizer
 
+    Note over User, Main: Initialization Phase
+    User->>Main: Run Program
+    Main->>Main: Define Architecture (struct)
+    Main->>Model: NNModel(arch, numClasses, ...)
+    activate Model
+    Model->>Input: new InputLayer(...)
+    
+    loop For each Conv Layer
+        Model->>Conv: new ConvLayer(...)
+        Model->>Model: Calculate FeatureMap Dim
+    end
+    
+    loop For each FC Layer
+        Model->>FC: new FullyConnected(...)
+    end
+    
+    Model->>Output: new OutputLayer(...)
+    deactivate Model
+
+    Note over Main, Optim: Training Phase (Single Epoch Example)
+    
+    Main->>Model: train_epochs(dataset, config)
+    activate Model
+    
+    loop For each Batch
+        Model->>Model: train_batch(batchData, trueLabels)
+        activate Model
+        
+        Note right of Model: 1. Forward Propagation
+        Model->>Model: classify(image)
+        activate Model
+        Model->>Input: start(image)
+        
+        loop Forward Pass through Layers
+            alt is ConvLayer
+                Model->>Conv: forwardProp(prevMaps)
+            else is PoolingLayer
+                Model->>Pool: forwardProp(prevMaps)
+            else is FullyConnected
+                Model->>FC: forwardProp(prevData)
+            end
+        end
+        
+        Model->>Output: forwardProp(prevData)
+        Model-->>Model: Return class
+        deactivate Model
+        
+        Note right of Model: 2. Calculate Loss
+        Model->>Model: calculate_loss_from_probs()
+        
+        Note right of Model: 3. Backward Propagation
+        
+        Model->>Output: backwardProp_batch(input, label)
+        Output-->>Model: prevLayerGrad
+        
+        loop Backward Pass (Reverse Order)
+            alt is FullyConnected
+                Model->>FC: backwardProp_batch(input, nextGrad)
+                FC-->>Model: prevLayerGrad
+            else is PoolingLayer
+                Model->>Pool: backwardProp_batch(input, nextGrad)
+                Pool-->>Model: prevLayerGrad
+            else is ConvLayer
+                Model->>Conv: backwardProp_batch(input, nextGrad)
+                Conv-->>Model: prevLayerGrad
+            end
+        end
+        
+        Note right of Model: 4. Update Weights
+        
+        loop Update All Layers
+            Model->>Conv: update_batch(batchSize)
+            Conv->>Optim: update(weights, grads)
+            
+            Model->>FC: update_batch(batchSize)
+            FC->>Optim: update(weights, grads)
+            
+            Model->>Output: update_batch(batchSize)
+            Output->>Optim: update(weights, grads)
+        end
+        
+        deactivate Model
+    end
+    
+    Model-->>Main: Return TrainingMetrics (history)
+    deactivate Model
+    
+    Note over User, Main: Completion
+    Main->>User: Display Results / Save Model
+```
 ### 3.2 Class Diagram
 ```mermaid
 classDiagram
@@ -346,111 +444,6 @@ classDiagram
     outputLayer ..> Optimizer : uses
 ```
 
-### 3.3 Sequence Diagram
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Main
-    participant Model as NNModel
-    participant Layers as Layer(s)
-    participant Input as InputLayer
-    participant Conv as ConvLayer
-    participant Pool as PoolingLayer
-    participant FC as FullyConnected
-    participant Output as OutputLayer
-    participant Optim as Optimizer
-
-    Note over User, Main: Initialization Phase
-    User->>Main: Run Program
-    Main->>Main: Define Architecture (struct)
-    Main->>Model: NNModel(arch, numClasses, ...)
-    activate Model
-    Model->>Input: new InputLayer(...)
-    
-    loop For each Conv Layer
-        Model->>Conv: new ConvLayer(...)
-        Model->>Model: Calculate FeatureMap Dim
-    end
-    
-    loop For each FC Layer
-        Model->>FC: new FullyConnected(...)
-    end
-    
-    Model->>Output: new OutputLayer(...)
-    deactivate Model
-
-    Note over Main, Optim: Training Phase (Single Epoch Example)
-    
-    Main->>Model: train_epochs(dataset, config)
-    activate Model
-    
-    loop For each Batch
-        Model->>Model: train_batch(batchData, trueLabels)
-        activate Model
-        
-        Note right of Model: 1. Forward Propagation
-        Model->>Model: classify(image)
-        activate Model
-        Model->>Input: start(image)
-        
-        loop Forward Pass through Layers
-            alt is ConvLayer
-                Model->>Conv: forwardProp(prevMaps)
-            else is PoolingLayer
-                Model->>Pool: forwardProp(prevMaps)
-            else is FullyConnected
-                Model->>FC: forwardProp(prevData)
-            end
-        end
-        
-        Model->>Output: forwardProp(prevData)
-        Model-->>Model: Return class
-        deactivate Model
-        
-        Note right of Model: 2. Calculate Loss
-        Model->>Model: calculate_loss_from_probs()
-        
-        Note right of Model: 3. Backward Propagation
-        
-        Model->>Output: backwardProp_batch(input, label)
-        Output-->>Model: prevLayerGrad
-        
-        loop Backward Pass (Reverse Order)
-            alt is FullyConnected
-                Model->>FC: backwardProp_batch(input, nextGrad)
-                FC-->>Model: prevLayerGrad
-            else is PoolingLayer
-                Model->>Pool: backwardProp_batch(input, nextGrad)
-                Pool-->>Model: prevLayerGrad
-            else is ConvLayer
-                Model->>Conv: backwardProp_batch(input, nextGrad)
-                Conv-->>Model: prevLayerGrad
-            end
-        end
-        
-        Note right of Model: 4. Update Weights
-        
-        loop Update All Layers
-            Model->>Conv: update_batch(batchSize)
-            Conv->>Optim: update(weights, grads)
-            
-            Model->>FC: update_batch(batchSize)
-            FC->>Optim: update(weights, grads)
-            
-            Model->>Output: update_batch(batchSize)
-            Output->>Optim: update(weights, grads)
-        end
-        
-        deactivate Model
-    end
-    
-    Model-->>Main: Return TrainingMetrics (history)
-    deactivate Model
-    
-    Note over User, Main: Completion
-    Main->>User: Display Results / Save Model
-```
 
 ---
 
