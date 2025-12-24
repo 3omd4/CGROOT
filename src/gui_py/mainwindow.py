@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
                              QStatusBar, QGroupBox, QTextEdit, QMenu, QToolBar, 
-                             QLabel, QProgressBar, QMessageBox, QApplication, QSplitter, QPushButton)
+                             QLabel, QProgressBar, QMessageBox, QApplication, QSplitter, QPushButton, QFileDialog)
 from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont
 from dataset_utils import get_class_name
@@ -15,6 +15,16 @@ from controllers.model_controller import ModelController
 from utils.resource_path import resource_path
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import pyqtSlot
+from pathlib import Path
+
+try:
+    from src.gui_py.utils.paths import get_datasets_dir
+except ImportError:
+    # Fallback if module structure differs
+    def get_datasets_dir():
+        from pathlib import Path
+        # Fix: Datasets are in src/data/datasets
+        return Path("src/data/datasets")
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -134,21 +144,20 @@ class MainWindow(QMainWindow):
             self.load_custom_dataset()
             
     def load_mnist_dataset(self):
-        # Default dir
-        script_dir = Path(__file__).parent
-        project_root = script_dir.parent.parent
-        default_dir = project_root / "src" / "data" / "datasets" / "mnist"
-        
-        dir_name = str(default_dir) if default_dir.exists() else ""
-        
+        # Default path
+        datasets_dir = get_datasets_dir()
+        start_dir = str(datasets_dir) if datasets_dir.exists() else "."
+            
         # 1. Select Images
         images_path, _ = QFileDialog.getOpenFileName(
-            self, "Select MNIST Images File", dir_name,
+            self, "Select MNIST Images File", start_dir,
             "MNIST Images (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)"
         )
         
         if not images_path:
             return
+
+        import os
             
         # 2. Auto-detect Labels (if standard naming)
         dir_name = os.path.dirname(images_path)
