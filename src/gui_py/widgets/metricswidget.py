@@ -179,7 +179,7 @@ class MetricsWidget(QWidget):
         self.loss_series.setPen(pen)
         
         self.val_loss_series = QLineSeries()
-        self.val_loss_series.setName("Val Loss")
+        self.val_loss_series.setName("Validation Loss")
         pen_val_loss = QPen(QColor(255, 100, 100))
         pen_val_loss.setWidth(2)
         pen_val_loss.setStyle(Qt.PenStyle.DashLine)
@@ -218,7 +218,7 @@ class MetricsWidget(QWidget):
         
         # Accuracy Chart
         self.acc_series = QLineSeries()
-        self.acc_series.setName("Train Acc")
+        self.acc_series.setName("Train Accuracy")
         pen_acc = QPen(QColor(0, 150, 0))
         pen_acc.setWidth(2)
         self.acc_series.setPointsVisible(True)
@@ -226,7 +226,7 @@ class MetricsWidget(QWidget):
         self.acc_series.setPen(pen_acc)
         
         self.val_acc_series = QLineSeries()
-        self.val_acc_series.setName("Val Acc")
+        self.val_acc_series.setName("Validation Accuracy")
         pen_val_acc = QPen(QColor(100, 200, 100))
         pen_val_acc.setWidth(2)
         pen_val_acc.setStyle(Qt.PenStyle.DashLine)
