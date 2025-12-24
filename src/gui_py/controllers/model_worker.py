@@ -242,6 +242,7 @@ class ModelWorker(QObject):
                 raise ImportError("C++ Core module (cgroot_core) not loaded. Please rebuild the project.")
             self.model = cgroot_core.create_model(config)
             self.logMessage.emit("Model initialized successfully")
+            return True
         except Exception as e:
             self.logMessage.emit(f"Error initializing model: {e}")
             raise e
