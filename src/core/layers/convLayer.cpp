@@ -10,11 +10,11 @@
 // ouput:        N/A
 // side effect:  the convolution layer is constructed
 // Note:         N/A
+
 convLayer::convLayer(convKernels &kernelConfig, activationFunction actFunc,
                      initFunctions initFunc, distributionType distType,
                      featureMapDim &inputFM_Dim, OptimizerConfig optConfig)
     : kernel_info(kernelConfig), act_Funct(actFunc) {
-
   // a check to make sure that the stride isn't zero so no error occur from
   // division by 0
   kernelConfig.stride = (kernelConfig.stride != 0) ? kernelConfig.stride : 1;
@@ -84,7 +84,6 @@ convLayer::convLayer(convKernels &kernelConfig, activationFunction actFunc,
   d_bias.assign(kernelConfig.numOfKerenels, 0.0);
   biasOptimizer = createOptimizer(optConfig);
 }
-
 // initialize a kernel
 // input:        -kernelConfig (contains all the information about the kernel)
 //               -initFunc (the initialization function)
@@ -132,7 +131,6 @@ convLayer::kernelType convLayer::initKernel(convKernels &kernelConfig,
   // return the initialized kernel
   return k;
 }
-
 // do the convolution operation by sweeping the kernels through
 // the input feature map and putin the result in the (output) feature map
 // essentially doing the forward propagation
@@ -212,7 +210,6 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
           // the horizontal direction
           j_iter += kernel_info.stride;
         }
-
         // move the kernel by the stride amount above the input feature map in
         // the vertical direction
         i_iter += kernel_info.stride;
@@ -260,14 +257,22 @@ void convLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
 // after a single
 void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
                              vector<featureMapType> &thisLayerGrad) {
-// Apply Activation Derivative to incoming gradients
-// Mutates thisLayerGrad in place to become dZ
-#pragma omp parallel for collapse(3)
+  // Get Dimensions
+  int inputH = inputFeatureMaps[0].size();
+  int inputW = inputFeatureMaps[0][0].size();
+  int kH = kernel_info.kernel_height;
+  int kW = kernel_info.kernel_width;
+  int stride = kernel_info.stride;
+  int pad = kernel_info.padding;
+
+// 1. Activation Derivative & Bias Gradients
+#pragma omp parallel for
   for (int d = 0; d < fm.FM_depth; d++) {
+    double bias_sum = 0.0; // Local variable prevents Race Condition
+
     for (int h = 0; h < fm.FM_height; h++) {
       for (int w = 0; w < fm.FM_width; w++) {
         double derivative = 0.0;
-        // Use the output of this layer (featureMaps) to calculate derivative
         switch (act_Funct) {
         case RelU:
           derivative = d_reLU_Funct(featureMaps[d][h][w]);
@@ -280,59 +285,54 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
           break;
         }
         thisLayerGrad[d][h][w] *= derivative;
+        bias_sum += thisLayerGrad[d][h][w];
       }
     }
+    d_bias[d] += bias_sum;
   }
 
-  // Calculate Weight Gradients (dW) and Input Gradients (dX)
-  int padH = kernel_info.kernel_height - 1;
-  int padW = kernel_info.kernel_width - 1;
-
+// Weight Gradients (dW) & Input Gradients (dX)
+// Parallelize over Kernel (k) and Input Channel (d)
 #pragma omp parallel for collapse(2)
   for (int k = 0; k < (int)kernel_info.numOfKerenels; k++) {
     for (int d = 0; d < (int)kernel_info.kernel_depth; d++) {
 
-      // A. Calculate Weight Gradients (Convolution of Input * dZ)
-      for (size_t r = 0; r < kernel_info.kernel_height; r++) {
-        for (size_t c = 0; c < kernel_info.kernel_width; c++) {
-          double sum = 0.0;
-          for (size_t i = 0; i < fm.FM_height; i++) {
-            for (size_t j = 0; j < fm.FM_width; j++) {
-              // Valid convolution
-              sum += inputFeatureMaps[d][i + r][j + c] * thisLayerGrad[k][i][j];
-            }
-          }
-          d_kernels[k][d][r][c] = sum; // Overwrite for SGD
-        }
-      }
-      // B. Calculate Previous Layer Gradients (Full Convolution of dZ *
-      // Rotated_Kernel)
-      for (int r = 0; r < (int)inputFeatureMaps[0].size(); r++) {
-        for (int c = 0; c < (int)inputFeatureMaps[0][0].size(); c++) {
-          double sum = 0.0;
-          // Convolve dZ (padded) with flipped kernel
-          for (int kr = 0; kr < (int)kernel_info.kernel_height; kr++) {
-            for (int kc = 0; kc < (int)kernel_info.kernel_width; kc++) {
-              int r_grad = r - (padH - kr);
-              int c_grad = c - (padW - kc);
+      // Iterate over the OUTPUT gradient map
+      for (int i = 0; i < (int)fm.FM_height; i++) {
+        for (int j = 0; j < (int)fm.FM_width; j++) {
+          double grad = thisLayerGrad[k][i][j];
+          if (grad == 0.0)
+            continue; // Optimization
 
-              if (r_grad >= 0 && r_grad < (int)fm.FM_height && c_grad >= 0 &&
-                  c_grad < (int)fm.FM_width) {
-                // Use rotated kernel weights
-                sum += thisLayerGrad[k][r_grad][c_grad] *
-                       kernels[k][d][kernel_info.kernel_height - 1 - kr]
-                              [kernel_info.kernel_width - 1 - kc];
+          // For this output pixel, which Input pixels (r,c) created it?
+          for (int r = 0; r < kH; r++) {
+            for (int c = 0; c < kW; c++) {
+
+              // CALCULATE INPUT INDICES (Correct Stride/Pad logic)
+              // This matches exactly how you calculated it in forwardProp
+              int in_r = i * stride - pad + r;
+              int in_c = j * stride - pad + c;
+
+              // Boundary Check
+              if (in_r >= 0 && in_r < inputH && in_c >= 0 && in_c < inputW) {
+
+                // A. Weight Gradient (dW)
+                // dW += Input_Pixel * Error_Signal
+                d_kernels[k][d][r][c] += inputFeatureMaps[d][in_r][in_c] * grad;
+
+// B. Input Gradient (dX) - Propagate error to previous layer
+// dX += Kernel_Weight * Error_Signal
+// We use atomic because multiple output pixels might overlap on one input pixel
+#pragma omp atomic
+                prevLayerGrad[d][in_r][in_c] += kernels[k][d][r][c] * grad;
               }
             }
           }
-#pragma omp atomic
-          prevLayerGrad[d][r][c] += sum;
         }
       }
     }
   }
 }
-
 // backward propagate the error after a batch
 // input:                -inputFeatureMaps
 //                       -thisLayerGrad
@@ -342,69 +342,76 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
 // after a whole batch
 void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
                                    vector<featureMapType> &thisLayerGrad) {
-  // 2Apply Activation Derivative
-#pragma omp parallel for collapse(3)
-  for (int d = 0; d < fm.FM_depth; d++) {
-    for (int h = 0; h < fm.FM_height; h++) {
-      for (int w = 0; w < fm.FM_width; w++) {
-        double derivative = 0.0;
+  const int inputH = inputFeatureMaps[0].size();
+  const int inputW = inputFeatureMaps[0][0].size();
+  const int kH = kernel_info.kernel_height;
+  const int kW = kernel_info.kernel_width;
+  const int stride = kernel_info.stride;
+  const int pad = kernel_info.padding;
+
+  //        Reset previous gradients
+  for (auto &ch : prevLayerGrad)
+    for (auto &row : ch)
+      fill(row.begin(), row.end(), 0.0);
+
+//        Activation derivative + dBias
+#pragma omp parallel for
+  for (int k = 0; k < fm.FM_depth; k++) {
+    double local_bias = 0.0;
+
+    for (int i = 0; i < fm.FM_height; i++) {
+      for (int j = 0; j < fm.FM_width; j++) {
+        double deriv = 0.0;
         switch (act_Funct) {
         case RelU:
-          derivative = d_reLU_Funct(featureMaps[d][h][w]);
+          deriv = d_reLU_Funct(featureMaps[k][i][j]);
           break;
         case Sigmoid:
-          derivative = d_sigmoid_Funct(featureMaps[d][h][w]);
+          deriv = d_sigmoid_Funct(featureMaps[k][i][j]);
           break;
         case Tanh:
-          derivative = d_tanh_Funct(featureMaps[d][h][w]);
+          deriv = d_tanh_Funct(featureMaps[k][i][j]);
           break;
         }
-        thisLayerGrad[d][h][w] *= derivative;
+        thisLayerGrad[k][i][j] *= deriv;
+        local_bias += thisLayerGrad[k][i][j];
       }
     }
+
+#pragma omp atomic
+    d_bias[k] += local_bias;
   }
 
-  int padH = kernel_info.kernel_height - 1;
-  int padW = kernel_info.kernel_width - 1;
-
+//       dW and dX (true convolution)
 #pragma omp parallel for collapse(2)
-  for (int k = 0; k < (int)kernel_info.numOfKerenels; k++) {
-    for (int d = 0; d < (int)kernel_info.kernel_depth; d++) {
+  for (int k = 0; k < kernel_info.numOfKerenels; k++) {
+    for (int d = 0; d < kernel_info.kernel_depth; d++) {
 
-      // A. Calculate Weight Gradients (Accumulate += for Batch)
-      for (size_t r = 0; r < kernel_info.kernel_height; r++) {
-        for (size_t c = 0; c < kernel_info.kernel_width; c++) {
-          double sum = 0.0;
-          for (size_t i = 0; i < fm.FM_height; i++) {
-            for (size_t j = 0; j < fm.FM_width; j++) {
-              sum += inputFeatureMaps[d][i + r][j + c] * thisLayerGrad[k][i][j];
-            }
-          }
-// Atomic accumulation for batch gradient
+      for (int i = 0; i < fm.FM_height; i++) {
+        for (int j = 0; j < fm.FM_width; j++) {
+
+          const double grad = thisLayerGrad[k][i][j];
+          if (grad == 0.0)
+            continue;
+
+          for (int r = 0; r < kH; r++) {
+            for (int c = 0; c < kW; c++) {
+
+              const int in_r = i * stride - pad + r;
+              const int in_c = j * stride - pad + c;
+
+              if (in_r >= 0 && in_r < inputH && in_c >= 0 && in_c < inputW) {
+
+                // dW
 #pragma omp atomic
-          d_kernels[k][d][r][c] += sum;
-        }
-      }
+                d_kernels[k][d][r][c] += inputFeatureMaps[d][in_r][in_c] * grad;
 
-      // B. Calculate Previous Layer Gradients (Same as Single)
-      for (int r = 0; r < (int)inputFeatureMaps[0].size(); r++) {
-        for (int c = 0; c < (int)inputFeatureMaps[0][0].size(); c++) {
-          double sum = 0.0;
-          for (int kr = 0; kr < (int)kernel_info.kernel_height; kr++) {
-            for (int kc = 0; kc < (int)kernel_info.kernel_width; kc++) {
-              int r_grad = r - (padH - kr);
-              int c_grad = c - (padW - kc);
-
-              if (r_grad >= 0 && r_grad < (int)fm.FM_height && c_grad >= 0 &&
-                  c_grad < (int)fm.FM_width) {
-                sum += thisLayerGrad[k][r_grad][c_grad] *
-                       kernels[k][d][kernel_info.kernel_height - 1 - kr]
-                              [kernel_info.kernel_width - 1 - kc];
+                // dX
+#pragma omp atomic
+                prevLayerGrad[d][in_r][in_c] += kernels[k][d][r][c] * grad;
               }
             }
           }
-#pragma omp atomic
-          prevLayerGrad[d][r][c] += sum;
         }
       }
     }
@@ -465,10 +472,7 @@ void convLayer::update_batch(int numOfExamples) {
     }
   }
 
-  // update biases - scale gradients by batch size first
-  for (size_t i = 0; i < d_bias.size(); i++) {
-    d_bias[i] *= scale;
-  }
+  // update biases
   biasOptimizer->update(bias, d_bias);
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }

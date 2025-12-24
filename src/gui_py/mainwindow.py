@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
         
         self.setup_ui()
         self.setup_menubar()
-        self.setup_toolbar()
+        # self.setup_toolbar()
         self.setup_statusbar()
         self.create_connections()
         
@@ -240,10 +240,10 @@ class MainWindow(QMainWindow):
         stop_action = toolbar.addAction(QIcon(resource_path("icons/stop.png")), "&Stop Training (Ctrl+S)", self.training_tab.on_stop_clicked)
         stop_action.setShortcut("Ctrl+S")
         
-        save_action = toolbar.addAction(QIcon(resource_path("icons/save.png")), "&Save Model (Ctrl+S)", self.training_tab.on_save_clicked)
+        save_action = toolbar.addAction(QIcon(resource_path("icons/save.png")), "&Save Model (Ctrl+S)", self.training_tab.on_store_model_clicked)
         save_action.setShortcut("Ctrl+I")
 
-        load_action = toolbar.addAction(QIcon(resource_path("icons/load.png")), "&Load Model (Ctrl+L)", self.training_tab.on_load_clicked)
+        load_action = toolbar.addAction(QIcon(resource_path("icons/load.png")), "&Load Model (Ctrl+L)", self.training_tab.on_load_model_clicked)
         load_action.setShortcut("Ctrl+L")
 
         toolbar.addSeparator()
