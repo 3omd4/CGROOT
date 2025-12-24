@@ -74,22 +74,48 @@ endif()
 # If Qt6 not found and on Windows, try common installation path
 if(NOT Qt6_FOUND AND WIN32)
     if("${CMAKE_PREFIX_PATH}" STREQUAL "")
-        set(CMAKE_PREFIX_PATH "C:/Qt/6.10.0/msvc2022_64")
+        set(CMAKE_PREFIX_PATH "C:/Qt/6.10.0/msvc2022_64") # Default fallback
         find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
-        # Try common Qt6 installation paths
-        set(QT_PATHS
-            "C:/Qt/6.10.1/msvc2022_64"
-            "C:/Qt/6.10.1/msvc2019_64"
-            "C:/Qt/6.10.0/msvc2022_64"
-            "C:/Qt/6.10.0/msvc2019_64"
-            "C:/Qt/6.9.0/msvc2022_64"
-            "C:/Qt/6.9.0/msvc2019_64"
-        )
-        foreach(QT_PATH ${QT_PATHS})
+        
+        # Dynamic Discovery of Qt paths
+        set(QT_SEARCH_ROOTS "C:/Qt" "$ENV{USERPROFILE}/Qt")
+        set(QT_CANDIDATES "")
+
+        foreach(ROOT ${QT_SEARCH_ROOTS})
+            if(EXISTS ${ROOT})
+                # Find all version directories (e.g. 6.x.x)
+                file(GLOB VERSION_DIRS "${ROOT}/6.*.*")
+                # Sort descending to try latest first
+                list(SORT VERSION_DIRS COMPARE STRING ORDER DESCENDING)
+                
+                foreach(VER_DIR ${VERSION_DIRS})
+                    if(IS_DIRECTORY ${VER_DIR})
+                        # Find compiler subdirectories (msvc*, mingw*)
+                        file(GLOB COMPILER_DIRS "${VER_DIR}/*_64")
+                        
+                        # Prioritize MSVC if on Windows and building with MSVC
+                        if(MSVC)
+                             list(FILTER COMPILER_DIRS INCLUDE REGEX "msvc")
+                        endif()
+
+                        foreach(COMP_DIR ${COMPILER_DIRS})
+                            if(IS_DIRECTORY ${COMP_DIR})
+                                list(APPEND QT_CANDIDATES ${COMP_DIR})
+                            endif()
+                        endforeach()
+                    endif()
+                endforeach()
+            endif()
+        endforeach()
+
+        # Iterate through dynamically found paths
+        foreach(QT_PATH ${QT_CANDIDATES})
+            message(STATUS "Checking Qt path: ${QT_PATH}")
             if(EXISTS ${QT_PATH})
                 set(CMAKE_PREFIX_PATH ${QT_PATH})
                 find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
                 if(Qt6_FOUND)
+                    message(STATUS "Qt6 found at: ${QT_PATH}")
                     break()
                 endif()
             endif()
