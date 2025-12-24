@@ -60,8 +60,6 @@ class ModelController(QObject):
         self.requestTrain.connect(self.worker.trainModel)
         self.requestStop.connect(self.worker.stopTraining)
         self.requestInference.connect(self.worker.runInference)
-        self.requestStop.connect(self.worker.stopTraining)
-        self.requestInference.connect(self.worker.runInference)
         self.setTargetLayer.connect(self.worker.setTargetLayer)
         self.requestStoreModel.connect(self.worker.storeModel)
         self.requestLoadModel.connect(self.worker.loadModel)

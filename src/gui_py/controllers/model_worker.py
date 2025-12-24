@@ -265,7 +265,8 @@ class ModelWorker(QObject):
         self._training_active = False # Ensure flag is off
         if hasattr(self, "_train_thread") and self._train_thread:
             self._train_thread.stop()
-            self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
+            self.logMessage.emit("Training thread stopped")
+            self._train_thread.wait(1000)  # Wait up to 1 second for thread to finish
 
     @pyqtSlot(dict)
     def resetModel(self, config):
