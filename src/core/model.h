@@ -190,6 +190,15 @@ public:
                LogCallback log_callback = nullptr,
                std::atomic<bool> *stop_requested = nullptr);
 
+  // Evaluate the model on a test dataset (Forward-Only)
+  // input:        -dataset (MNIST dataset with images and labels)
+  //               -progress_callback (optional callback for progress updates)
+  // output:       // Returns {avg_loss, accuracy, confusion_matrix}
+  // Confusion matrix is [true_label][predicted_label]
+  std::tuple<double, double, std::vector<std::vector<int>>>
+  evaluate(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+           ProgressCallback progress_callback = nullptr);
+
   // Get the feature maps of a specific layer
   // input:        layerIndex
   // output:       vector<vector<vector<double>>> (feature maps)

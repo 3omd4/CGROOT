@@ -215,6 +215,7 @@ class ModelWorker(QObject):
     metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
     datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
     modelInfoLoaded = pyqtSignal(int, int, int) # w, h, d
+    evaluationFinished = pyqtSignal(float, float, list) # loss, acc, confusion_matrix
     
     # Internal signals for thread-safe callback emissions
     _internal_log = pyqtSignal(str)
@@ -429,6 +430,8 @@ class ModelWorker(QObject):
         self.logMessage.emit("===================================")
         
         try:
+            if cgroot_core is None:
+                raise ImportError("C++ Core module (cgroot_core) not loaded. Please rebuild the project.")
             self.model = cgroot_core.create_model(config)
             self.logMessage.emit("Model initialized successfully")
         except Exception as e:
@@ -817,3 +820,57 @@ class ModelWorker(QObject):
                 self.cleanup()
         except Exception:
             pass  # Avoid exceptions in destructor
+    
+    @pyqtSlot(str, str)
+    def runTesting(self, images_path, labels_path):
+        """Run evaluation on a test dataset."""
+        if not self.model:
+            self.logMessage.emit("Error: No model loaded to test.")
+            return
+
+        self.logMessage.emit(f"Loading Test Dataset from: {images_path}")
+        self.modelStatusChanged.emit(True)
+
+        try:
+            # Load dataset
+            test_dataset = cgroot_core.MNISTLoader.load_test_data(images_path, labels_path)
+            if not test_dataset:
+                self.logMessage.emit("Failed to load test dataset.")
+                self.modelStatusChanged.emit(False)
+                return
+
+            self.logMessage.emit(f"Loaded {test_dataset.num_images} test images. Starting Evaluation...")
+
+            # Progress Callback
+            def progress_cb(epoch, total, loss, acc, idx):
+                # Update progress bar
+                self.progressUpdated.emit(idx, test_dataset.num_images)
+                
+                # Log percentage periodically
+                if idx % 1000 == 0:
+                   perc = (idx / test_dataset.num_images) * 100
+                   self.logMessage.emit(f"Evaluating... {perc:.1f}%")
+
+            # Run Evaluation
+            loss, accuracy, matrix = self.model.evaluate(test_dataset, progress_cb)
+
+            self.logMessage.emit("=== Evaluation Results ===")
+            self.logMessage.emit(f"Test Accuracy: {accuracy * 100:.2f}%")
+            self.logMessage.emit(f"Test Loss: {loss:.4f}")
+            self.logMessage.emit("==========================")
+            
+            # Emit results (including matrix)
+            self.evaluationFinished.emit(loss, accuracy, matrix)
+
+        except Exception as e:
+            self.logMessage.emit(f"Evaluation Failed: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        finally:
+            self.modelStatusChanged.emit(False)
+            # Cleanup dataset
+            try:
+                del test_dataset
+            except:
+                pass

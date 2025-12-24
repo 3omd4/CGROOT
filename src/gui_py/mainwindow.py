@@ -1,8 +1,11 @@
+```python
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
                              QStatusBar, QGroupBox, QTextEdit, QMenu, QToolBar, 
                              QLabel, QProgressBar, QMessageBox, QApplication, QSplitter, QPushButton)
 from PyQt6.QtCore import Qt, QThread
-from PyQt6.QtGui import QAction, QKeySequence, QFont
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont
+from .dataset_utils import get_class_name
+from .widgets.confusion_matrix import ConfusionMatrixDialog
 
 from widgets.configurationwidget import ConfigurationWidget
 from widgets.trainingwidget import TrainingWidget
@@ -31,6 +34,9 @@ class MainWindow(QMainWindow):
         
         self.log_message(f"Application Initialized. Logs saving to: src/data/logs/")
         self.log_message(f"Starting in Full Screen Mode.")
+        
+        # Default State
+        self.dataset_type = "MNIST"
         
     def setup_ui(self):
         central_widget = QWidget()
@@ -119,8 +125,8 @@ class MainWindow(QMainWindow):
         start_dir = str(datasets_dir) if datasets_dir.exists() else "."
             
         images_path, _ = QFileDialog.getOpenFileName(
-            self, "Select MNIST Images File", start_dir,
-            "MNIST Images (*.idx3-ubyte);;MNIST Images (*.idx4-ubyte);;All Files (*.*)"
+            self, "Select Training Images", start_dir,
+            "IDX Files (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)"
         )
         
         if not images_path:
@@ -229,6 +235,7 @@ class MainWindow(QMainWindow):
         self.controller.metricsSetEpoch.connect(self.metrics_tab.set_total_epochs)
         self.controller.datasetInfoLoaded.connect(self.on_dataset_info_loaded)
         self.controller.modelInfoLoaded.connect(self.on_model_info_loaded)
+        self.controller.evaluationFinished.connect(self.on_evaluation_finished)
         
         self.config_tab.vizSettingsChanged.connect(self.on_gui_settings_changed)
         
@@ -566,3 +573,11 @@ class MainWindow(QMainWindow):
         total_est = 1 + num_conv * 2 + 1 + num_fc # Generous estimate
         self.training_tab.update_layer_limits(total_est + 5) 
 
+    def on_evaluation_finished(self, loss, accuracy, matrix):
+        """Handle evaluation completion: Show Confusion Matrix."""
+        self.log_message("Measurement Complete. Showing Confusion Matrix...")
+        
+        # Instantiate and show dialog
+        # We store it in self to prevent garbage collection
+        self.cm_dialog = ConfusionMatrixDialog(self, matrix, self.dataset_type)
+        self.cm_dialog.show()

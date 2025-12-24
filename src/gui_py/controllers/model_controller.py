@@ -16,6 +16,7 @@ class ModelController(QObject):
     metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
     datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
     modelInfoLoaded = pyqtSignal(int, int, int) # w, h, d (From loaded model)
+    evaluationFinished = pyqtSignal(float, float, list) # loss, acc, confusion_matrix
 
     
     # Signals to Worker
@@ -26,6 +27,7 @@ class ModelController(QObject):
     setTargetLayer = pyqtSignal(int)
     requestStoreModel = pyqtSignal(str, dict) # folderPath, configuration
     requestLoadModel = pyqtSignal(str) # filePath
+    requestTest = pyqtSignal(str, str) # images_path, labels_path
     setVisualizationsEnabled = pyqtSignal(bool) # NEW: Toggle visualizations
 
     def __init__(self):
@@ -49,7 +51,7 @@ class ModelController(QObject):
         self.worker.metricsSetEpoch.connect(self.metricsSetEpoch)
         self.worker.datasetInfoLoaded.connect(self.datasetInfoLoaded)
         self.worker.modelInfoLoaded.connect(self.modelInfoLoaded)
-
+        self.worker.evaluationFinished.connect(self.evaluationFinished)
         
         # Connect Controller -> Worker
         self.requestLoadDataset.connect(self.worker.loadDataset)
@@ -59,6 +61,7 @@ class ModelController(QObject):
         self.setTargetLayer.connect(self.worker.setTargetLayer)
         self.requestStoreModel.connect(self.worker.storeModel)
         self.requestLoadModel.connect(self.worker.loadModel)
+        self.requestTest.connect(self.worker.runTesting)
         self.setVisualizationsEnabled.connect(self.worker.setVisualizationsEnabled)
         
         self.thread.start()

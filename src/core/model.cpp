@@ -1085,6 +1085,97 @@ vector<TrainingMetrics> NNModel::train_epochs(
   return new_metrics;
 }
 
+// Helper to calculate cross-entropy loss from probabilities
+// Copied logic from internal helper to ensure self-contained evaluate
+static double calculate_ce_loss(const vector<double> &probs, int label) {
+  if (probs.empty())
+    return 0.0;
+  double p = probs[label];
+  // Avoid log(0)
+  if (p < 1e-15)
+    p = 1e-15;
+  return -std::log(p);
+}
+
+// Evaluate the model on a test dataset (Forward-Only)
+// Evaluate the model on a test dataset (Forward-Only)
+std::tuple<double, double, std::vector<std::vector<int>>>
+NNModel::evaluate(const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+                  ProgressCallback progress_callback) {
+
+  if (Layers.empty()) {
+    std::cerr << "Error: Model not initialized" << std::endl;
+    return {0.0, 0.0, {}};
+  }
+
+  size_t num_images = dataset.num_images;
+  if (num_images == 0) {
+    return {0.0, 0.0, {}};
+  }
+
+  // Determine number of classes from output layer
+  int num_classes = 10; // Default for MNIST/CIFAR-10
+  if (!Layers.empty()) {
+    Layer *lastLayer = Layers.back();
+    if (lastLayer->getLayerType() == output) {
+      outputLayer *outL = static_cast<outputLayer *>(lastLayer);
+      num_classes = outL->getNeurons().size();
+    } else if (lastLayer->getLayerType() == fullyConnected) {
+      FullyConnected *fcL = static_cast<FullyConnected *>(lastLayer);
+      num_classes = fcL->getNeurons().size();
+    }
+  }
+
+  // Initialize Confusion Matrix: [True][Predicted]
+  std::vector<std::vector<int>> matrix(num_classes,
+                                       std::vector<int>(num_classes, 0));
+
+  size_t correct_count = 0;
+  double loss_sum = 0.0;
+  size_t samples_processed = 0;
+
+  // Process all images
+  for (size_t i = 0; i < num_images; ++i) {
+    // Convert image
+    image img_data = convert_mnist_to_image_format(
+        dataset.images[i].pixels, imageHeight, imageWidth, imageDepth);
+
+    int true_label = static_cast<int>(dataset.images[i].label);
+
+    // Forward pass (No Backprop)
+    int predicted_label = classify(img_data);
+
+    if (predicted_label == true_label) {
+      correct_count++;
+    }
+
+    // Update Confusion Matrix
+    if (true_label >= 0 && true_label < num_classes && predicted_label >= 0 &&
+        predicted_label < num_classes) {
+      matrix[true_label][predicted_label]++;
+    }
+
+    // Calculate Loss
+    vector<double> probs = getProbabilities();
+    loss_sum += calculate_ce_loss(probs, true_label);
+    samples_processed++;
+
+    // Progress Update
+    if (progress_callback) {
+      // We reuse signature: epoch=1, total=1, loss, acc, idx
+      double current_acc = (double)correct_count / (i + 1);
+      double current_loss = loss_sum / (i + 1);
+      progress_callback(1, 1, current_loss, current_acc, static_cast<int>(i));
+    }
+  }
+
+  double avg_acc =
+      samples_processed > 0 ? (double)correct_count / samples_processed : 0.0;
+  double avg_loss = samples_processed > 0 ? loss_sum / samples_processed : 0.0;
+
+  return {avg_loss, avg_acc, matrix};
+}
+
 vector<vector<vector<double>>> NNModel::getLayerFeatureMaps(size_t layerIndex) {
   // std::lock_guard<std::mutex> lock(modelMutex);
   if (layerIndex >= Layers.size()) {

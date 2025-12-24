@@ -1,7 +1,15 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QProgressBar, QLabel, QGroupBox, QGridLayout, QScrollArea, QSpinBox, QSizePolicy, QFileDialog, QCheckBox)
+                             QProgressBar, QLabel, QGroupBox, QGridLayout, QScrollArea, QSpinBox, QSizePolicy, QFileDialog, QCheckBox, QMessageBox)
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, qRgb
 from PyQt6.QtCore import Qt, pyqtSignal
+try:
+    from src.gui_py.utils.paths import get_datasets_dir
+except ImportError:
+    # Fallback if module structure differs
+    def get_datasets_dir():
+        from pathlib import Path
+        # Fix: Datasets are in src/data/datasets
+        return Path("src/data/datasets")
 
 class TrainingWidget(QWidget):
     startTrainingRequested = pyqtSignal()
@@ -17,6 +25,9 @@ class TrainingWidget(QWidget):
         # Default Visualization Settings
         self.viz_show_preview = True
         self.viz_map_frequency = "Every Epoch"
+        
+        # State tracking
+        self.is_model_loaded = False
         
         self.init_ui()
         self.connect_signals()
@@ -139,8 +150,13 @@ class TrainingWidget(QWidget):
         self.store_model_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 10px; }")
         self.store_model_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
+        self.test_btn = QPushButton("Run Test")
+        self.test_btn.setStyleSheet("QPushButton { background-color: #9C27B0; color: white; font-weight: bold; padding: 10px; }")
+        self.test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
         self.load_model_btn.clicked.connect(self.on_load_model_clicked)
         self.store_model_btn.clicked.connect(self.on_store_model_clicked)
+        self.test_btn.clicked.connect(self.on_test_clicked)
         
         # Status Label
         self.status_label = QLabel("Ready to start training")
@@ -150,6 +166,7 @@ class TrainingWidget(QWidget):
         btn_layout.addWidget(self.stop_btn)
         btn_layout.addWidget(self.load_model_btn)
         btn_layout.addWidget(self.store_model_btn)
+        btn_layout.addWidget(self.test_btn)
         btn_layout.addStretch()
         btn_layout.addWidget(self.status_label)
         
@@ -165,6 +182,10 @@ class TrainingWidget(QWidget):
         # Connect internal signals to controller slots
         self.loadModelRequested.connect(self.controller.requestLoadModel)
         # self.storeModelRequested.connect(self.controller.requestStoreModel) # Removed: Managed by MainWindow to inject config
+        
+        # Listen for model changes to update internal state
+        self.controller.modelInfoLoaded.connect(self.on_model_loaded)
+        self.controller.modelStatusChanged.connect(self.on_model_status_changed) # True = Training Started = Model exists
 
     def on_start_clicked(self):
         # We emit signal, main window orchestrates call to controller
@@ -203,6 +224,61 @@ class TrainingWidget(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Select Directory to Store Model", start_dir)
         if folder:
             self.storeModelRequested.emit(folder)
+            
+    def on_test_clicked(self):
+        if not self.is_model_loaded:
+            QMessageBox.warning(self, "No Model Loaded", "Please load a model or start training before running a test.")
+            return
+
+        import os
+
+
+        # Navigate to datasets dir if possible
+        # Default path
+        datasets_dir = get_datasets_dir()
+        start_dir = str(datasets_dir) if datasets_dir.exists() else self._get_model_dir()
+            
+        path, _ = QFileDialog.getOpenFileName(self, "Select Test Images (IDX)", start_dir, "IDX Files (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)")
+        
+        if not path:
+            return
+
+        # Attempt to find matching labels file automatically
+        # Common convention: test-images... -> test-labels...
+        # or t10k-images... -> t10k-labels...
+        
+        folder = os.path.dirname(path)
+        filename = os.path.basename(path)
+        
+        labels_path = ""
+        possible_names = []
+        
+        if "images" in filename:
+            possible_names.append(filename.replace("images", "labels"))
+        
+        # Also try common pairs
+        if "t10k-images-idx3-ubyte" in filename:
+             possible_names.append("t10k-labels-idx1-ubyte")
+        if "train-images" in filename: # If user selected train set
+             possible_names.append("train-labels-idx1-ubyte")
+             
+        found = False
+        for name in possible_names:
+            candidate = os.path.join(folder, name)
+            if os.path.exists(candidate):
+                labels_path = candidate
+                found = True
+                break
+        
+        if not found:
+            # Ask user for labels file
+            labels_path, _ = QFileDialog.getOpenFileName(self, "Select Test Labels (IDX)", folder, "IDX Files (*.idx1-ubyte);;All Files (*.*)")
+            
+        if path and labels_path:
+             self.controller.requestTest.emit(path, labels_path)
+        else:
+             # If user cancelled labels selection
+             pass
         
     def on_layer_changed(self, val):
         self.fm_title_label.setText(f"Feature Maps (Layer {val})")
@@ -211,12 +287,20 @@ class TrainingWidget(QWidget):
     def set_training_state(self, is_running):
         self.start_btn.setEnabled(not is_running)
         self.stop_btn.setEnabled(is_running)
+        self.test_btn.setEnabled(not is_running)
         if is_running:
             self.status_label.setText("Training in progress...")
             self.status_label.setStyleSheet("QLabel { font-weight: bold; color: green; padding: 5px; }")
         else:
             self.status_label.setText("Training stopped")
             self.status_label.setStyleSheet("QLabel { font-weight: bold; color: red; padding: 5px; }")
+            
+    def on_model_loaded(self, w, h, d):
+        self.is_model_loaded = True
+        
+    def on_model_status_changed(self, is_training):
+        if is_training:
+            self.is_model_loaded = True
             
     # Methods for controller to update UI status
     def training_finished(self):

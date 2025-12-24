@@ -204,7 +204,31 @@ void bind_model(py::module &m) {
           py::arg("progress_callback") = py::none(),
           py::arg("log_callback") = py::none(),
           py::arg("stop_flag") = py::none(),
-          "Train model for multiple epochs with callbacks (GIL Released)");
+          "Train model for multiple epochs with callbacks (GIL Released)")
+
+      .def(
+          "evaluate",
+          [](NNModel &self,
+             const cgroot::data::MNISTLoader::MNISTDataset &dataset,
+             py::object py_progress_callback) {
+            ProgressCallback progress_cpp = nullptr;
+            if (!py_progress_callback.is_none()) {
+              progress_cpp = [py_progress_callback](int epoch, int total,
+                                                    double loss, double acc,
+                                                    int current_image_idx) {
+                py::gil_scoped_acquire acquire; // Lock Python
+                py_progress_callback(epoch, total, loss, acc,
+                                     current_image_idx);
+              };
+            }
+
+            // Release GIL for computation
+            py::gil_scoped_release release;
+            return self.evaluate(dataset, progress_cpp);
+          },
+          py::arg("dataset"), py::arg("progress_callback") = py::none(),
+          "Evaluate model on dataset (GIL Released). Returns (loss, accuracy, "
+          "confusion_matrix)");
   // --- FIX ENDS HERE ---
 }
 
