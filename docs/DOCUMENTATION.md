@@ -92,7 +92,7 @@ To model real-world mathematical concepts as interacting software objects.
 - **Architectural Patterning:** Adopting the Model-View-Controller (MVC) pattern to decouple the neural network logic (`NNModel`) from the GUI visualization.
 
 **Deliverable:**  
-Class Diagrams and Sequence Diagrams (Section 3).
+Class Diagrams and Sequence Diagrams (Section 4).
 
 ---
 
@@ -120,7 +120,7 @@ To merge the backend computation engine with the frontend user interface.
 - Developing GUI widgets (`TrainingWidget`, `MetricsWidget`) to visualize the live state of the underlying C++ objects.
 
 **Deliverable:**  
-The complete, integrated application and the *Implementation Details* documentation (Section 4).
+The complete, integrated application and the *Implementation Details* documentation (Section 5).
 
 ---
 
