@@ -663,5 +663,7 @@ class MainWindow(QMainWindow):
         
         # Instantiate and show dialog
         # We store it in self to prevent garbage collection
-        self.cm_dialog = ConfusionMatrixDialog(self, matrix, self.dataset_type)
+        # Pass Best Training Accuracy for comparison
+        train_acc = self.metrics_tab.best_accuracy
+        self.cm_dialog = ConfusionMatrixDialog(self, matrix, self.dataset_type, train_acc)
         self.cm_dialog.show()

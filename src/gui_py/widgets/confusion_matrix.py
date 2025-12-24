@@ -1,17 +1,18 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QLabel, QFrame, QSplitter, QTextEdit, QGroupBox, QPushButton, QFileDialog,
-                             QTabWidget, QWidget, QScrollArea)
-from PyQt6.QtGui import QColor, QBrush, QFont, QIcon, QPixmap
-from PyQt6.QtCore import Qt
+                             QTabWidget, QWidget, QScrollArea, QListWidget, QListWidgetItem, QAbstractItemView)
+from PyQt6.QtGui import QColor, QBrush, QFont, QIcon, QPixmap, QAction
+from PyQt6.QtCore import Qt, QSize
 from dataset_utils import get_class_name
 
 class ConfusionMatrixDialog(QDialog):
-    def __init__(self, parent, matrix, dataset_type="MNIST"):
+    def __init__(self, parent, matrix, dataset_type="MNIST", train_acc=None):
         super().__init__(parent)
         self.setWindowTitle("Model Evaluation Report")
         self.resize(1400, 750) # Increased size
         self.matrix = matrix
         self.dataset_type = dataset_type
+        self.train_acc = train_acc
         
         # Calculate Metrics
         self.calculate_metrics()
@@ -109,7 +110,14 @@ class ConfusionMatrixDialog(QDialog):
         left_panel = QGroupBox("Confusion Matrix (Heatmap)")
         left_layout = QVBoxLayout(left_panel)
         
+        # Legend Label
+        legend_lbl = QLabel("Rows: True (Actual)   |   Columns: Predicted")
+        legend_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        legend_lbl.setStyleSheet("font-weight: bold; font-size: 12px; color: #555; margin-bottom: 5px;")
+        left_layout.addWidget(legend_lbl)
+        
         self.table = QTableWidget()
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setRowCount(self.num_classes)
         self.table.setColumnCount(self.num_classes)
         # Update Labels to include Index: "0: Airplane", "1: Automobile"
@@ -130,20 +138,35 @@ class ConfusionMatrixDialog(QDialog):
                 item = QTableWidgetItem(str(val))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 
+
                 # Heatmap logic
-                brightness = 0
-                if max_val > 0:
-                    brightness = int((val / max_val) * 200) + 55
-                    
                 if r == c:
-                    bg_color = QColor(0, brightness, 0)
-                    fg_color = QColor(255, 255, 255) if brightness > 128 else QColor(200,200,200)
+                    # Diagonal (Correct): White (low) -> Dark Green (high)
+                    # Interpolate from White (255,255,255) to DarkGreen (0,100,0)
+                    ratio = val / max_val if max_val > 0 else 0
+                    
+                    r_val = int(255 * (1 - ratio) + 0 * ratio)
+                    g_val = int(255 * (1 - ratio) + 128 * ratio) # 128 is nice dark green
+                    b_val = int(255 * (1 - ratio) + 0 * ratio)
+                    
+                    bg_color = QColor(r_val, g_val, b_val)
+                    
+                    # Text color: White if background is dark, else Black
+                    fg_color = QColor(255, 255, 255) if ratio > 0.5 else QColor(0,0,0)
+
                 else:
-                    err_intensity = int((val / (max_val * 0.5 + 1)) * 255) 
-                    if err_intensity > 255: err_intensity = 255
+                    # Off-Diagonal (Error): White (0) -> Red (high)
+                    # Normalize by row sum (error relative to class count) not global max
+                    # But simple max-based scaling is often robust enough.
+                    # Current: err_intensity based on max_val
+                    err_ratio = val / (max_val * 0.2 + 1) # Scale aggressively to show errors
+                    if err_ratio > 1.0: err_ratio = 1.0
+                    
+                    # White -> Red (255, 0, 0)
+                    g_b_val = int(255 * (1 - err_ratio))
                     
                     if val > 0:
-                         bg_color = QColor(255, 255 - err_intensity, 255 - err_intensity)
+                         bg_color = QColor(255, g_b_val, g_b_val)
                          fg_color = QColor(0,0,0)
                     else:
                          bg_color = QColor(255, 255, 255)
@@ -186,6 +209,36 @@ class ConfusionMatrixDialog(QDialog):
         stats_layout.addLayout(create_stat("Macro F1-Score", f"{self.macro_f1:.2f}", "#1976D2"))
         stats_layout.addLayout(create_stat("Error Rate", f"{self.error_rate*100:.1f}%", "#C62828"))
         
+        # Training Comparison
+        if self.train_acc is not None:
+             gap = self.train_acc - self.accuracy
+             status_color = "#2E7D32" # Blue
+             status_text = "Good Fit"
+             
+             if gap > 0.10: # 10% gap
+                 status_color = "#D32F2F" # Red
+                 status_text = "Possible Overfitting (>10%)"
+             elif gap < -0.05:
+                status_color = "#2E7D32" # Green
+                status_text = "Underfitting"
+             
+             train_v_layout = QVBoxLayout()
+             lbl = QLabel("Training Accuracy")
+             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+             val = QLabel(f"{self.train_acc*100:.1f}%")
+             val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+             val.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+             val.setStyleSheet(f"color: #9C27B0;")
+             
+             warn = QLabel(status_text)
+             warn.setStyleSheet(f"color: {status_color}; font-weight: bold;")
+             warn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+             
+             train_v_layout.addWidget(val)
+             train_v_layout.addWidget(lbl)
+             train_v_layout.addWidget(warn)
+             stats_layout.addLayout(train_v_layout)
+        
         right_layout.addWidget(stats_frame)
 
         # B. Class Metrics Table
@@ -194,6 +247,7 @@ class ConfusionMatrixDialog(QDialog):
         right_layout.addWidget(metrics_lbl)
         
         self.metrics_table = QTableWidget()
+        self.metrics_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.metrics_table.setRowCount(self.num_classes)
         self.metrics_table.setColumnCount(4)
         self.metrics_table.setHorizontalHeaderLabels(["Class", "Precision", "Recall", "F1-Score"])
@@ -227,28 +281,35 @@ class ConfusionMatrixDialog(QDialog):
         conf_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         right_layout.addWidget(conf_lbl)
         
-        self.confusions_list = QTextEdit()
-        self.confusions_list.setReadOnly(True)
-        html = "<ul>"
+        self.confusions_list = QListWidget()
+        self.confusions_list.setToolTip("Click an item to highlight the cell in the matrix.")
+        self.confusions_list.itemClicked.connect(self.on_confusion_clicked)
         
         if not self.confusions:
-             html += "<li>No errors! Perfect score.</li>"
+             self.confusions_list.addItem("No errors! Perfect score.")
         else:
-            for count, true_idx, pred_idx in self.confusions[:5]:
+            for count, true_idx, pred_idx in self.confusions:
                 true_name = labels[true_idx]
                 pred_name = labels[pred_idx]
-                html += f"<li><b>{true_name}</b> confused as <b>{pred_name}</b>: {count} times</li>"
-            
-            if len(self.confusions) > 5:
-                html += f"<li>... and {len(self.confusions) - 5} other types of errors.</li>"
                 
-        html += "</ul>"
-        self.confusions_list.setHtml(html)
-        self.confusions_list.setFixedHeight(120)
+                text = f"{count}x: {true_name} → {pred_name}"
+                item = QListWidgetItem(text)
+                # Store coordinates to jump to
+                item.setData(Qt.ItemDataRole.UserRole, (true_idx, pred_idx))
+                self.confusions_list.addItem(item)
+                
+        self.confusions_list.setFixedHeight(150)
         right_layout.addWidget(self.confusions_list)
         
         layout.addWidget(left_panel, 3)
         layout.addWidget(right_panel, 2)
+
+    def on_confusion_clicked(self, item):
+        coords = item.data(Qt.ItemDataRole.UserRole)
+        if coords:
+            r, c = coords
+            self.table.setCurrentCell(r, c)
+            self.table.setFocus()
 
     def init_help_tab(self):
         layout = QVBoxLayout(self.tab_help)
@@ -271,9 +332,9 @@ class ConfusionMatrixDialog(QDialog):
         <h3>2. Performance Metrics</h3>
         <table border="1" cellpadding="5" cellspacing="0">
             <tr>
-                <td bgcolor="#e0e0e0"><b color="black">Metric</b></td>
-                <td bgcolor="#e0e0e0"><b color="black">What it Questions</b></td>
-                <td bgcolor="#e0e0e0"><b color="black">Interpretation</b></td>
+                <td bgcolor="#e0e0e0"><b style="color: black;">Metric</b></td>
+                <td bgcolor="#e0e0e0"><b style="color: black;">What it Questions</b></td>
+                <td bgcolor="#e0e0e0"><b style="color: black;">Interpretation</b></td>
             </tr>
             <tr>
                 <td><b>Precision</b></td>
@@ -299,8 +360,8 @@ class ConfusionMatrixDialog(QDialog):
         <h3>3. Improving F1-Score (Configuration Guide)</h3>
         <table border="1" cellpadding="5" cellspacing="0">
             <tr>
-                <td bgcolor="#e0e0e0"><b color="black">Parameter</b></td>
-                <td bgcolor="#e0e0e0"><b color="black">Impact on F1-Score</b></td>
+                <td bgcolor="#e0e0e0"><b style="color: black;">Parameter</b></td>
+                <td bgcolor="#e0e0e0"><b style="color: black;">Impact on F1-Score</b></td>
             </tr>
             <tr>
                 <td><b>Epochs</b></td>

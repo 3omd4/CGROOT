@@ -304,6 +304,8 @@ class TrainingWidget(QWidget):
             return
 
         if images_path and labels_path:
+             self.status_label.setText("Testing training starting...")
+             self.status_label.setStyleSheet("QLabel { font-weight: bold; color: blue; padding: 5px; }")
              self.controller.requestTest.emit(images_path, labels_path)
         else:
             # If user cancelled labels selection

@@ -78,6 +78,8 @@ if(NOT Qt6_FOUND AND WIN32)
         find_package(Qt6 QUIET COMPONENTS Core Widgets Charts)
         # Try common Qt6 installation paths
         set(QT_PATHS
+            "C:/Qt/6.10.1/msvc2022_64"
+            "C:/Qt/6.10.1/msvc2019_64"
             "C:/Qt/6.10.0/msvc2022_64"
             "C:/Qt/6.10.0/msvc2019_64"
             "C:/Qt/6.9.0/msvc2022_64"
