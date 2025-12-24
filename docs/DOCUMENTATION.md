@@ -1,6 +1,6 @@
 # Software Design Document: CGROOT++
 
-**Project Name:** CGROOT++ (C++ Graph Root)  
+**Project Name:** CGROOT++  
 **Version:** 1.0.0  
 **Date:** December 23, 2025  
 
@@ -503,13 +503,22 @@ Here is a brief description of the functions of the different classes, for more 
 - **update:** updates the weights of FullyConnected and outputLayer and the kernels of convLayer by calling the update function of the used optimizer, both works the same way. There is another variation of this function called update_batch which is used when training with batches instead of individual samples.
 
 #### 4.3.2. NNModel Functions
+
 - **classify:** forward propagates the image through the layers by using the forward propagation of each layer, it does such by first checking what was the previous layer in order to get the data from it. In the end it returns the detected type of the image (which could be used for either training or as classification).
 - **train:** train the model on an image (or a batch of images if train_batch were to be used). The function calls classify first then backward propagates the gradients by first checking what the layers before and after to get the data and gradients from them, respectively, then updates the weights and kernels of each layer. 
 - **train_epoch:** used to train the model on a complete epoch.
 
+#### 4.3.3. Optimizer Functions
+The optimizer class serves as the base for various optimization algorithms used to update model weights.
+- **Optimizer (Base Class):** Defines the interface with a virtual `update` method.
+- **SGD:** Implements Stochastic Gradient Descent. Updates weights using gradients and an optional L2 weight decay.
+- **SGD_Momentum:** Adds a momentum term to SGD, helping accelerate gradients in the right direction and dampen oscillations.
+- **RMSprop:** Maintains a moving average of the squared gradients to normalize the gradient, adapting the learning rate for each weight.
+- **Adam:** Adaptive Moment Estimation. Utilizes both the first moment (mean) and second moment (uncentered variance) of the gradients to adapt learning rates for each parameter.
+
 To complete the implementation details regarding the GUI files and functions, here is the documentation detailing the Python-based PyQt6 infrastructure:
 
-#### 4.3.3. GUI Files and Widget Functions
+#### 4.3.4. GUI Files and Widget Functions
 The graphical user interface is structured into modular widgets, each responsible for a specific stage of the neural network lifecycle:
 
 1. **mainwindow.py (Main Window)**  
@@ -577,7 +586,7 @@ The graphical user interface is structured into modular widgets, each responsibl
     Manages the application's visual style.
     - **apply_dark_theme:** Configures the global QPalette with a dark color scheme (Project Fusion) and applies specific QSS stylesheets for widgets like GroupBoxes and ProgressBars.
 
-#### 4.3.4. Controller and Worker Functions
+#### 4.3.5. Controller and Worker Functions
 The GUI communicates with the C++ backend through a dedicated controller-worker thread system to prevent interface freezing:
 
 - **model_controller.py:** 
@@ -598,7 +607,7 @@ The GUI communicates with the C++ backend through a dedicated controller-worker 
     - **LoaderThread:** Handles the blocking I/O of loading large binary datasets or scanning thousands of image files from folders.
     - **TestingThread:** Runs `model.evaluate` on the test set and computes the confusion matrix off the main thread.
 
-#### 4.3.5. Core C++ Utilities
+#### 4.3.6. Core C++ Utilities
 These classes handle the low-level data and file operations:
 
 1. **MNISTLoader (src/core/utils/mnist_loader.cpp)**  
