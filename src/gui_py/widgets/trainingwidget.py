@@ -16,6 +16,7 @@ class TrainingWidget(QWidget):
     stopTrainingRequested = pyqtSignal()
     loadModelRequested = pyqtSignal(str) # Path to model file
     storeModelRequested = pyqtSignal(str) # Path to folder
+    resetModelRequested = pyqtSignal() # New Signal
     vizToggled = pyqtSignal(bool) # Signal to sync with config widget
 
     def __init__(self, controller):
@@ -149,6 +150,11 @@ class TrainingWidget(QWidget):
         self.store_model_btn = QPushButton("Store Model")
         self.store_model_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 10px; }")
         self.store_model_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.reset_btn = QPushButton("Reset Model")
+        self.reset_btn.setStyleSheet("QPushButton { background-color: #607D8B; color: white; font-weight: bold; padding: 10px; }")
+        self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.reset_btn.setToolTip("Reset model to initial random weights using current configuration")
         
         self.test_btn = QPushButton("Run Test")
         self.test_btn.setStyleSheet("QPushButton { background-color: #9C27B0; color: white; font-weight: bold; padding: 10px; }")
@@ -157,6 +163,7 @@ class TrainingWidget(QWidget):
         self.load_model_btn.clicked.connect(self.on_load_model_clicked)
         self.store_model_btn.clicked.connect(self.on_store_model_clicked)
         self.test_btn.clicked.connect(self.on_test_clicked)
+        self.reset_btn.clicked.connect(self.on_reset_clicked)
         
         # Status Label
         self.status_label = QLabel("Ready to start training")
@@ -166,6 +173,7 @@ class TrainingWidget(QWidget):
         btn_layout.addWidget(self.stop_btn)
         btn_layout.addWidget(self.load_model_btn)
         btn_layout.addWidget(self.store_model_btn)
+        btn_layout.addWidget(self.reset_btn)
         btn_layout.addWidget(self.test_btn)
         btn_layout.addStretch()
         btn_layout.addWidget(self.status_label)
@@ -196,6 +204,18 @@ class TrainingWidget(QWidget):
         self.stopTrainingRequested.emit()
         self.set_training_state(False)
         
+    def on_reset_clicked(self):
+        reply = QMessageBox.question(
+            self, 
+            "Confirm Model Reset", 
+            "Are you sure you want to reset the model?\n\nThis will re-initialize the neural network with random weights using the current configuration.\n\nAll training progress will be lost.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.resetModelRequested.emit()
+
     def _get_model_dir(self):
         from pathlib import Path
         # src/gui_py/widgets
@@ -238,47 +258,56 @@ class TrainingWidget(QWidget):
         datasets_dir = get_datasets_dir()
         start_dir = str(datasets_dir) if datasets_dir.exists() else self._get_model_dir()
             
-        path, _ = QFileDialog.getOpenFileName(self, "Select Test Images (IDX)", start_dir, "IDX Files (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)")
+        images_path, _ = QFileDialog.getOpenFileName(self, "Select Test Images (IDX)", start_dir, "IDX Files (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)")
         
-        if not path:
+        if not images_path:
             return
+
+        
 
         # Attempt to find matching labels file automatically
         # Common convention: test-images... -> test-labels...
         # or t10k-images... -> t10k-labels...
-        
-        folder = os.path.dirname(path)
-        filename = os.path.basename(path)
+
+        # Attempt to auto-discover labels file
+        dir_name = os.path.dirname(images_path)
+        base_name = os.path.basename(images_path)
+
+        # Common naming convention: swap 'images' with 'labels'
+        # e.g. train-images.idx3-ubyte -> train-labels.idx1-ubyte
+        #      train-images-idx3-ubyte -> train-labels-idx1-ubyte
+        if 'images' in base_name:
+            labels_name = base_name.replace('images', 'labels')
+            # Fix: Also replace idx3 with idx1 to handle standard MNIST extensions
+            labels_name = labels_name.replace('idx3', 'idx1') 
+            labels_name = labels_name.replace('idx4', 'idx1') 
+
+        else:
+            # Fallback check for common patterns if 'images' string not explicit or different case
+            labels_name = base_name.replace('idx3', 'idx1') 
+            labels_name = labels_name.replace('idx4', 'idx1') 
+
+        guess_labels_path = os.path.join(dir_name, labels_name)
         
         labels_path = ""
-        possible_names = []
-        
-        if "images" in filename:
-            possible_names.append(filename.replace("images", "labels"))
-        
-        # Also try common pairs
-        if "t10k-images-idx3-ubyte" in filename:
-             possible_names.append("t10k-labels-idx1-ubyte")
-        if "train-images" in filename: # If user selected train set
-             possible_names.append("train-labels-idx1-ubyte")
-             
-        found = False
-        for name in possible_names:
-            candidate = os.path.join(folder, name)
-            if os.path.exists(candidate):
-                labels_path = candidate
-                found = True
-                break
-        
-        if not found:
-            # Ask user for labels file
-            labels_path, _ = QFileDialog.getOpenFileName(self, "Select Test Labels (IDX)", folder, "IDX Files (*.idx1-ubyte);;All Files (*.*)")
-            
-        if path and labels_path:
-             self.controller.requestTest.emit(path, labels_path)
+
+        if os.path.exists(guess_labels_path):
+            labels_path = guess_labels_path
         else:
-             # If user cancelled labels selection
-             pass
+            # Fallback to manual selection if auto-discovery fails
+            labels_path, _ = QFileDialog.getOpenFileName(
+                self, "Select MNIST Labels File", dir_name,
+                "MNIST Labels (*.idx1-ubyte);;All Files (*.*)"
+            )
+            
+        if not labels_path:
+            return
+
+        if images_path and labels_path:
+             self.controller.requestTest.emit(images_path, labels_path)
+        else:
+            # If user cancelled labels selection
+            pass
         
     def on_layer_changed(self, val):
         self.fm_title_label.setText(f"Feature Maps (Layer {val})")

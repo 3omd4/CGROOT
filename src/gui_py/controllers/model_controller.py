@@ -27,6 +27,7 @@ class ModelController(QObject):
     setTargetLayer = pyqtSignal(int)
     requestStoreModel = pyqtSignal(str, dict) # folderPath, configuration
     requestLoadModel = pyqtSignal(str) # filePath
+    requestResetModel = pyqtSignal(dict) # New Signal: configuration
     requestTest = pyqtSignal(str, str) # images_path, labels_path
     setVisualizationsEnabled = pyqtSignal(bool) # NEW: Toggle visualizations
 
@@ -58,11 +59,14 @@ class ModelController(QObject):
         self.requestTrain.connect(self.worker.trainModel)
         self.requestStop.connect(self.worker.stopTraining)
         self.requestInference.connect(self.worker.runInference)
+        self.requestStop.connect(self.worker.stopTraining)
+        self.requestInference.connect(self.worker.runInference)
         self.setTargetLayer.connect(self.worker.setTargetLayer)
         self.requestStoreModel.connect(self.worker.storeModel)
         self.requestLoadModel.connect(self.worker.loadModel)
         self.requestTest.connect(self.worker.runTesting)
         self.setVisualizationsEnabled.connect(self.worker.setVisualizationsEnabled)
+        self.requestResetModel.connect(self.worker.resetModel) # Connect Reset
         
         self.thread.start()
         

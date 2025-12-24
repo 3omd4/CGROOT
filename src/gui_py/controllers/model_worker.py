@@ -454,9 +454,30 @@ class ModelWorker(QObject):
     def stopTraining(self):
         """Stop the training thread."""
         self.should_stop = True
+        self.is_active = False # Ensure flag is off
         if hasattr(self, "_train_thread") and self._train_thread:
             self._train_thread.stop()
             self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
+
+    @pyqtSlot(dict)
+    def resetModel(self, config):
+        """Reset and re-initialize the model with current config (Random Weights)."""
+        if self.is_active:
+            self.logMessage.emit("Cannot reset model while training is active. Please stop training first.")
+            return
+
+        self.logMessage.emit("Resetting model with random weights...")
+        self.logMessage.emit("** WARNING: Training history cleared **")
+        
+        # Re-initialize model
+        if self._initialize_model(config):
+             # Clear history signals if any UI components listen to them
+             # Currently we just re-emit initialized status
+             self.modelStatusChanged.emit(False) # Training not active
+             self.modelInfoLoaded.emit(config) # Inform UI of new (clean) state
+             self.logMessage.emit("Model reset successfully.")
+        else:
+             self.logMessage.emit("Failed to reset model.")
 
     @pyqtSlot(str, dict)
     def storeModel(self, folder_path, config=None):

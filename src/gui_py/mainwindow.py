@@ -1,11 +1,10 @@
-```python
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
                              QStatusBar, QGroupBox, QTextEdit, QMenu, QToolBar, 
                              QLabel, QProgressBar, QMessageBox, QApplication, QSplitter, QPushButton)
 from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont
-from .dataset_utils import get_class_name
-from .widgets.confusion_matrix import ConfusionMatrixDialog
+from dataset_utils import get_class_name
+from widgets.confusion_matrix import ConfusionMatrixDialog
 
 from widgets.configurationwidget import ConfigurationWidget
 from widgets.trainingwidget import TrainingWidget
@@ -161,8 +160,9 @@ class MainWindow(QMainWindow):
                 self, "Select MNIST Labels File", dir_name,
                 "MNIST Labels (*.idx1-ubyte);;All Files (*.*)"
             )
-            if not labels_path:
-                return
+            
+        if not labels_path:
+            return
 
         # Determine Dataset Type
         dataset_type = "MNIST"
@@ -258,6 +258,7 @@ class MainWindow(QMainWindow):
         self.training_tab.startTrainingRequested.connect(self.start_training)
         self.training_tab.stopTrainingRequested.connect(self.stop_training)
         self.training_tab.storeModelRequested.connect(self.on_store_model_requested) # New handler
+        self.training_tab.resetModelRequested.connect(self.on_reset_model_requested)
 
     def on_store_model_requested(self, folder_path):
         # Gather full configuration (Training + Architecture + GUI)
@@ -276,6 +277,18 @@ class MainWindow(QMainWindow):
             full_config['_full_logs'] = self.log_output.toPlainText()
         
         self.controller.requestStoreModel.emit(folder_path, full_config)
+
+    def on_reset_model_requested(self):
+        self.log_message("Resetting Model with current initialization parameters...")
+        # Gather full configuration
+        train_params = self.config_tab.get_training_parameters()
+        arch_params = self.config_tab.get_architecture_parameters()
+        gui_params = self.config_tab.get_gui_settings()
+        
+        full_config = {**train_params, **arch_params, **gui_params}
+        full_config['dataset_type'] = self.dataset_type 
+        
+        self.controller.requestResetModel.emit(full_config)
         
     def start_training(self):
         # Get params from configuration
@@ -527,12 +540,15 @@ class MainWindow(QMainWindow):
         # CIFAR-10 is 32x32. 
         # If d=3 (RGB) OR d=1 (Grayscale CIFAR), we assume CIFAR-10
         if w == 32 and h == 32:
-            dataset_type = "CIFAR-10"
+            self.dataset_type = "CIFAR-10"
         elif w == 28 and h == 28:
-            dataset_type = "MNIST" # Could be Fashion too, but MNIST is safer default
+            self.dataset_type = "MNIST" # Could be Fashion too, but MNIST is safer default
+        else:
+            # Keep existing or default if dimensions unknown
+            pass
         
-        self.log_message(f"Auto-setting Dataset Type (Labels) to: {dataset_type}")
-        self.inference_tab.set_dataset_type(dataset_type)
+        self.log_message(f"Auto-setting Dataset Type (Labels) to: {self.dataset_type}")
+        self.inference_tab.set_dataset_type(self.dataset_type)
         
         # Also update config dimensions to match model
         self.config_tab.set_image_dimensions(w, h, d) 
