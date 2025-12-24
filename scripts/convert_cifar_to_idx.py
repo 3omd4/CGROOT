@@ -128,7 +128,7 @@ def write_idx1_labels(filepath, labels, num):
 
 if __name__ == "__main__":
     # Assuming standard project structure
-    base_dir = r"D:\nasser\cifar-10-batches-bin"
+    base_dir = r"D:\Education\Elec3\1st term\Software Engineering\Project\Repo\CGROOT\cifar-10-batches-bin"
     # Using the raw folder inside 'cifar-10-batches-bin' if it exists there, 
     # or the user might have put them in base_dir directly.
     # From previous context, user used: D:\nasser\cifar-10-batches-bin in convert_bin_to_ubyte.py

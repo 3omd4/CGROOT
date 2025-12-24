@@ -332,6 +332,15 @@ def detect_compilers():
                 available[idx] = (name, path)
                 print(f"[{idx}] {GREEN}{name}{RESET} found at {MAGENTA}{path}{RESET}")
                 idx += 1
+        
+        # Fallback: check if cmake is available in PATH
+        if not available:
+            cmake_in_path = shutil.which("cmake")
+            if cmake_in_path:
+                available[idx] = ("CMake from PATH", cmake_in_path)
+                print(f"[{idx}] {GREEN}CMake from PATH{RESET} found at {MAGENTA}{cmake_in_path}{RESET}")
+                idx += 1
+        
         print()
         if not available:
             print(f"{RED}ERROR: No supported compiler toolchains found!{RESET}")
@@ -1065,43 +1074,9 @@ def build_installer():
 
     log("Starting PyInstaller build")
     
-    # Run PyInstaller with CLI arguments for onefile build
-    print(f"{BLUE}Running PyInstaller (OneFile Mode)...{RESET}")
-    
-    # Determine separator for add-data
-    # PyInstaller path separator (inside --add-data)
-    data_sep = ";" if get_os_type() == "windows" else ":"
-    
-    # Path to binary directory (Release) for cgroot_lib.pyd
-    # Note: We rely on build_dir pointing to correct config if set, but here hardcoded to Release usage usually
-    # If user selected Debug, we might want that, but installer usually implies Release.
-    # Check if 'Release' exists, else try current config.
-    bin_path = build_dir / "bin" / "Release"
-    if not bin_path.exists():
-         bin_path = build_dir / "bin" / configuration
-    
-    cmd_parts = [
-        "pyinstaller",
-        "--noconfirm",
-        "--clean",
-        "--onefile",
-        "--windowed",
-        "--name=CGROOT_Trainer",
-        f"--icon={project_root / 'icons' / 'favicon.ico'}",
-
-        # ✅ FIXED add-data syntax
-        f"--add-data={project_root / 'icons'}{data_sep}icons",
-        # f"--add-data={project_root / 'src' / 'data'}{data_sep}src/data",
-
-        # Add search path for cgroot_core.pyd
-        f"--paths={bin_path}",
-
-        "--hidden-import=cgroot_core",
-
-        str(project_root / "src" / "gui_py" / "main.py"),
-    ]
-    
-    cmd = " ".join(cmd_parts)
+    # Run PyInstaller using the spec file
+    print(f"{BLUE}Running PyInstaller (CGROOT_Trainer.spec)...{RESET}")
+    cmd = "pyinstaller CGROOT_Trainer.spec --noconfirm"
     ret = run_command(cmd)
     
     if ret != 0:
@@ -1109,47 +1084,31 @@ def build_installer():
         log("PyInstaller build failed")
         pause()
         return
-    
+
     print(f"{GREEN}PyInstaller build successful.{RESET}")
-    
+
     # Deploy to build/CGROOT_Trainer
-    # Logic for OneFile: Source is dist/CGROOT_Trainer.exe (or binary name)
-    # Destination is build/CGROOT_Trainer/CGROOT_Trainer.exe
+    dist_path = project_root / "dist" / "CGROOT_Trainer"
+    target_path = build_dir / "CGROOT_Trainer"
     
-    exe_name = "CGROOT_Trainer.exe" if get_os_type() == "windows" else "CGROOT_Trainer"
-    dist_exe = project_root / "dist" / exe_name
-    target_dir = build_dir / "CGROOT_Trainer"
-    target_path = target_dir # Alias for compatibility with shared logic below
-    target_exe = target_dir / exe_name
-    
-    print(f"{BLUE}Deploying to {target_dir}...{RESET}")
+    print(f"{BLUE}Deploying to {target_path}...{RESET}")
     
     try:
-        if not target_dir.exists():
-            target_dir.mkdir(parents=True)
-            
-        # Clean destination file if exists
-        if target_exe.exists():
-            target_exe.unlink()
-            
-        if dist_exe.exists():
-            print(f"{BLUE}Copying executable...{RESET}")
-            shutil.copy2(dist_exe, target_exe)
-            print(f"{GREEN}Deployment successful.{RESET}")
-        else:
-            print(f"{RED}Error: Dist executable not found at {dist_exe}{RESET}")
-            log(f"Dist executable not found at {dist_exe}")
-            return
+        if not build_dir.exists():
+            build_dir.mkdir(parents=True)
 
+        if target_path.exists():
+            print(f"{YELLOW}Removing existing deployment...{RESET}")
+            shutil.rmtree(target_path)
+            
+        print(f"{BLUE}Copying build artifacts...{RESET}")
+        shutil.copytree(dist_path, target_path)
+        print(f"{GREEN}Deployment successful.{RESET}")
     except Exception as e:
         print(f"{RED}Deployment failed: {e}{RESET}")
         log(f"Deployment failed: {e}")
         pause()
         return
-        
-    # Copy src/data to target/src/data
-    data_src = project_root / "src" / "data"
-    data_dst = target_path / "src" / "data"
         
     # Copy src/data to target/src/data
     data_src = project_root / "src" / "data"
@@ -1382,8 +1341,6 @@ if __name__ == "__main__":
             run_tests_only("Release")
         elif sys.argv[1] == "--full":
             run_full_cycle()
-        elif sys.argv[1] == "--installer":
-            build_installer()
         elif "--gui" in sys.argv:
             # Launch GUI directly
             gui_script = project_root / "src" / "gui_py" / "main.py"

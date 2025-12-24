@@ -268,12 +268,41 @@ class ModelWorker(QObject):
 
     @pyqtSlot()
     def stopTraining(self):
-        """Stop the training thread."""
+        """Stop the training thread and save the current model state."""
+        if not self._training_active:
+            self.logMessage.emit("Training is not currently active.")
+            return
+            
+        self.logMessage.emit("Stopping training and saving model...")
         self.should_stop = True
         self._training_active = False # Ensure flag is off
+        
+        # Stop the training thread gracefully
         if hasattr(self, "_train_thread") and self._train_thread:
             self._train_thread.stop()
             self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
+        
+        # Auto-save the model after stopping
+        if self.model:
+            try:
+                from pathlib import Path
+                # Get default model directory
+                script_dir = Path(__file__).parent
+                project_root = script_dir.parent.parent
+                auto_save_dir = project_root / "src" / "data" / "trained-model" / "auto_save"
+                auto_save_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Get configuration for saving
+                config_to_save = getattr(self, '_last_config', None)
+                
+                # Call storeModel to save weights and configuration
+                self.logMessage.emit(f"Auto-saving model to: {auto_save_dir}")
+                self.storeModel(str(auto_save_dir), config_to_save)
+                self.logMessage.emit("Model saved successfully after training stop.")
+            except Exception as e:
+                self.logMessage.emit(f"Warning: Failed to auto-save model: {e}")
+        else:
+            self.logMessage.emit("No model to save.")
 
     @pyqtSlot(dict)
     def resetModel(self, config):

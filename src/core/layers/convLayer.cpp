@@ -172,8 +172,8 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
           //"k1" is row iterator and "k2" is the column iterator
           for (int k1 = i_iter; k1 < (i_iter + kernel_info.kernel_height);
                k1++) {
-            for (int k2 = j_iter; k2 < (j_iter + kernel_info.kernel_width);
-                 k2++) {
+            for (int k2 = j_iter; k2 < (j_iter + kernel_info.kernel_width);k2++)
+            {
               // the convolutio is done by doing element-wise multiplication of
               // the input feature map and the kernel infront of this part of
               // the feature map this is done for every channel of the input
@@ -225,10 +225,13 @@ void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
 // side effect:  the feature maps are filled with the forward propagation values
 // note:         N/A
 void convLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
-  // apply the convolution
+  // STEP 1: Apply convolution operation
+  // Convolve kernels over input feature maps with stride and padding to produce raw output
   convolute(inputFeatureMaps);
 
-  // apply the activation function to every element of the output feature map
+  // STEP 2: Apply non-linear activation function element-wise to the output
+  // This introduces non-linearity to the network and helps learn complex patterns
+  // Activation function applied: ReLU, Sigmoid, or Tanh based on layer configuration
   for (size_t d = 0; d < fm.FM_depth; d++) {
     for (size_t h = 0; h < fm.FM_height; h++) {
       for (size_t w = 0; w < fm.FM_width; w++) {
@@ -248,16 +251,20 @@ void convLayer::forwardProp(vector<featureMapType> &inputFeatureMaps) {
   }
 }
 
-// backward propagate the error
-// input:                -inputFeatureMaps
-//                       -thisLayerGrad
+// BACKWARD PROPAGATION (BACKPROP) - Single Sample Mode
+// This function computes gradients for weight updates and propagates error to previous layer
+// Used in Stochastic Gradient Descent (SGD) - updates after each single sample
+// input:                -inputFeatureMaps (cached activations from forward pass)
+//                       -thisLayerGrad (gradient of loss w.r.t output of this layer)
 // output:               N/A
-// side effect:          the prevLayerGrad is filled with the error to be
-// propagated Note:                 This function works with SGD or for updating
-// after a single
+// side effect:          1. prevLayerGrad is filled with error to propagate to previous layer
+//                       2. d_kernels accumulates weight gradients (dW)
+//                       3. d_bias accumulates bias gradients (dB)
+// Note:                 This function works for single samples. For batch mode, use backwardProp_batch()
 void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
                              vector<featureMapType> &thisLayerGrad) {
-  // Get Dimensions
+  // Cache dimension values for efficient lookup
+  // These represent the spatial dimensions of input feature maps and kernels
   int inputH = inputFeatureMaps[0].size();
   int inputW = inputFeatureMaps[0][0].size();
   int kH = kernel_info.kernel_height;
@@ -265,7 +272,9 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
   int stride = kernel_info.stride;
   int pad = kernel_info.padding;
 
-// 1. Activation Derivative & Bias Gradients
+// PHASE 1: Activation Derivative & Bias Gradients
+// Chain rule: dL/dZ = dL/dA * dA/dZ (where Z is pre-activation, A is post-activation)
+// This accounts for the non-linearity introduced by the activation function
 #pragma omp parallel for
   for (int d = 0; d < fm.FM_depth; d++) {
     double bias_sum = 0.0; // Local variable prevents Race Condition
@@ -291,38 +300,49 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
     d_bias[d] += bias_sum;
   }
 
-// Weight Gradients (dW) & Input Gradients (dX)
-// Parallelize over Kernel (k) and Input Channel (d)
+// PHASE 2: Compute Gradients for Weights (dW) and for Input (dX)
+// Chain rule applications:
+//   - Weight Gradient: dL/dW = dL/dZ * dZ/dW = thisLayerGrad[k][i][j] * input_pixel
+//   - Input Gradient: dL/dX = sum over all output positions (dL/dZ * dZ/dX)
+// Parallelize over kernels (k) and input channels (d) for better cache locality
 #pragma omp parallel for collapse(2)
   for (int k = 0; k < (int)kernel_info.numOfKerenels; k++) {
     for (int d = 0; d < (int)kernel_info.kernel_depth; d++) {
 
-      // Iterate over the OUTPUT gradient map
+      // Iterate through each position in the OUTPUT gradient feature map
+      // This represents the error signal flowing back from the next layer
       for (int i = 0; i < (int)fm.FM_height; i++) {
         for (int j = 0; j < (int)fm.FM_width; j++) {
           double grad = thisLayerGrad[k][i][j];
           if (grad == 0.0)
-            continue; // Optimization
+            continue; // Skip zero gradients for efficiency
 
-          // For this output pixel, which Input pixels (r,c) created it?
+          // CRUCIAL: Map output position (i,j) back to input positions
+          // For each kernel position (r,c), find which input pixel it operated on
+          // This reverses the forward pass convolution operation
           for (int r = 0; r < kH; r++) {
             for (int c = 0; c < kW; c++) {
 
-              // CALCULATE INPUT INDICES (Correct Stride/Pad logic)
-              // This matches exactly how you calculated it in forwardProp
+              // Convert kernel-relative coordinates to input coordinates
+              // Formula: in_pos = output_pos * stride - padding + kernel_pos
+              // This accounts for stride (sampling interval) and padding (border handling)
+              // Must match forward pass calculation exactly to maintain correctness
               int in_r = i * stride - pad + r;
               int in_c = j * stride - pad + c;
 
-              // Boundary Check
+              // Only process if input position is within valid bounds
+              // (Some positions may be outside due to padding/stride)
               if (in_r >= 0 && in_r < inputH && in_c >= 0 && in_c < inputW) {
 
-                // A. Weight Gradient (dW)
-                // dW += Input_Pixel * Error_Signal
+                // COMPUTATION A: Accumulate Weight Gradient (dW)
+                // dW[k][d][r][c] accumulates contributions: Input_value * Error_signal
+                // This tells us how much to adjust this weight to reduce error
                 d_kernels[k][d][r][c] += inputFeatureMaps[d][in_r][in_c] * grad;
 
-// B. Input Gradient (dX) - Propagate error to previous layer
-// dX += Kernel_Weight * Error_Signal
-// We use atomic because multiple output pixels might overlap on one input pixel
+// COMPUTATION B: Accumulate Input Gradient (dX) - Error backpropagation to previous layer
+// dX[d][in_r][in_c] = Kernel_weight * Error_signal
+// Multiple output positions may map to same input pixel (overlapping receptive fields)
+// Use atomic operation to safely accumulate without race conditions in parallel execution
 #pragma omp atomic
                 prevLayerGrad[d][in_r][in_c] += kernels[k][d][r][c] * grad;
               }
@@ -333,15 +353,21 @@ void convLayer::backwardProp(vector<featureMapType> &inputFeatureMaps,
     }
   }
 }
-// backward propagate the error after a batch
-// input:                -inputFeatureMaps
-//                       -thisLayerGrad
+// BACKWARD PROPAGATION BATCH MODE (BACKPROP_BATCH)
+// This function computes gradients for entire batch and must reset gradients
+// Used in Batch Gradient Descent (BGD) - accumulates gradients over entire batch before update
+// input:                -inputFeatureMaps (vector of cached activations from forward pass)
+//                       -thisLayerGrad (gradient of loss w.r.t output of this layer for batch)
 // output:               N/A
-// side effect:          the prevLayerGrad is filled with the error to be
-// propagated Note:                 This function works with BGD or for updating
-// after a whole batch
+// side effect:          1. prevLayerGrad reset to zero, then filled with accumulated batch errors
+//                       2. d_kernels reset and accumulates batch weight gradients
+//                       3. d_bias reset and accumulates batch bias gradients
+// Note:                 This function processes entire batch. For single samples, use backwardProp()
+//                       The main difference is resetting gradient accumulators to handle batch accumulation
 void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
                                    vector<featureMapType> &thisLayerGrad) {
+  // Cache dimension values as const for optimization
+  // These define the spatial dimensions used in convolution calculations
   const int inputH = inputFeatureMaps[0].size();
   const int inputW = inputFeatureMaps[0][0].size();
   const int kH = kernel_info.kernel_height;
@@ -349,12 +375,17 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
   const int stride = kernel_info.stride;
   const int pad = kernel_info.padding;
 
-  //        Reset previous gradients
+  // BATCH MODE CRITICAL STEP: Reset all accumulated gradients to zero
+  // This ensures we don't mix gradients from previous batch passes
+  // In SGD mode (backwardProp), gradients are accumulated; here we start fresh
   for (auto &ch : prevLayerGrad)
     for (auto &row : ch)
       fill(row.begin(), row.end(), 0.0);
 
-//        Activation derivative + dBias
+// PHASE 1: Compute activation derivatives and accumulate bias gradients
+// Apply chain rule through activation function: dL/dZ = dL/dA * dA/dZ
+// Process all samples in batch and accumulate bias updates
+// Parallelized over output channels (kernels)
 #pragma omp parallel for
   for (int k = 0; k < fm.FM_depth; k++) {
     double local_bias = 0.0;
@@ -382,31 +413,47 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
     d_bias[k] += local_bias;
   }
 
-//       dW and dX (true convolution)
+// PHASE 2: Accumulate Weight Gradients (dW) and Input Gradients (dX) for entire batch
+// This is the "true convolution" operation that computes gradient tensors
+// Chain rule for gradients:
+//   - dW[k][d][r][c] += Input[d][in_r][in_c] * Error[k][i][j]
+//   - dX[d][in_r][in_c] += Kernel[k][d][r][c] * Error[k][i][j]
+// Parallelize over kernels and input channels for maximum parallelism
 #pragma omp parallel for collapse(2)
   for (int k = 0; k < kernel_info.numOfKerenels; k++) {
     for (int d = 0; d < kernel_info.kernel_depth; d++) {
 
+      // Iterate through output gradient feature map (error flowing back)
       for (int i = 0; i < fm.FM_height; i++) {
         for (int j = 0; j < fm.FM_width; j++) {
 
+          // Cache gradient value; skip if zero to improve efficiency
           const double grad = thisLayerGrad[k][i][j];
           if (grad == 0.0)
             continue;
 
+          // Map output position back to input spatial coordinates
+          // Account for kernel size, stride, and padding in the mapping
           for (int r = 0; r < kH; r++) {
             for (int c = 0; c < kW; c++) {
 
+              // Calculate which input pixel contributed to this output position
+              // Inverse of forward convolution: output = f(input with stride/padding)
               const int in_r = i * stride - pad + r;
               const int in_c = j * stride - pad + c;
 
+              // Validate input coordinates are within bounds
               if (in_r >= 0 && in_r < inputH && in_c >= 0 && in_c < inputW) {
 
-                // dW
+                // GRADIENT 1: Weight Gradient (dW) - How to adjust kernel to reduce error
+                // Accumulate: dW += Input_pixel * Error_signal
+                // Atomic operation prevents race conditions from parallel writes
 #pragma omp atomic
                 d_kernels[k][d][r][c] += inputFeatureMaps[d][in_r][in_c] * grad;
 
-                // dX
+                // GRADIENT 2: Input Gradient (dX) - Error to propagate backward
+                // Accumulate: dX += Kernel_weight * Error_signal
+                // Atomic operation ensures thread-safe accumulation of overlapping contributions
 #pragma omp atomic
                 prevLayerGrad[d][in_r][in_c] += kernels[k][d][r][c] * grad;
               }
@@ -418,12 +465,15 @@ void convLayer::backwardProp_batch(vector<featureMapType> &inputFeatureMaps,
   }
 }
 
-// update the kernels
+// UPDATE KERNELS - Single Sample Mode (Stochastic Gradient Descent)
+// This updates all kernels and biases using accumulated gradients from one sample
+// Used after backwardProp() to apply single-sample gradient updates
 // input:          N/A
 // ouput:          N/A
-// side effect:    the kernel is updated with new values and the kernel
-// gradients are reseted Note:           This function works for single samples,
-// for a batch, use upadate_batch()
+// side effect:    1. Kernels updated using optimizer (SGD, Adam, etc.) with their gradients
+//                 2. Biases updated similarly
+//                 3. All gradient accumulators (d_kernels, d_bias) reset to zero for next sample
+// Note:           For batch mode with averaging, use update_batch() instead
 void convLayer::update() {
 #pragma omp parallel for
   for (int krnl = 0; krnl < static_cast<int>(kernels.size()); krnl++) {
@@ -444,13 +494,21 @@ void convLayer::update() {
   fill(d_bias.begin(), d_bias.end(), 0.0);
 }
 
-// update the kernels
-// input:          numOfExamples
+// UPDATE KERNELS - Batch Mode (Batch Gradient Descent)
+// This updates all kernels and biases after processing entire batch
+// CRITICAL: Averages accumulated gradients by batch size before applying updates
+// Used after backwardProp_batch() to apply averaged batch gradient updates
+// input:          numOfExamples (total number of samples in the batch)
 // ouput:          N/A
-// side effect:    the kernel is updated with new values and the kernel
-// gradients are reseted Note:           This function works for a batch of
-// samples, for a single sample, use upadate()
+// side effect:    1. Accumulated gradients averaged by dividing by batch size
+//                 2. Kernels and biases updated using averaged gradients via optimizer
+//                 3. All gradient accumulators reset to zero for next batch
+// Note:           For single-sample updates, use update() instead (no averaging needed)
+//                 Averaging prevents large weight updates that batch processing would cause
 void convLayer::update_batch(int numOfExamples) {
+  // Calculate scaling factor: 1/N where N is batch size
+  // This converts accumulated gradients (sum over batch) to average gradients
+  // Each gradient value is multiplied by this scale before optimizer uses it
   double scale = 1.0 / static_cast<double>(numOfExamples);
 
 #pragma omp parallel for

@@ -201,8 +201,19 @@ class TrainingWidget(QWidget):
         self.set_training_state(True)
         
     def on_stop_clicked(self):
-        self.stopTrainingRequested.emit()
-        self.set_training_state(False)
+        # Confirm stop with user
+        reply = QMessageBox.question(
+            self, 
+            "Stop Training", 
+            "Do you want to stop training?\n\nThe current model state will be automatically saved to:\nsrc/data/trained-model/auto_save/",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.stopTrainingRequested.emit()
+            self.set_training_state(False)
+            self.status_label.setText("Stopping training and saving model...")
         
     def on_reset_clicked(self):
         reply = QMessageBox.question(
