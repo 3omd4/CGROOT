@@ -10,195 +10,10 @@ try:
 except ImportError:
     cgroot_core = None
 
-# ========================== Training Thread ==========================
-class TrainingThread(QThread):
-    # epoch, total, loss, acc, feature_maps(object), pred, qimage, probs, current_idx, layer_type, true_label
-    progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int, int)
-    log = pyqtSignal(str)
-
-    def __init__(self, model, dataset, config):
-        super().__init__()
-        self.model = model
-        self.dataset = dataset
-        self.config = config
-        self._stop_requested = False
-        self.layer_index = 1 # Default to layer 1
-        self._visualizations_enabled = True
-        
-    def set_visualizations_enabled(self, enabled):
-        self._visualizations_enabled = enabled
-        
-    def set_layer_index(self, idx):
-        self.layer_index = idx
-
-    def run(self):
-        # Thread-safe callbacks for C++ training
-        def progress_callback(epoch, total, loss, acc, current_idx=-1):
-            if not self._stop_requested:
-                # Safe to access model here as C++ execution is paused in callback
-                maps = None
-                layer_type = -1
-                
-                # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
-                if self._visualizations_enabled:
-                    # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
-                    # But careful: per-sample updates shouldn't fetch heavy maps.
-                    try:
-                        # Access dynamic layer index
-                        target_layer = self.layer_index
-                        if target_layer < 0: target_layer = 0
-                        
-                        # Get maps. If invalid layer, this returns []
-                        maps = self.model.getLayerFeatureMaps(target_layer)
-                        layer_type = self.model.getLayerType(target_layer)
-                    except Exception as e:
-                        import traceback
-                        traceback.print_exc()
-                        # No fallback! Let it be empty list or None so UI knows it failed/is invalid.
-                        maps = [] # Explicitly empty so UI clears it
-                        layer_type = -1
-                    
-                    # Also, pick a random image from dataset to show as "preview"
-                    # This ensures the user sees 'Activity'
-                    preview_img_data = None
-                    preview_pred = -1
-                    preview_probs = []
-                    preview_label = -1
-                    
-                    if self.dataset and hasattr(self.dataset, 'num_images') and self.dataset.num_images > 0:
-                        try:
-                            # Use current_idx if valid (>=0), otherwise random if we want (or skip)
-                            # The C++ code emits -1 at epoch end.
-                            idx = -1
-                            if current_idx >= 0:
-                                idx = current_idx
-                                # User requested NO INFERENCE during training.
-                                preview_pred = -1
-                                preview_probs = []
-                                    
-                                # Prepare QImage for display
-                                # Access properties directly as defined in bindings
-                                width = self.dataset.image_width
-                                height = self.dataset.image_height
-                                
-                                # Access pixels from MNISTImage object
-                                # self.dataset.images is a list of MNISTImage objects
-                                # images[idx].pixels is the vector of uint8
-
-
-                                # IMPORTANT: Keep raw pixel values for visualization!
-                                # C++ classify_pixels and convert_mnist_to_image_format normalize before model
-                                # Visualization needs raw uint8 [0-255] to display correctly
-                                img_data_vec = self.dataset.images[idx].pixels
-                                preview_label = self.dataset.images[idx].label
-                                
-                                if img_data_vec:
-                                    # Create QImage from raw data
-                                    # QImage constructor from data requires bytes, so we might need to convert
-                                    # vector<uint8_t> (which pybind gives as list of int) to bytes.
-                                    # Or loop setPixel if that's safer/easier given the format.
-                                    # Flattened list of ints.
-                                    
-                                    # Infer depth
-                                    pixel_count = len(img_data_vec)
-                                    area = width * height
-                                    depth = pixel_count // area
-                                    
-                                    if depth == 1:
-                                        q_img = QImage(width, height, QImage.Format.Format_Grayscale8)
-                                        for y in range(height):
-                                            for x in range(width):
-                                                idx_pixel = y * width + x
-                                                val = int(img_data_vec[idx_pixel])
-                                                q_img.setPixel(x, y, qRgb(val, val, val))
-                                    elif depth == 3:
-                                        q_img = QImage(width, height, QImage.Format.Format_RGB888)
-                                        # Data is CHW (Planar)
-                                        r_start = 0
-                                        g_start = area
-                                        b_start = 2 * area
-                                        
-                                        for y in range(height):
-                                            for x in range(width):
-                                                offset = y * width + x
-                                                r = int(img_data_vec[r_start + offset])
-                                                g = int(img_data_vec[g_start + offset])
-                                                b = int(img_data_vec[b_start + offset])
-                                                q_img.setPixel(x, y, qRgb(r, g, b))
-                                    else:
-                                        # Fallback or error
-                                        q_img = None
-                                    
-                                    preview_img_data = q_img
-                            else:
-                                # If current_idx is -1 (e.g., epoch end), we might still want to show a random image
-                                # or just skip updating the image. For now, we'll keep it as None.
-                                pass
-                        except Exception as e:
-                            print(f"Error getting preview image or performing inference: {e}")
-                else:
-                    # Visualizations DISABLED
-                    maps = []
-                    layer_type = -1
-                    preview_img_data = None
-                    preview_pred = -1
-                    preview_probs = []
-                    preview_label = -1
-                
-                # Emit
-                # We need to distinguish what we are updating in the UI.
-                # The _internal_progress signal handles all.
-                # If 'maps' is empty list, UI won't update maps (if we handle it right in Controller/MainWindow/Widget)
-                # If 'preview_img_data' is None, UI won't update image.
-                
-                # Emit includes current_idx and layer_type
-                
-                self.progress.emit(epoch, total, loss, acc, maps, preview_pred, preview_img_data, preview_probs, current_idx, layer_type, preview_label)
-
-        def log_callback(msg):
-            if not self._stop_requested:
-                self.log.emit(msg)
-
-        def stop_check():
-            return self._stop_requested
-
-        try:
-            history = self.model.train_epochs(
-                self.dataset,
-                self.config,
-                progress_callback,
-                log_callback,
-                stop_check
-            )
-            # if not self._stop_requested:
-            #     self.finished.emit() # Removed to prevent double emission (QThread emits finished automatically)
-        except Exception as e:
-            self.log.emit(f"Training error: {e}")
-
-    def stop(self):
-        self._stop_requested = True
-
-# ========================== Loader Thread ==========================
-class LoaderThread(QThread):
-    loaded = pyqtSignal(object)  # dataset object
-    log = pyqtSignal(str)
-    error = pyqtSignal(str)
-
-    def __init__(self, images_path, labels_path):
-        super().__init__()
-        self.images_path = images_path
-        self.labels_path = labels_path
-
-    def run(self):
-        try:
-            if not cgroot_core:
-                self.error.emit("Core library not loaded")
-                return
-
-            dataset = cgroot_core.MNISTLoader.load_training_data(self.images_path, self.labels_path)
-            self.loaded.emit(dataset)
-        except Exception as e:
-            self.error.emit(f"Exception loading dataset: {e}")
+# Imported from workers package
+from workers.training_thread import TrainingThread
+from workers.loader_thread import LoaderThread
+from utils.visualization_manager import VisualizationManager
 
 class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
@@ -695,8 +510,11 @@ class ModelWorker(QObject):
             # Format image based on depth
             fmt = QImage.Format.Format_Grayscale8 if d == 1 else QImage.Format.Format_RGB888
             
-            # Scale and convert
+            # Scale and convert FIRST
+            # Using VisualizationManager to handle format issues if possible, or just standard Qt
+            # Note: runInference uses QImage directly passed from UI, so we keep using QImage methods here
             img = qimage_obj.scaled(w, h).convertToFormat(fmt)
+
             
             width = img.width()
             height = img.height()
@@ -706,10 +524,28 @@ class ModelWorker(QObject):
             bits = img.bits()
             bits.setsize(img.sizeInBytes())
             
-            # Run Classification using C++ helper
+            import numpy as np
+            
+            # Create numpy array view from QImage memory
+            # QImage RGB888 is (H, W, 3), Grayscale is (H, W) or (H, W, 1)
+            # Strides are essential because QImage aligns rows to 4 bytes
+            
+            shape = (height, width, d)
+            strides = (stride, d, 1) # (row_bytes, pixel_bytes, component_bytes)
+            
+            # Note: QImage bits pointer is valid as long as 'img' is alive
+            input_array = np.ndarray(
+                shape=shape,
+                dtype=np.uint8,
+                buffer=bits,
+                strides=strides
+            )
+
+            # Run Classification using optimized binding
             self.logMessage.emit(f"Running inference (Input: {width}x{height}x{d})...")
-            # Note: C++ classify_pixels logic must match the QImage format (RGB888 vs Grayscale8)
-            predicted_class = cgroot_core.classify_pixels(self.model, bits, width, height, stride)
+            
+            # Passing array directly - C++ will infer dims and handle strides
+            predicted_class = cgroot_core.classify_pixels(self.model, input_array)
             
             self.logMessage.emit(f"Inference Result: {predicted_class}")
             
@@ -722,6 +558,7 @@ class ModelWorker(QObject):
             confidence = max(probs) if probs else 0.0
             self.logMessage.emit(f"Inference Confidence: {confidence:.4f}")
             
+            # Emit signal with results
             self.imagePredicted.emit(predicted_class, qimage_obj, probs)
             
         except Exception as e:

@@ -700,28 +700,44 @@ NNModel *create_model(py::dict config) {
   }
 }
 
+#include <pybind11/numpy.h>
+
 // Helper to classify raw pixel data
-int classify_pixels(NNModel &model, py::buffer image_buffer, int width,
-                    int height, int stride) {
-  py::buffer_info info = image_buffer.request();
-  // We expect a flat buffer or 1D buffer from bits()
-  if (info.ndim != 1) {
-    // throw std::runtime_error("Expected 1D buffer of pixels");
-    // Relaxed check: bits() returns void*, pybind sees it as buffer.
+// Now accepts numpy array (memory view of QImage bits with strides)
+int classify_pixels(NNModel &model, py::array_t<uint8_t> input_array) {
+
+  // Access data efficiently without copying (if possible)
+  // We use unchecked accessor for max speed (no bounds checks)
+  auto r = input_array.unchecked<3>();
+  // Should ideally check ndim, but we rely on Python side sending correct shape
+  // (H, W, D)
+
+  // Validate dimensions
+  if (r.ndim() != 3) {
+    // It might be 2D if Grayscale single channel?
+    // model_worker sends (H, W, D) always, so 3D is expected even for depth 1.
+    // But lets be safe.
+    if (input_array.ndim() != 3) {
+      std::cerr << "Error: Expected 3D array (H, W, D)" << std::endl;
+      return 0; // Or throw
+    }
   }
 
-  uint8_t *ptr = static_cast<uint8_t *>(info.ptr);
+  int height = r.shape(0);
+  int width = r.shape(1);
+  int depth = r.shape(2);
 
-  // Validate dimensions against model expectations
-  if (width != model.getInputWidth() || height != model.getInputHeight()) {
-    std::cout << "Warning: classify_pixels received image size " << width << "x"
-              << height << " but model expects " << model.getInputWidth() << "x"
-              << model.getInputHeight() << std::endl;
+  // Validate against model
+  if (width != model.getInputWidth() || height != model.getInputHeight() ||
+      depth != model.getInputDepth()) {
+    std::cout << "Warning: classify_pixels received " << width << "x" << height
+              << "x" << depth << " but model expects " << model.getInputWidth()
+              << "x" << model.getInputHeight() << "x" << model.getInputDepth()
+              << std::endl;
   }
-
-  int depth = model.getInputDepth();
 
   // Convert to model's image format: vector<vector<vector<double>>>
+  // This copy is still needed until we refactor NNModel to accept flat buffers
   image img_data;
   img_data.resize(depth);
 
@@ -730,34 +746,23 @@ int classify_pixels(NNModel &model, py::buffer image_buffer, int width,
     for (int y = 0; y < height; ++y) {
       img_data[d][y].resize(width);
       for (int x = 0; x < width; ++x) {
-        // Calculate source index
-        // If grayscale (depth=1), stride is usually width (+pad)
-        // If RGB (depth=3), pixel is usually 3-byte packed or 4-byte aligned.
-        // QImage Format_RGB888 is packed 3 bytes (R,G,B).
-        // QImage Format_Grayscale8 is packed 1 byte.
-        // Stride is provided from Python as `bytesPerLine`.
-
-        // Pixel start address at row y, column x
-        size_t pixel_offset = y * stride + x * (depth == 1 ? 1 : 3);
-        // Note: Format_RGB888 is 3 bytes per pixel. Format_RGB32 is 4.
-        // Python side guarantees Format_Grayscale8 or Format_RGB888.
-
-        // Get value for current channel d
-        // For grayscale (d=0), value is ptr[offset]
-        // For RGB, value is ptr[offset + d] (0=R, 1=G, 2=B)
-
-        unsigned char val = 0;
-        if ((pixel_offset + d) < info.size) {
-          val = ptr[pixel_offset + d];
-        }
-
-        // Pass raw pixel values (0-255) as doubles
+        // Numpy array access (handles strides automatically!)
+        // r(y, x, d) -> (row, col, channel)
+        unsigned char val = r(y, x, d);
         img_data[d][y][x] = static_cast<double>(val);
       }
     }
   }
 
   return model.classify(img_data);
+}
+
+// Helper to manually destroy model (if needed, though Python usually handles
+// ownership)
+void destroy_model(NNModel *model) {
+  if (model) {
+    delete model;
+  }
 }
 
 PYBIND11_MODULE(cgroot_core, m) {
@@ -770,6 +775,8 @@ PYBIND11_MODULE(cgroot_core, m) {
   // Bind new factory/utility functions
   m.def("create_model", &create_model, py::return_value_policy::take_ownership,
         "Create a new NNModel from a configuration dictionary");
-  m.def("classify_pixels", &classify_pixels,
-        "Classify image from raw pixel buffer");
+
+  m.def("classify_pixels", &classify_pixels, "Classify image from numpy array");
+
+  m.def("destroy_model", &destroy_model, "Destroy a NNModel instance");
 }
