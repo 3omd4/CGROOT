@@ -277,9 +277,6 @@ public:
   typedef vector<double> weights;
 
 private:
-  // any additional data
-  vector<double> inputCache;    // Stores the input 'x' from forwardProp
-  vector<double> preActivation; // Stores 'z' before ReLU/Sigmoid
   vector<weights> neurons;      // the vector of weights of each neuron
   vector<double> bias;          // the vector of biases
   vector<double> outputData;    // the vector of output data
