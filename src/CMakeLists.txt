@@ -46,8 +46,6 @@ set(CORE_UTILS_SOURCES
     core/utils/mnist_loader.h
     core/utils/data_utils.cpp
     core/utils/data_utils.h
-    core/utils/weight_init.h
-    core/utils/metrics.h
 )
 
 # Core model
@@ -58,10 +56,8 @@ set(CORE_MODEL_SOURCES
 
 # Combine all core library sources
 set(LIBRARY_SOURCES
-
     ${CORE_LAYERS_SOURCES}
     ${CORE_ACTIVATIONS_SOURCES}
-    ${CORE_LOSSES_SOURCES}
     ${CORE_OPTIMIZERS_SOURCES}
     ${CORE_INITIALIZATION_SOURCES}
     ${CORE_UTILS_SOURCES}
