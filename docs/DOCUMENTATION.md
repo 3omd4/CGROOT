@@ -46,9 +46,95 @@ Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abs
 
 ---
 
-## 3. System Design
+## 3. Software Development Process Model
 
-### 3.1 Sequence Diagram
+### 3.1. Overview
+
+The development of **CGROOT++** followed the **Fountain Model**, a process specifically tailored for Object-Oriented Software Engineering (OOSE). Unlike linear models, the Fountain Model acknowledges that in object-oriented development, phases such as analysis, design, and implementation often overlap. This approach allowed the team to iterate on the core C++ class hierarchies (such as `Layer` and `Optimizer`) while simultaneously refining the Python-based GUI, ensuring a cohesive integration of the distinct architectural layers.
+
+---
+
+### 3.2. Justification for Model Selection
+
+The Fountain Model was selected due to the intrinsic nature of the project's codebase:
+
+- **Object-Oriented Design:** The system is built upon a rigid inheritance structure where specific layers (e.g., `ConvLayer`, `FullyConnected`) derive from an abstract `Layer` base class.
+
+- **Modularity:** The separation of the core engine (C++) and the user interface (Python) allowed for distinct development circles that "bubbled up" to integration.
+
+- **Iterative Refinement:** The complexity of mathematical operations (such as backpropagation) required frequent iteration between the System Design (Class Diagrams) and Implementation phases to ensure numerical stability.
+
+---
+
+### 3.3. Development Phases
+
+#### 3.3.1. User Requirements & Analysis (The Base)
+
+**Objective:**  
+To define the educational goals and functional necessities of the framework.
+
+**Activities:**
+- Establishing the need for a transparent "white-box" deep learning tool.
+- Defining the scope of supported layers and optimizers.
+
+**Deliverable:**  
+The *System Analysis* specification (Section 2).
+
+---
+
+#### 3.3.2. Object-Oriented System Design
+
+**Objective:**  
+To model real-world mathematical concepts as interacting software objects.
+
+**Activities:**
+- **Defining the Class Hierarchy:** Structuring the abstract `Layer` class and its polymorphic relationship with `InputLayer`, `ConvLayer`, and `OutputLayer`.
+- **Architectural Patterning:** Adopting the Model-View-Controller (MVC) pattern to decouple the neural network logic (`NNModel`) from the GUI visualization.
+
+**Deliverable:**  
+Class Diagrams and Sequence Diagrams (Section 3).
+
+---
+
+#### 3.3.3. Implementation & Unit Testing (Overlapping Phase)
+
+**Objective:**  
+To implement the designed classes and verify their individual behaviors.
+
+**Activities:**
+- **Core Logic:** Implementing the C++ tensor operations and OpenMP-based parallelization.
+- **Component Testing:** As each class (e.g., MSE loss function or Adam optimizer) was implemented, it was immediately unit-tested to verify mathematical accuracy before integration into the larger `NNModel`.
+
+**Deliverable:**  
+The C++ source code (`src/core`) and Python bindings (`src/bindings`).
+
+---
+
+#### 3.3.4. Integration & System Evolution
+
+**Objective:**  
+To merge the backend computation engine with the frontend user interface.
+
+**Activities:**
+- Bridging the C++ and Python environments using **pybind11**.
+- Developing GUI widgets (`TrainingWidget`, `MetricsWidget`) to visualize the live state of the underlying C++ objects.
+
+**Deliverable:**  
+The complete, integrated application and the *Implementation Details* documentation (Section 4).
+
+---
+
+#### 3.3.5. Maintenance & Further Development
+
+**Objective:**  
+To extend and evolve the framework over time.
+
+**Activities:**  
+The modular nature of the Fountain Model allows new features (such as additional activation functions or optimizers) to be introduced by extending existing base classes, without requiring major restructuring of the overall system.
+
+## 4. System Design
+
+### 4.1 Sequence Diagram
 ```mermaid
 sequenceDiagram
     autonumber
@@ -154,7 +240,7 @@ sequenceDiagram
     Main->>User: Display Results / Save Model
 ```
 
-### 3.2 Class Diagram
+### 4.2 Class Diagram
 ```mermaid
 classDiagram
     direction TB
@@ -447,18 +533,18 @@ classDiagram
 
 ---
 
-## 4. Implementation Details
+## 5. Implementation Details
 
-### 4.1. Tech Stack
+### 5.1. Tech Stack
 - **Core Logic:** C++ for high-performance tensor operations and OpenMP for multi-threaded parallel processing.
 - **GUI Framework:** Python 3.13 with PyQt6 for a responsive, cross-platform interface.
 - **Interface Bridge:** pybind11 to expose C++ neural network classes and functions to the Python environment.
 - **Visualization:** PyQtGraph for real-time loss/accuracy metrics and QImage/QPainter for feature map rendering.
 
-### 4.2. Architectural Design
+### 5.2. Architectural Design
 Due to the nature of how neural networks work and how we foresaw the program to work and behave, a combination of three architectural design patterns was used:
 
-#### 4.2.1. Model-View-Controller (MVC) Architecture
+#### 5.2.1. Model-View-Controller (MVC) Architecture
 The main Idea in mind in making the project is to be educational and simple, so a GUI is needed for this purpose, so the MVC pattern were used since the program is interactive, and information needs to be conveyed to the user in different ways.
 
 - **Model:** The Neural Network model implemented in C++ (NNModel) and the training logic handled by ModelWorker in Python. 
@@ -469,7 +555,7 @@ The main Idea in mind in making the project is to be educational and simple, so 
     - Log Output: Real-time terminal-style logging at the bottom of the window.
 - **Controller:** The ModelController and ModelWorker manage the flow of data between the GUI and the C++ backend using asynchronous threads (QThread) to keep the UI responsive during heavy computation.
 
-#### 4.2.2. Layered Architecture 
+#### 5.2.2. Layered Architecture 
 The program is complex so abstractions at different layers are needed.
 The layering structure is simple and consists of three main layers:
 
@@ -477,16 +563,16 @@ The layering structure is simple and consists of three main layers:
 - **Neural Network Model (NNModel):** Responsible for training logic. The user interacts via the GUI to set "Learning Rate", "Optimizer", and "Weight Decay". It uses functions like classify, train, train_batch, and train_epochs (3.2 Class Diagram).
 - **GUI:** Further abstractions is accomplished using the GUI since the user doesn’t need to write code to load the data to the model or how to use the model functions, all the user needs is to use the simple and informative GUI.
 
-#### 4.2.3. Pipe and Filter Architecture
+#### 5.2.3. Pipe and Filter Architecture
 What neural networks do are basically doing data processing and updating some variables using the results, and the processing is done sequentially as every layer does it works on the data and pass it to the next layer (the NNModel class is the one responsible for this operation). The processing operations consists of two main operations (3.3 Sequence Diagram):
 
 - **Forward Propagation:** Input -> Convolution -> Pooling -> Flatten -> Fully Connected -> Output
 - **Backward Propagation and update:** Output -> Fully Connected -> Flatten -> Pooling -> Convolution -> Input.
 
-### 4.3. Functions
+### 5.3. Functions
 Here is a brief description of the functions of the different classes, for more compact perspective look at 3.2 Class Diagram.
 
-#### 4.3.1. Layers Functions
+#### 5.3.1. Layers Functions
 - **forwardProp:** Do the forward propagation operation corresponding to the layer, different layers may have different names for this function, the operation of each is described below, with the functions with different name have the other name in brackets [func_name].
     - **inputLayer [start]:** apply normalization on the data to be in the range from 0 to 1.
     - **FullyConnected:** applies the forward propagation algorithm of a fully connected layer by applying the dot product and then applies the activation function.
@@ -502,13 +588,13 @@ Here is a brief description of the functions of the different classes, for more 
     - **outputLayer:** apply the backward propagation using categorical cross entropy loss function and calculates the gradients of the previous layer.
 - **update:** updates the weights of FullyConnected and outputLayer and the kernels of convLayer by calling the update function of the used optimizer, both works the same way. There is another variation of this function called update_batch which is used when training with batches instead of individual samples.
 
-#### 4.3.2. NNModel Functions
+#### 5.3.2. NNModel Functions
 
 - **classify:** forward propagates the image through the layers by using the forward propagation of each layer, it does such by first checking what was the previous layer in order to get the data from it. In the end it returns the detected type of the image (which could be used for either training or as classification).
 - **train:** train the model on an image (or a batch of images if train_batch were to be used). The function calls classify first then backward propagates the gradients by first checking what the layers before and after to get the data and gradients from them, respectively, then updates the weights and kernels of each layer. 
 - **train_epoch:** used to train the model on a complete epoch.
 
-#### 4.3.3. Optimizer Functions
+#### 5.3.3. Optimizer Functions
 The optimizer class serves as the base for various optimization algorithms used to update model weights.
 - **Optimizer (Base Class):** Defines the interface with a virtual `update` method.
 - **SGD:** Implements Stochastic Gradient Descent. Updates weights using gradients and an optional L2 weight decay.
@@ -518,7 +604,7 @@ The optimizer class serves as the base for various optimization algorithms used 
 
 To complete the implementation details regarding the GUI files and functions, here is the documentation detailing the Python-based PyQt6 infrastructure:
 
-#### 4.3.4. GUI Files and Widget Functions
+#### 5.3.4. GUI Files and Widget Functions
 The graphical user interface is structured into modular widgets, each responsible for a specific stage of the neural network lifecycle:
 
 1. **mainwindow.py (Main Window)**  
@@ -586,7 +672,7 @@ The graphical user interface is structured into modular widgets, each responsibl
     Manages the application's visual style.
     - **apply_dark_theme:** Configures the global QPalette with a dark color scheme (Project Fusion) and applies specific QSS stylesheets for widgets like GroupBoxes and ProgressBars.
 
-#### 4.3.5. Controller and Worker Functions
+#### 5.3.5. Controller and Worker Functions
 The GUI communicates with the C++ backend through a dedicated controller-worker thread system to prevent interface freezing:
 
 - **model_controller.py:** 
@@ -607,7 +693,7 @@ The GUI communicates with the C++ backend through a dedicated controller-worker 
     - **LoaderThread:** Handles the blocking I/O of loading large binary datasets or scanning thousands of image files from folders.
     - **TestingThread:** Runs `model.evaluate` on the test set and computes the confusion matrix off the main thread.
 
-#### 4.3.6. Core C++ Utilities
+#### 5.3.6. Core C++ Utilities
 These classes handle the low-level data and file operations:
 
 1. **MNISTLoader (src/core/utils/mnist_loader.cpp)**  
