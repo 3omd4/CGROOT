@@ -36,8 +36,26 @@ class TrainingThread(QThread):
                 maps = None
                 layer_type = -1
                 
+                # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
                 if self._visualizations_enabled:
-                    # ... [Preview Image Logic] ...
+                    try:
+                        # Access dynamic layer index
+                        target_layer = self.layer_index
+                        if target_layer < 0: target_layer = 0
+                        
+                        # Get maps. If invalid layer, this returns []
+                        maps = self.model.getLayerFeatureMaps(target_layer)
+                        layer_type = self.model.getLayerType(target_layer)
+                        
+                        # Process maps using Manager (optional step for normalization/coloring if moved there)
+                        maps = VisualizationManager.process_feature_maps(maps, layer_type)
+                        
+                    except Exception as e:
+                        # No fallback! Let it be empty list or None so UI knows it failed/is invalid.
+                        maps = [] # Explicitly empty so UI clears it
+                        layer_type = -1
+                    
+
                     # Preview Image Generation
                     preview_img_data = None
                     preview_pred = -1
@@ -46,11 +64,19 @@ class TrainingThread(QThread):
                     
                     if self.dataset and hasattr(self.dataset, 'num_images') and self.dataset.num_images > 0:
                         try:
-                            # Use current_idx if valid (>=0), otherwise random if we want (or skip)
-                            # The C++ code emits -1 at epoch end.
+                            # Safely determine index
                             idx = -1
-                            if current_idx >= 0:
-                                idx = current_idx
+                            if current_idx > 0:
+                                # current_idx is 'batch_start' (next item index), so -1 gives the last processed item
+                                idx = current_idx - 1
+                            elif current_idx == 0:
+                                idx = 0 # Should rare happen but safe fallback
+                            
+                            # Ensure bounds
+                            if idx >= self.dataset.num_images:
+                                idx = self.dataset.num_images - 1
+                            
+                            if idx >= 0:
                                 # User requested NO INFERENCE during training to save time/complexity
                                 preview_pred = -1
                                 preview_probs = []
@@ -71,7 +97,7 @@ class TrainingThread(QThread):
                                 )
 
                             else:
-                                # If current_idx is -1 (e.g., epoch end), skip updating image
+                                # If valid idx couldn't be determined
                                 pass
                         except Exception as e:
                             print(f"Error getting preview image or calling VizManager: {e}")
