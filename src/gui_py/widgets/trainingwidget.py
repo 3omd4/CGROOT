@@ -214,6 +214,20 @@ class TrainingWidget(QWidget):
             self.stopTrainingRequested.emit()
             self.set_training_state(False)
             self.status_label.setText("Stopping training and saving model...")
+            self.clear_visualizations()
+            
+    def clear_visualizations(self):
+        """Clear training preview and feature map views."""
+        self.image_label.clear()
+        self.image_label.setText("Training Stopped")
+        self.image_label.setStyleSheet("QLabel { background-color: #222; color: #888; }")
+        
+        if hasattr(self, 'preview_info_label'):
+            self.preview_info_label.clear()
+            
+        self.fm_label.clear()
+        self.fm_label.setText("Training Stopped")
+        self.fm_label.setStyleSheet("QLabel { background-color: #222; color: #888; }")
         
     def on_reset_clicked(self):
         reply = QMessageBox.question(

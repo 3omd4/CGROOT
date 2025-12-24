@@ -38,7 +38,7 @@ qrc_*.cpp
 
 #*.md
 MATRIX_OPS_IO_REFERENCE.md
-*.md
+!*.md
 !README.md
 
 *.exe

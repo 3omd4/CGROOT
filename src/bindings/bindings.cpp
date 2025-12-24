@@ -184,21 +184,24 @@ void bind_model(py::module &m) {
               };
             }
 
-            // Note on Stop Flag:
-            // Your C++ model expects atomic<bool>*, but Python passes a
-            // function. Bridging this strictly requires changing C++
-            // architecture to accept std::function<bool()>. For now, we pass
-            // nullptr to prevent crashes, but this means the 'Stop' button
-            // won't work unless you modify model.h/cpp to accept a
-            // std::function for stopping.
-            std::atomic<bool> *stop_ptr = nullptr;
+            std::function<bool()> stop_check_cpp = nullptr;
+            if (!py_stop_callback.is_none()) {
+              stop_check_cpp = [py_stop_callback]() -> bool {
+                py::gil_scoped_acquire acquire; // Lock Python
+                try {
+                  return py_stop_callback().cast<bool>();
+                } catch (...) {
+                  return false; // Default to not stopping if error
+                }
+              };
+            }
 
             // 2. RELEASE GIL AND RUN TRAINING
             // This allows the GUI thread to run while C++ computes
             py::gil_scoped_release release;
 
             return self.train_epochs(dataset, config, progress_cpp, log_cpp,
-                                     stop_ptr);
+                                     stop_check_cpp);
           },
           py::arg("dataset"), py::arg("config"),
           py::arg("progress_callback") = py::none(),

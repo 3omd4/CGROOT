@@ -373,6 +373,8 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Stopping training and saving model...")
         self.controller.requestStop.emit()
         self.spinner.stop()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Stopped")
         self.log_message("Training stopped by user. Model is being saved...")
         
     def log_message(self, msg):

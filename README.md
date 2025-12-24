@@ -1,746 +1,626 @@
-# 🧠 CGROOT++
+# Software Design Document: CGROOT++
 
-<div align="center">
-
-![C++](https://img.shields.io/badge/C++-17-blue.svg?style=for-the-badge&logo=cplusplus)
-![CMake](https://img.shields.io/badge/CMake-3.10+-green.svg?style=for-the-badge&logo=cmake)
-![Visual Studio](https://img.shields.io/badge/Visual%20Studio-2019-purple.svg?style=for-the-badge&logo=visual-studio)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
-
-**A High-Performance Educational C++ Deep Learning Framework**
-
-[🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🔧 Installation](#-installation) • [💡 Examples](#-examples) • [🤝 Contributing](#-contributing)
-
-</div>
+**Project Name:** CGROOT++  
+**Version:** 1.0.0  
+**Date:** December 23, 2025  
 
 ---
 
-## 📋 Table of Contents
+## 1. Introduction
 
-- [🎯 Overview](#-overview)
-- [✨ Features](#-features)
-- [👥 Our Team](#-our-team)
-- [🗺️ Development Roadmap](#️-development-roadmap)
-- [🚀 Quick Start](#-quick-start)
-- [🔧 Installation](#-installation)
-- [📖 Documentation](#-documentation)
-- [💡 Examples](#-examples)
-- [🏗️ Project Structure](#️-project-structure)
-- [🛠️ Available Scripts](#️-available-scripts)
-- [🧪 Testing](#-testing)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
+### 1.1 Problem Statement
+Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abstract away the underlying mathematical mechanics, effectively making them "black boxes" for students and researchers. CGROOT++ addresses the lack of lightweight, educational frameworks that provide low-level implementations of automatic differentiation, convolutional operations, and optimization algorithms in C++ while remaining accessible via a user-friendly GUI.
 
----
+### 1.2 Scope
+- **What the software does:**
+    - Implements core neural network layers: Convolutional (Conv2D), Pooling (Max/Average), Flatten, and Fully Connected layers.
+    - Supports multiple activation functions (ReLU, Sigmoid, Tanh, Softmax) and advanced optimizers (Adam, RMSprop, Momentum).
+    - Includes a feature-rich Python GUI (PyQt6) for interactive model configuration, real-time training visualization, feature map inspection, and image inference.
+    - Enables model persistence (saving/loading architecture and weights) for reproducible experiments.
+    - Utilizes OpenMP for multi-threaded CPU acceleration.
+- **What the software does NOT do:**
+    - It does not support GPU acceleration (CUDA/OpenCL).
+    - It does not support distributed training or cloud-based deployment.
 
-## 🎯 Overview
-
-**CGroot++** is a mini educational machine learning (ML) framework designed specifically for ML developers and the open-source community. Its primary goal is to serve as an educational tool, demystifying the internal workings of ML models. The project's unique value proposition lies in its combination of being fully open-source, having a strong educational focus, and including capabilities for explaining model decisions.
-
-The framework is built using a hybrid technical stack to balance performance and usability. The core computational engine is written in **C++** for maximum efficiency, while **Python** is leveraged for a user-friendly GUI and plotting capabilities. The project uses **CMake** for building project files and is designed for entirely **local** deployment, as it functions as a standalone framework without needing a backend, frontend, or database.
-
-### 🎯 Key Goals
-
-- **Education**: Clear, well-documented code structure for learning deep learning internals
-- **Explainability**: Capabilities for explaining model decisions and internal workings
-- **Performance**: Optimized C++ implementation for maximum speed
-- **Simplicity**: Clean, intuitive API design similar to PyTorch
-- **Open Source**: Fully open-source framework for the community
-- **Local Deployment**: Standalone framework requiring no external dependencies
+### 1.3 Target Audience
+- **Students & Educators:** Those seeking to understand the internal mathematics and implementation of deep learning (CNNs, Backpropagation).
 
 ---
 
-## ✨ Features
+## 2. System Analysis
 
-### 🎯 Core Features
+### 2.1 Functional Requirements
+- **FR-01 Data Loader:** The system shall parse and load MNIST-format (IDX) binary datasets (MNIST, Fashion-MNIST, CIFAR-10) and automatically pair label files with image files.
+- **FR-02 Neural Network Engine:** The system shall support complex architectures with Convolutional, Pooling (Max/Avg), Flatten, and Fully Connected layers, utilizing core activations (ReLU, Sigmoid, Tanh, Softmax) and loss functions (MSE, Cross-Entropy).
+- **FR-03 Automatic Differentiation:** The system must implement a dynamic computational graph to automatically calculate gradients for all parameters via backpropagation.
+- **FR-04 Optimization:** The system shall support advanced optimizers including SGD, SGD with Momentum, Adam, and RMSprop.
+- **FR-05 Training & Inference:** The system shall support batch training with validation splits, real-time metric tracking, model persistence (save/load), and single-image inference.
+- **FR-06 Graphical User Interface:** The Python-based GUI shall provide interactive configuration, real-time visualization of training metrics and image previews, feature map visualization, and comprehensive logging.
 
-#### 🧠 **Neural Network Engine**
-
-- **Core Matrix Operations**: High-performance tensor operations, Multi-dimensional arrays with automatic differentiation
-- **Automatic Differentiation**: Dynamic computational graph with gradient computation
-- **Forward & Backward Propagation**: Complete automatic differentiation
-- **Model Class**: Sequential container for stacking layers
-- **CPU Kernels**: Optimized mathematical operations for CPU execution
-
-#### 🔗 **Core Layers**
-
-- **Dense Layer**: Fully connected linear transformations
-- **Activation Functions**: ReLU, Sigmoid, Tanh, Softmax
-- **Sequential Container**: Stack multiple layers in sequence
-
-#### 📉 **Loss Functions**
-
-- **Mean Squared Error (MSE)**: For regression tasks
-- **Binary Cross-Entropy**: For binary classification tasks
-- **Categorical Cross-Entropy**: For multi-class classification tasks
-
-#### 🎛️ **Optimizers**
-
-- **Stochastic Gradient Descent (SGD)**: The fundamental baseline optimizer
-- **Momentum**: Common improvement on SGD
-- **Adam**: Popular and effective adaptive optimizer
-
-#### 🔧 **Initialization & Training**
-
-- **Weight Initialization**: Glorot (Xavier) and He initialization methods
-- **User-friendly API**: Intuitive interface similar to PyTorch
-- **Performance Tracking**: Loss and accuracy monitoring after each epoch
-- **Data Batching**: Efficient data loading and batching mechanism
-
-### 🚀 Secondary Features (Planned)
-
-#### 🏗️ **Advanced Layers**
-
-- **Convolutional Layer (Conv2D)**: 2D convolution operations
-- **Pooling Layer**: Max Pooling and Average Pooling
-- **Dropout Layer**: Regularization technique
-
-#### 🛡️ **Regularization Techniques**
-
-- **L2 Regularization**: Weight decay for preventing overfitting
-- **Dropout**: Random neuron deactivation during training
-
-#### 🎛️ **Training Control**
-
-- **Early Stopping**: Prevent overfitting by monitoring validation loss
-- **Model Saving/Loading**: Persist trained models
-
-#### 📊 **Additional Loss Functions**
-
-- **Mean Absolute Error (MAE)**: For robust regression tasks
-
-### 🛠️ Development Tools
-
-- **🔧 Interactive Manager**: Windows batch script for easy project management
-- **🧪 Unit Tests**: Comprehensive test suite
-- **📚 Examples**: Ready-to-run example programs
-- **📖 Documentation**: Detailed API reference and tutorials
+### 2.2 Non-Functional Requirements
+- **NFR-01 Performance:** Heavy mathematical operations shall be implemented in optimized C++ utilizing OpenMP for parallelization to ensure high throughput.
+- **NFR-02 Usability:** The GUI must remain responsive during training. 
+- **NFR-03 Reliability:** Gradient calculations must be numerically verified, and the system must handle data types safely between C++ and Python.
+- **NFR-04 Extensibility:** The modular architecture (using pybind11) shall allow for easy addition of new layers and optimizers without refactoring the core engine.
+- **NFR-05 Portability:** The system must be cross-platform (Windows, Linux, macOS), buildable via CMake, and function entirely locally without external dependencies.
 
 ---
 
-## 👥 Our Team
+## 3. System Design
 
-The CGROOT++ project is developed by a dedicated team of software engineering students who share a passion for machine learning and educational technology. We work collaboratively to create a comprehensive deep learning framework that serves both educational and practical purposes.
+### 3.1 Sequence Diagram
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Main
+    participant Model as NNModel
+    participant Layers as Layer(s)
+    participant Input as InputLayer
+    participant Conv as ConvLayer
+    participant Pool as PoolingLayer
+    participant FC as FullyConnected
+    participant Output as OutputLayer
+    participant Optim as Optimizer
 
-### 🎯 **Our Mission**
+    Note over User, Main: Initialization Phase
+    User->>Main: Run Program
+    Main->>Main: Define Architecture (struct)
+    Main->>Model: NNModel(arch, numClasses, ...)
+    activate Model
+    Model->>Input: new InputLayer(...)
+    
+    loop For each Conv Layer
+        Model->>Conv: new ConvLayer(...)
+        Model->>Model: Calculate FeatureMap Dim
+    end
+    
+    loop For each FC Layer
+        Model->>FC: new FullyConnected(...)
+    end
+    
+    Model->>Output: new OutputLayer(...)
+    deactivate Model
 
-To build an open-source, educational machine learning framework that demystifies the internal workings of neural networks while providing high-performance capabilities for real-world applications.
-
-### 🤝 **Collaborative Approach**
-
-- **Unified Development**: We work together as one cohesive team
-- **Shared Knowledge**: Regular code reviews and knowledge sharing sessions
-- **Collective Ownership**: Every team member contributes to all aspects of the project
-- **Continuous Learning**: We learn from each other and grow together as developers
-
-### 👨‍💻 **Team Members**
-
-- **Mohamed Emad-Eldeen**
-- **George Esmat**
-- **Ziad Khalid**
-- **Ahmed Hasan**
-- **Mohamed Amgd**
-- **Antony Ghayes**
-
----
-
-## 🗺️ Development Roadmap
-
-### 🎯 **Current Focus: Core Foundation**
-
-- **Tensor Operations**: Multi-dimensional array implementation with memory management
-- **Shape Management**: Tensor shape and stride calculations
-- **Parameter System**: Learnable weights with proper initialization
-- **Basic Kernels**: CPU-optimized mathematical operations
-
-### 🧠 **Next Phase: Automatic Differentiation**
-
-- **Computational Graph**: Dynamic graph construction and management
-- **Operation Nodes**: Individual operation implementations (Add, Mul, MatMul, etc.)
-- **Backward Propagation**: Gradient computation and accumulation
-- **Gradient Checking**: Numerical gradient verification
-
-### 🏗️ **Future Development: Neural Networks**
-
-- **Module System**: Base class for all neural network components
-- **Linear Layer**: Fully connected layer implementation
-- **Activation Functions**: ReLU, Sigmoid, Tanh implementations
-- **Sequential Container**: Layer stacking and forward pass
-
-### 🚀 **Advanced Features (Planned)**
-
-- **Convolutional Layers**: Conv2D implementation with im2col
-- **Pooling Layers**: Max Pooling and Average Pooling
-- **Regularization**: Dropout and L2 Regularization
-- **Training Controls**: Early stopping and model persistence
-
-### 🔮 **Long-term Vision**
-
-- **GPU Support**: CUDA kernels for accelerated computation
-- **Python Bindings**: Seamless integration with Python ecosystem
-- **Visualization Tools**: Model architecture and training visualization
-- **Advanced Optimizers**: RMSprop, AdaGrad, and other optimizers
-- **More Layer Types**: BatchNorm, LayerNorm, and attention mechanisms
-
----
-
-## 🚀 Quick Start
-
-### 🪟 Windows
-
-#### Option 1: Launch GUI Directly
-
-```cmd
-python scripts/CGROOT_Manager.py --gui
+    Note over Main, Optim: Training Phase (Single Epoch Example)
+    
+    Main->>Model: train_epochs(dataset, config)
+    activate Model
+    
+    loop For each Batch
+        Model->>Model: train_batch(batchData, trueLabels)
+        activate Model
+        
+        Note right of Model: 1. Forward Propagation
+        Model->>Model: classify(image)
+        activate Model
+        Model->>Input: start(image)
+        
+        loop Forward Pass through Layers
+            alt is ConvLayer
+                Model->>Conv: forwardProp(prevMaps)
+            else is PoolingLayer
+                Model->>Pool: forwardProp(prevMaps)
+            else is FullyConnected
+                Model->>FC: forwardProp(prevData)
+            end
+        end
+        
+        Model->>Output: forwardProp(prevData)
+        Model-->>Model: Return class
+        deactivate Model
+        
+        Note right of Model: 2. Calculate Loss
+        Model->>Model: calculate_loss_from_probs()
+        
+        Note right of Model: 3. Backward Propagation
+        
+        Model->>Output: backwardProp_batch(input, label)
+        Output-->>Model: prevLayerGrad
+        
+        loop Backward Pass (Reverse Order)
+            alt is FullyConnected
+                Model->>FC: backwardProp_batch(input, nextGrad)
+                FC-->>Model: prevLayerGrad
+            else is PoolingLayer
+                Model->>Pool: backwardProp_batch(input, nextGrad)
+                Pool-->>Model: prevLayerGrad
+            else is ConvLayer
+                Model->>Conv: backwardProp_batch(input, nextGrad)
+                Conv-->>Model: prevLayerGrad
+            end
+        end
+        
+        Note right of Model: 4. Update Weights
+        
+        loop Update All Layers
+            Model->>Conv: update_batch(batchSize)
+            Conv->>Optim: update(weights, grads)
+            
+            Model->>FC: update_batch(batchSize)
+            FC->>Optim: update(weights, grads)
+            
+            Model->>Output: update_batch(batchSize)
+            Output->>Optim: update(weights, grads)
+        end
+        
+        deactivate Model
+    end
+    
+    Model-->>Main: Return TrainingMetrics (history)
+    deactivate Model
+    
+    Note over User, Main: Completion
+    Main->>User: Display Results / Save Model
 ```
 
-#### Option 2: Full Build and Package
-
-```cmd
-python scripts/CGROOT_Manager.py --full
-```
-
-This will:
-
-- Kill any zombie processes
-- Clean and rebuild the project (Release)
-- Install PyInstaller (if needed)
-- Package the app as a standalone `.exe`
-- Launch the packaged executable
-
-#### Option 3: Interactive Manager
-
-```cmd
-python scripts/CGROOT_Manager.py
-```
-
-Provides a menu with all build and run options.
-
-### 🐧 Linux/macOS
-
-```bash
-# Build the C++ core
-mkdir build && cd build
-cmake ..
-make
-
-# Launch the GUI
-python3 src/gui_py/main.py
-```
-
----
-
-## 💻 GUI Application
-
-CGROOT++ includes a comprehensive PyQt6-based GUI for training and testing neural networks.
-
-### ✨ Features
-
-- **📈 Real-time Training Visualization**: Live preview of training samples and predictions
-- **🗺️ Feature Maps**: Visualize intermediate layer activations
-- **📊 Metrics Tracking**: Interactive charts for loss and accuracy
-- **⚙️ Configuration**: Complete control over model architecture and hyperparameters
-- **💾 Model Persistence**: Save and load trained models
-- **🔍 Inference**: Test models on individual images
-- **📝 Comprehensive Logging**: All actions logged with timestamps
-
-### ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action         |
-| -------- | -------------- |
-| `Ctrl+O` | Load Dataset   |
-| `Ctrl+T` | Start Training |
-| `Ctrl+S` | Stop Training  |
-| `F1`     | Show Help      |
-
-### 📋 Workflow
-
-1. **Load Dataset** (File → Load Dataset or `Ctrl+O`)
-
-   - Select MNIST-format image file
-   - Label file auto-detected
-   - Supports MNIST and Fashion-MNIST
-
-2. **Configure Model** (Configuration Tab)
-
-   - Set architecture (layers, neurons, kernels)
-   - Choose optimizer (SGD, Momentum, Adam)
-   - Adjust hyperparameters
-   - Optional: Enable validation split
-
-3. **Train** (Training Tab)
-
-   - Click "Start Training" or press `Ctrl+T`
-   - Monitor real-time preview and metrics
-   - View feature maps at each epoch
-   - Stop anytime with `Ctrl+S`
-
-4. **Save Model** (Training Tab)
-
-   - Click "Store Model"
-   - Choose location (defaults to `src/data/trained-model`)
-   - Saves weights and configuration
-
-5. **Inference** (Inference Tab)
-   - Load saved model
-   - Select test image
-   - View prediction and confidence scores
-
----
-
-## 🔧 Framework & Technology Stack
-
-The project's technical stack uses **C++** for core efficiency and **Python** for the GUI and plotting functionalities. **CMake** is utilized for building the project files, and the framework is designed for **local** deployment, as hosting, database, frontend, and backend components are not required.
-
-### 🛠️ **Technical Stack**
-
-- **Programming Language(s)**: C++ for efficiency, Python for GUI & plotting
-- **Deployment/Hosting**: Local; hosting isn't needed for an ML framework
-- **Other Tools/Libraries**: CMake for building project files
-- **Target Platform**: Cross-platform (Windows, Linux, macOS)
-
-### 🎯 **Design Philosophy**
-
-- **Educational Focus**: Clear, well-documented code for learning ML internals
-- **Performance**: Optimized C++ implementation for maximum speed
-- **Simplicity**: Clean, intuitive API design similar to PyTorch
-- **Modularity**: Well-structured components for easy extension
-- **Local Deployment**: Standalone framework with no external dependencies
-
-### 🌟 **Unique Value Proposition**
-
-| **What is the project's name?**               | CGroot++                                                       |
-| --------------------------------------------- | -------------------------------------------------------------- |
-| **What is the core purpose of the software?** | Mini educational ML framework                                  |
-| **Who is the target audience?**               | ML developers + open-source communities                        |
-| **What is the unique value proposition?**     | Open source + educational purpose + explaining model decisions |
-
-### 🎓 **Educational Benefits**
-
-- **Transparency**: Every component is clearly documented and easy to understand
-- **Learning Path**: Step-by-step implementation of ML concepts from scratch
-- **Model Explainability**: Built-in capabilities for understanding model decisions
-- **Hands-on Experience**: Direct interaction with low-level ML operations
-- **Community Learning**: Open-source nature encourages collaborative learning
-
----
-
-## 🔧 Installation
-
-### Prerequisites
-
-- **C++ Compiler**: C++17 compatible (GCC 7+, Clang 5+, MSVC 2019+)
-- **CMake**: Version 3.10 or higher
-- **Visual Studio**: 2019 or later (Windows)
-- **Python**: 3.8+ (required for GUI)
-- **Qt6**: Required for PyQt6 GUI application
-
-### Python Dependencies
-
-Install required Python packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-Required packages:
-
-- `PyQt6` - GUI framework
-- `pyqtgraph` - Plotting and visualization
-- `numpy` - Numerical operations
-- `colorama` - Terminal colors
-
-### Windows Installation
-
-1.  **Install Visual Studio 2019** or later with C++ development tools and CMake
-2.  **Install Python 3.8+** from [python.org](https://python.org)
-3.  **Install Qt6** (CMake will attempt to find it)
-4.  **Clone the repository**:
-    ```cmd
-    git clone <repository-url>
-    cd CGROOT
-    ```
-5.  **Install Python dependencies**:
-    ```cmd
-    pip install -r requirements.txt
-    ```
-6.  **Build the project**:
-    ```cmd
-    python scripts/CGROOT_Manager.py --build
-    ```
-7.  **Launch the GUI**:
-    ```cmd
-    python scripts/CGROOT_Manager.py --gui
-    ```
-
-### Linux Installation
-
-```bash
-# Install system dependencies (Ubuntu/Debian)
-sudo apt update
-sudo apt install build-essential cmake git python3 python3-pip
-sudo apt install qt6-base-dev  # Qt6 for PyQt6
-
-# Install Python dependencies
-pip3 install -r requirements.txt
-
-# Clone and build
-git clone <repository-url>
-cd CGROOT
-mkdir build && cd build
-cmake ..
-make
-
-# Launch GUI
-python3 src/gui_py/main.py
-```
-
-### macOS Installation
-
-```bash
-# Install dependencies with Homebrew
-brew install cmake git python qt@6
-
-# Install Python dependencies
-pip3 install -r requirements.txt
-
-# Clone and build
-git clone <repository-url>
-cd CGROOT
-mkdir build && cd build
-cmake ..
-make
-
-# Launch GUI
-python3 src/gui_py/main.py
-```
-
----
-
-## 📖 Documentation
-
-### 🏗️ Architecture Overview
-
-CGROOT++ follows a modular architecture with clear separation of concerns:
-
-```
-src/
-├── core/           # Core tensor and parameter classes
-├── autograd/       # Automatic differentiation system
-├── math/           # Mathematical operations and kernels
-├── nn/             # Neural network layers and modules
-└── optim/          # Optimization algorithms
-```
-
-### 🔧 API Reference
-
-#### Tensor Operations
-
-```cpp
-#include "core/tensor.h"
-
-// Create tensors
-auto a = Tensor<float>({2, 3});  // 2x3 tensor
-auto b = Tensor<float>({3, 4});  // 3x4 tensor
-
-// Basic operations
-auto c = a + b;                  // Element-wise addition
-auto d = a.matmul(b);            // Matrix multiplication
-auto e = a.relu();               // ReLU activation
-```
-
-#### Neural Network Layers
-
-```cpp
-#include "nn/linear.h"
-#include "nn/relu.h"
-#include "nn/sequential.h"
-
-// Create a simple neural network
-auto model = Sequential<float>();
-model.add(std::make_shared<Linear<float>>(784, 128));
-model.add(std::make_shared<ReLU<float>>());
-model.add(std::make_shared<Linear<float>>(128, 10));
-```
-
-#### Training Loop
-
-```cpp
-#include "nn/mse_loss.h"
-#include "optim/sgd.h"
-
-// Define loss and optimizer
-auto criterion = MSELoss<float>();
-auto optimizer = SGD<float>(model.parameters(), 0.01);
-
-// Training loop
-for (int epoch = 0; epoch < num_epochs; ++epoch) {
-    optimizer.zero_grad();
-    auto output = model.forward(input);
-    auto loss = criterion.forward(output, target);
-    loss.backward();
-    optimizer.step();
-}
+### 3.2 Class Diagram
+```mermaid
+classDiagram
+    direction TB
+
+    %% --- Python GUI / Bindings ---
+    class ModelController {
+        + create_model(config)
+        + start_training()
+        + stop_training()
+        + requestLoadDataset(images, labels)
+        + requestTrain(config)
+        + requestInference(image)
+    }
+    style ModelController fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,stroke-dasharray: 5 5
+
+    class Bindings {
+        &lt;&lt;PyBind11&gt;&gt;
+        + create_model(dict) NNModel*
+        + classify_pixels(buffer) int
+        + bind_model(module)
+    }
+    style Bindings fill:#eceff1,stroke:#455a64,stroke-width:2px
+
+    %% --- Data Utilities ---
+    class MNISTLoader {
+        &lt;&lt;Static Utility&gt;&gt;
+        + load_training_data(images_path, labels_path) MNISTDataset
+        + load_test_data(images_path, labels_path) MNISTDataset
+        + create_batches(dataset, batch_size) vector~vector~MNISTImage~~
+    }
+    style MNISTLoader fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+
+    class MNISTDataset {
+        + vector~MNISTImage~ images
+        + size_t num_images
+        + size_t image_width
+        + size_t image_height
+    }
+    style MNISTDataset fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+
+    %% --- Core Components ---
+    class NNModel {
+        - vector~Layer*~ Layers
+        - image data
+        - size_t imageHeight
+        - size_t imageWidth
+        - size_t imageDepth
+        - vector~TrainingMetrics~ trainingHistory
+        + NNModel(architecture, ...)
+        + train(image, int) pair~double,int~
+        + train_batch(vector~image~, vector~int~) pair~double,int~
+        + train_epochs(dataset, config, ...) vector~TrainingMetrics~
+        + classify(image) int
+        + getLayerFeatureMaps(layerIndex)
+        + getLayerType(layerIndex)
+        + store(folderPath) bool
+        + load(filePath) bool
+        + getTrainingHistory()
+    }
+    style NNModel fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    class Definitions {
+        &lt;&lt;Enumeration&gt;&gt;
+        OptimizerType
+        LayerType
+        activationFunction
+        initFunctions
+        poolingLayerType
+        distributionType
+    }
+    style Definitions fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    class architecture {
+        + size_t numOfConvLayers
+        + size_t numOfFCLayers
+        + vector~convKernels~ kernelsPerconvLayers
+        + vector~size_t~ neuronsPerFCLayer
+        + vector~activationFunction~ convLayerActivationFunc
+        + vector~activationFunction~ FCLayerActivationFunc
+        + vector~initFunctions~ convInitFunctionsType
+        + vector~initFunctions~ FCInitFunctionsType
+        + distributionType distType
+        + vector~size_t~ poolingLayersInterval
+        + vector~poolingLayerType~ poolingtype
+        + vector~poolKernel~ kernelsPerPoolingLayer
+        + OptimizerConfig optConfig
+    }
+    style architecture fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    
+    class TrainingConfig {
+        + size_t epochs
+        + size_t batch_size
+        + float validation_split
+        + bool use_validation
+        + bool shuffle
+        + uint random_seed
+    }
+    style TrainingConfig fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    class TrainingMetrics {
+        + int epoch
+        + double train_loss
+        + double train_accuracy
+        + double val_loss
+        + double val_accuracy
+    }
+    style TrainingMetrics fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+
+    %% --- Layer Hierarchy ---
+    class Layer {
+        &lt;&lt;Abstract&gt;&gt;
+        + getLayerType()* LayerType
+    }
+    style Layer fill:#fafafa,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+
+    class inputLayer {
+        - imageType normalizedImage
+        - LayerType type
+        + inputLayer(height, width, depth)
+        + start(image)
+        + getOutput() imageType
+    }
+    style inputLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class convLayer {
+        - vector~kernelType~ kernels
+        - vector~kernelType~ d_kernels
+        - vector~double~ bias
+        - vector~double~ d_bias
+        - vector~featureMapType~ featureMaps
+        - convKernels kernel_info
+        - vector~vector~vector~Optimizer*~~~ kernelOptimizers
+        - Optimizer* biasOptimizer
+        + convLayer(kernelConfig, ...)
+        + initKernel(...)
+        + forwardProp(inputFeatureMaps)
+        + backwardProp(inputFeatureMaps, grads)
+        + backwardProp_batch(inputFeatureMaps, grads)
+        + update()
+        + update_batch(n)
+        + convolute(inputFeatureMaps)
+    }
+    style convLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class poolingLayer {
+        - poolKernel kernel_info
+        - poolingLayerType poolingType
+        - vector~featureMapType~ featureMaps
+        + poolingLayer(kernelConfig, ...)
+        + forwardProp(inputFeatureMaps)
+        + backwardProp(inputFeatureMaps, grads)
+        + backwardProp_batch(inputFeatureMaps, grads)
+    }
+    style poolingLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class FullyConnected {
+        - vector~double~ inputCache
+        - vector~double~ preActivation
+        - vector~weights~ neurons
+        - vector~double~ bias
+        - vector~double~ outputData
+        - vector~Optimizer*~ neuronOptimizers
+        - Optimizer* biasOptimizer
+        + FullyConnected(numOfNeurons, ...)
+        + forwardProp(inputData)
+        + backwardProp(inputData, grads)
+        + backwardProp_batch(inputData, grads)
+        + update()
+        + update_batch(n)
+    }
+    style FullyConnected fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class FlattenLayer {
+        - vector~double~ flattened_Arr
+        + FlattenLayer(h, w, d)
+        + forwardProp(featureMaps)
+        + backwardProp(grads)
+        + backwardProp_batch(grads)
+        + flat(featureMaps)
+        + applyOptimizer(opt)
+    }
+    style FlattenLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    class outputLayer {
+        - vector~weights~ neurons
+        - vector~double~ bias
+        - vector~double~ outputData
+        - vector~Optimizer*~ neuronOptimizers
+        - Optimizer* biasOptimizer
+        + outputLayer(numOfClasses, ...)
+        + forwardProp(inputData)
+        + backwardProp(inputData, correctClass)
+        + backwardProp_batch(inputData, correctClass)
+        + update()
+        + update_batch(n)
+        + getClass() int
+    }
+    style outputLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    Layer <|-- inputLayer
+    Layer <|-- convLayer
+    Layer <|-- poolingLayer
+    Layer <|-- FullyConnected
+    Layer <|-- FlattenLayer
+    Layer <|-- outputLayer
+
+    %% --- Optimizers ---
+    class Optimizer {
+        &lt;&lt;Abstract&gt;&gt;
+        # double learning_rate
+        # double weight_decay
+        + update(weights, grads)*
+    }
+    style Optimizer fill:#fafafa,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+
+    class SGD {
+        + update(weights, grads)
+    }
+    style SGD fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class SGD_Momentum {
+        - double momentum
+        - vector~double~ v
+        + update(weights, grads)
+    }
+    style SGD_Momentum fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class Adam {
+        - double beta1
+        - double beta2
+        - double epsilon
+        - int t
+        - vector~double~ m
+        - vector~double~ v
+        + update(weights, grads)
+    }
+    style Adam fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    class RMSprop {
+        - double beta
+        - double epsilon
+        - vector~double~ s
+        + update(weights, grads)
+    }
+    style RMSprop fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+
+    Optimizer <|-- SGD
+    Optimizer <|-- SGD_Momentum
+    Optimizer <|-- Adam
+    Optimizer <|-- RMSprop
+
+    %% --- Loss Functions ---
+    class MSE {
+        + compute(pred, target)$
+        + gradient(grad, pred, target)$
+    }
+    style MSE fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class BinaryCrossEntropy {
+        + compute(pred, target)$
+        + gradient(grad, pred, target)$
+    }
+    style BinaryCrossEntropy fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class CategoricalCrossEntropy {
+        + compute(pred, target)$
+        + gradient(grad, pred, target)$
+    }
+    style CategoricalCrossEntropy fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+
+    %% --- Relationships ---
+    ModelController ..> Bindings : invokes
+    Bindings ..> NNModel : creates/wraps
+    Bindings ..> MNISTLoader : uses
+    
+    MNISTLoader ..> MNISTDataset : produces
+    NNModel ..> MNISTDataset : consumes
+    
+    NNModel "1" *-- "*" Layer : contains
+    NNModel ..> architecture : uses
+    NNModel ..> TrainingConfig : uses
+    NNModel ..> TrainingMetrics : produces
+    
+    NNModel ..> Optimizer : uses
+    FullyConnected ..> Optimizer : uses
+    convLayer ..> Optimizer : uses
+    outputLayer ..> Optimizer : uses
 ```
 
 ---
 
-## 💡 Examples
+## 4. Implementation Details
 
-### 📁 Available Examples
+### 4.1. Tech Stack
+- **Core Logic:** C++ for high-performance tensor operations and OpenMP for multi-threaded parallel processing.
+- **GUI Framework:** Python 3.13 with PyQt6 for a responsive, cross-platform interface.
+- **Interface Bridge:** pybind11 to expose C++ neural network classes and functions to the Python environment.
+- **Visualization:** PyQtGraph for real-time loss/accuracy metrics and QImage/QPainter for feature map rendering.
 
-| Example           | Description                  | Status            |
-| ----------------- | ---------------------------- | ----------------- |
-| `simple_test.cpp` | Basic tensor operations demo | ✅ Ready          |
-| `xor_solver.cpp`  | XOR problem solver with MLP  | 🚧 In Development |
+### 4.2. Architectural Design
+Due to the nature of how neural networks work and how we foresaw the program to work and behave, a combination of three architectural design patterns was used:
 
-### 🚀 Running Examples
+#### 4.2.1. Model-View-Controller (MVC) Architecture
+The main Idea in mind in making the project is to be educational and simple, so a GUI is needed for this purpose, so the MVC pattern were used since the program is interactive, and information needs to be conveyed to the user in different ways.
 
-#### Windows
+- **Model:** The Neural Network model implemented in C++ (NNModel) and the training logic handled by ModelWorker in Python. 
+- **View:** The GUI, composed of several specialized widgets:
+    - Training Tab: Displays "Training Preview" (images and labels) and "Feature Maps".
+    - Metrics Tab: Visualizes "Loss" and "Accuracy" charts.
+    - Configuration Tab: Provides fields for "Hyperparameters" (Learning Rate, Epochs, Batch Size) and "Network Architecture" (Conv/FC layer counts).
+    - Log Output: Real-time terminal-style logging at the bottom of the window.
+- **Controller:** The ModelController and ModelWorker manage the flow of data between the GUI and the C++ backend using asynchronous threads (QThread) to keep the UI responsive during heavy computation.
 
-```cmd
-# Using the manager
-CGROOT_Manager.bat
-# Select option 3 or 4 to run examples
+#### 4.2.2. Layered Architecture 
+The program is complex so abstractions at different layers are needed.
+The layering structure is simple and consists of three main layers:
 
-# Or manually
-.\build\bin\Debug\simple_test.exe
-.\build\bin\Debug\cgrunner.exe
-```
+- **The (Neural Network) Layers:** which consists of the class Layer and its derivative classes (inputLayer, convLayer, poolingLayer, FullyConnected, FlattenLayer, outputLayer) with every layer being abstract as it hides its algorithms and only communicates with its user using simple functions (3.2 Class Diagram).
+- **Neural Network Model (NNModel):** Responsible for training logic. The user interacts via the GUI to set "Learning Rate", "Optimizer", and "Weight Decay". It uses functions like classify, train, train_batch, and train_epochs (3.2 Class Diagram).
+- **GUI:** Further abstractions is accomplished using the GUI since the user doesn’t need to write code to load the data to the model or how to use the model functions, all the user needs is to use the simple and informative GUI.
 
-#### Linux/macOS
+#### 4.2.3. Pipe and Filter Architecture
+What neural networks do are basically doing data processing and updating some variables using the results, and the processing is done sequentially as every layer does it works on the data and pass it to the next layer (the NNModel class is the one responsible for this operation). The processing operations consists of two main operations (3.3 Sequence Diagram):
 
-```bash
-./bin/simple_test
-./bin/cgrunner
-```
+- **Forward Propagation:** Input -> Convolution -> Pooling -> Flatten -> Fully Connected -> Output
+- **Backward Propagation and update:** Output -> Fully Connected -> Flatten -> Pooling -> Convolution -> Input.
 
-### 📝 Example: Simple Tensor Operations
+### 4.3. Functions
+Here is a brief description of the functions of the different classes, for more compact perspective look at 3.2 Class Diagram.
 
-```cpp
-#include <iostream>
-#include "core/tensor.h"
+#### 4.3.1. Layers Functions
+- **forwardProp:** Do the forward propagation operation corresponding to the layer, different layers may have different names for this function, the operation of each is described below, with the functions with different name have the other name in brackets [func_name].
+    - **inputLayer [start]:** apply normalization on the data to be in the range from 0 to 1.
+    - **FullyConnected:** applies the forward propagation algorithm of a fully connected layer by applying the dot product and then applies the activation function.
+    - **FlattenLayer:** flattens a 3D vector coming from convLayer to be fed to a FullyConnected.
+    - **convLayer:** applies the forward propagation algorithm of a convolution layer by applying the convolution operation and then applies the activation function.
+    - **poolingLayer:** reduce the size of the incoming feature image to reduce computation.
+    - **outputLayer:** acts just as FullyConnected but have softmax as activation function by default.
+- **backwardProp:** Do the backward propagation operation corresponding to the layer, the operation of each is described below. There is another variation of this function called backwardProp_batch which is used when training with batches instead of individual samples.
+    - **FullyConnected:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
+    - **FlattenLayer:** passes the gradients back to the previous layer.
+    - **convLayer:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
+    - **poolingLayer:** passes the gradients back to the previous layer
+    - **outputLayer:** apply the backward propagation using categorical cross entropy loss function and calculates the gradients of the previous layer.
+- **update:** updates the weights of FullyConnected and outputLayer and the kernels of convLayer by calling the update function of the used optimizer, both works the same way. There is another variation of this function called update_batch which is used when training with batches instead of individual samples.
 
-int main() {
-    // Create tensors
-    auto a = Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6});
-    auto b = Tensor<float>({2, 3}, {2, 3, 4, 5, 6, 7});
+#### 4.3.2. NNModel Functions
 
-    // Perform operations
-    auto c = a + b;
-    auto d = a * b;
+- **classify:** forward propagates the image through the layers by using the forward propagation of each layer, it does such by first checking what was the previous layer in order to get the data from it. In the end it returns the detected type of the image (which could be used for either training or as classification).
+- **train:** train the model on an image (or a batch of images if train_batch were to be used). The function calls classify first then backward propagates the gradients by first checking what the layers before and after to get the data and gradients from them, respectively, then updates the weights and kernels of each layer. 
+- **train_epoch:** used to train the model on a complete epoch.
 
-    // Print results
-    std::cout << "Tensor a:\n" << a << std::endl;
-    std::cout << "Tensor b:\n" << b << std::endl;
-    std::cout << "a + b:\n" << c << std::endl;
-    std::cout << "a * b:\n" << d << std::endl;
+#### 4.3.3. Optimizer Functions
+The optimizer class serves as the base for various optimization algorithms used to update model weights.
+- **Optimizer (Base Class):** Defines the interface with a virtual `update` method.
+- **SGD:** Implements Stochastic Gradient Descent. Updates weights using gradients and an optional L2 weight decay.
+- **SGD_Momentum:** Adds a momentum term to SGD, helping accelerate gradients in the right direction and dampen oscillations.
+- **RMSprop:** Maintains a moving average of the squared gradients to normalize the gradient, adapting the learning rate for each weight.
+- **Adam:** Adaptive Moment Estimation. Utilizes both the first moment (mean) and second moment (uncentered variance) of the gradients to adapt learning rates for each parameter.
 
-    return 0;
-}
-```
+To complete the implementation details regarding the GUI files and functions, here is the documentation detailing the Python-based PyQt6 infrastructure:
 
----
+#### 4.3.4. GUI Files and Widget Functions
+The graphical user interface is structured into modular widgets, each responsible for a specific stage of the neural network lifecycle:
 
-## 🏗️ Project Structure
+1. **mainwindow.py (Main Window)**  
+   This is the application's entry point and orchestrator. It manages the primary layout and connects the user's actions to the backend controller.
+    - **setup_ui:** Initializes the main layout using a QSplitter to allow users to resize the workspace between the "Tabbed View" and the "Log Output".
+    - **on_load_dataset:** Opens a QFileDialog to select MNIST-format image files and automatically attempts to discover the corresponding labels file.
+    - **log_message:** Appends status updates and system messages to the read-only "Log Output" text panel, supporting auto-scroll functionality.
+    - **on_store_model_requested:** Gathers all current architecture (Conv/Pool/FC), training parameters (Hyperparameters), and GUI settings to send a unified configuration payload to the controller for saving.
 
-```
-CGROOT/
-├── 📁 src/                    # Source code
-│   ├── 📁 core/              # Core tensor and parameter classes
-│   │   ├── tensor.h/cpp      # Main tensor implementation
-│   │   ├── parameter.h       # Parameter wrapper for learnable weights
-│   │   └── shape.h           # Shape utilities
-│   ├── 📁 autograd/          # Automatic differentiation
-│   │   ├── graph.h/cpp       # Computational graph
-│   │   ├── op_nodes.h/cpp    # Operation nodes
-│   │   └── grad_fn.h         # Base class for gradient functions
-│   ├── 📁 math/              # Mathematical operations
-│   │   └── cpu_kernels.h/cpp # CPU-optimized kernels
-│   ├── 📁 nn/                # Neural network layers
-│   │   ├── module.h          # Base module class
-│   │   ├── linear.h          # Linear layer
-│   │   ├── relu.h            # ReLU activation
-│   │   ├── sigmoid.h         # Sigmoid activation
-│   │   ├── sequential.h      # Sequential container
-│   │   ├── conv2d.h          # 2D Convolution
-│   │   ├── mse_loss.h        # MSE loss function
-│   │   └── cross_entropy_loss.h # Cross entropy loss
-│   ├── 📁 optim/             # Optimizers
-│   │   ├── optimizer.h       # Base optimizer class
-│   │   ├── sgd.h             # SGD optimizer
-│   │   └── adam.h            # Adam optimizer
-│   └── 📁 gui_py/             # Python GUI application
-│       ├── main.py           # Main GUI entry point
-│       └── components/       # GUI components
-├── 📁 examples/              # Example programs
-│   ├── simple_test.cpp       # Basic functionality demo
-│   └── xor_solver.cpp        # XOR problem solver
-├── 📁 tests/                 # Unit tests
-│   ├── test_tensor.cpp       # Tensor operation tests
-│   └── test_autograd.cpp     # Autograd tests
-├── 📁 scripts/               # Utility scripts
-│   ├── CGROOT_Manager.py     # Cross-platform project manager
-│   └── package_app.py        # Script for packaging GUI
-├── 📁 build/                 # Build output directory
-├── 📄 CMakeLists.txt         # CMake configuration
-├── 📄 CGROOT_Manager.bat     # Windows batch script (deprecated by Python manager)
-├── 📄 requirements.txt       # Python dependencies
-└── 📄 README.md              # This file
-```
+2. **configurationwidget.py (Configuration Tab)**  
+   This file manages the hyperparameters and network architecture settings.
+    - **setup_network_tab:** Dynamically builds the architecture interface, allowing users to add or remove "Convolutional" and "Fully Connected" layers.
+    - **rebuild_conv_layer_controls / rebuild_fc_layer_controls / rebuild_pool_layer_controls:** Dynamically generates UI rows for each layer based on the user's count settings, allowing per-layer customization of kernels, strides, padding, and activation functions.
+    - **validate_architecture:** Simulates the forward pass of the network to ensure that the input dimensions (Width/Height) remain positive after all convolution and pooling operations, preventing crashes before training starts.
+    - **get_architecture_parameters:** Aggregates configuration from all dynamic layer widgets into a dictionary for the backend.
+    - **on_optimizer_changed:** Adjusts the visibility of input fields (like "Beta1", "Beta2", or "Momentum") based on the selected optimization algorithm (e.g., Adam vs. SGD).
+    - **sync_output_layer:** A helper function that ensures the number of neurons in the final layer always matches the "Number of Classes" specified in the model settings.
+    - **on_save_config / on_load_config:** Handles the serialization of the current GUI state into a JSON file for future sessions.
 
----
+3. **trainingwidget.py (Training Tab)**  
+   Responsible for real-time visualization of the learning process.
+    - **display_image:** Renders the current training sample as a "Training Preview", showing the image alongside its predicted and true labels.
+    - **display_feature_maps:** Processes 3D data (vector<vector<vector<float>>>) from the C++ model and generates a grid of grayscale images to visualize what the filters are "seeing" at a specific layer.
+    - **on_viz_toggled:** A master switch that enables or disables real-time data transfer between C++ and Python to maximize training speed.
+    - **on_test_clicked:** Triggers the testing process on a separate test dataset and displays results (Loss/Accuracy) and the Confusion Matrix.
 
-## 🛠️ Available Scripts
+4. **metricswidget.py (Metrics Tab)**  
+   Focuses on statistical performance monitoring.
+    - **updateMetrics:** Receives live data from the controller to plot the "Loss" and "Accuracy" curves for both training and validation sets. It handles dynamic X-axis rescaling.
+    - **save_charts:** Exports the current Training/Validation Loss and Accuracy charts as high-resolution PNG images to a user-selected directory.
+    - **set_animations:** Toggles chart transitions to save CPU resources during high-speed training.
 
-### 🪟 Python Manager (Cross-platform)
+5. **confusion_matrix.py (Confusion Matrix Widget)**  
+   Visualizes classification performance.
+    - **update_matrix:** Takes a 2D list (ground truth vs predicted) and renders a color-coded grid using QPainter. Darker cells represent higher counts.
+    - **paintEvent:** Custom painting logic that draws the grid, text labels, and color intensity overlays.
 
-| Command                                            | Description                                   |
-| -------------------------------------------------- | --------------------------------------------- |
-| `python scripts/CGROOT_Manager.py`                 | Interactive menu with all options             |
-| `python scripts/CGROOT_Manager.py --build`         | Build Release configuration                   |
-| `python scripts/CGROOT_Manager.py --clean --build` | Clean and build                               |
-| `python scripts/CGROOT_Manager.py --gui`           | Launch GUI application                        |
-| `python scripts/CGROOT_Manager.py --full`          | **Full cycle**: clean → build → package → run |
-| `python scripts/CGROOT_Manager.py --test`          | Run test executables                          |
+6. **utils/custom_loader.py (Custom Dataset Loader)**  
+   Utility for loading non-MNIST datasets.
+    - **load_from_folder:** Scans a directory structure (root/class_name/image.png), resizes images to target dimensions (e.g., 28x28), converts them to grayscale or RGB, and packs them into the C++ compatible MNISTDataset structure.
 
-### 📦 Packaging
+7. **inferencewidget.py (Inference Tab)**  
+   Allows users to run the trained model on single images.
+    - **on_load_image:** Opens a file dialog to load an external image (PNG/JPG).
+    - **on_run_inference:** Sends the loaded image to the model for prediction and updates the results area with the predicted class and confidence scores.
+    - **displayPrediction:** Updates the UI with the top predicted class and a probability distribution list.
 
-```bash
-# Create standalone executable
-python scripts/package_app.py
+8. **imageviewerwidget.py (Image Viewer)**  
+   A reusable component for displaying images while maintaining aspect ratio.
+    - **displayImage:** Scales and renders a QImage onto a label with smooth transformation, ensuring the image fits within the layout without distortion.
 
-# Output will be in: dist/CGROOT_Trainer/CGROOT_Trainer.exe
-```
+9. **spinner.py (Loading Indicator)**  
+   A custom-drawn loading spinner used during long operations.
+    - **paintEvent:** Draws a rotating arc using QPainter to indicate activity when the main thread is waiting for a background task.
 
-### 🐧 Linux/macOS Commands
+10. **utils/visualization_manager.py**  
+    Handles the complex conversion of raw C++ data to PyQt images.
+    - **create_preview_image:** Converts flattened 1D vectors (from C++) into 2D QImages, handling both Grayscale (depth=1) and RGB (depth=3) formats, including planar-to-interleaved conversion for RGB.
 
-```bash
-# Build commands
-make                    # Build all targets
-make cgroot_core       # Build C++ core only
+11. **utils/paths.py**  
+    Centralizes file path management.
+    - **get_logs_dir / get_models_dir:** Returns absolute paths to standard application directories, creating them if they don't exist, to ensure cross-platform compatibility.
 
-# Run GUI
-python3 src/gui_py/main.py
+12. **dark_theme.py**  
+    Manages the application's visual style.
+    - **apply_dark_theme:** Configures the global QPalette with a dark color scheme (Project Fusion) and applies specific QSS stylesheets for widgets like GroupBoxes and ProgressBars.
 
-# Clean commands
-make clean             # Clean build files
-rm -rf build/          # Remove entire build directory
-```
+#### 4.3.5. Controller and Worker Functions
+The GUI communicates with the C++ backend through a dedicated controller-worker thread system to prevent interface freezing:
 
----
+- **model_controller.py:** 
+  Acts as a bridge between the main thread (GUI) and the worker thread.
+    - **Signals:** Defines all communication channels (requestTrain, metricsUpdated, etc.) to ensure thread safety without direct function calls across threads.
+    - **cleanup:** Stop the worker thread and waits for it to finish before application exit used in the main window close event.
 
-## 🧪 Testing
+- **model_worker.py (The "Brain" of the GUI):**
+  Manages the lifecycle of the C++ objects and background threads.
+    - **trainModel:** Instantiates a TrainingThread that executes the C++ training loop. It connects internal signals to emit progressUpdated and featureMapsReady back to the UI at controlled intervals.
+    - **loadModel:** Finds the matching .bin weights and .json configuration files to restore a previously saved state. It also deserializes training history to restore the "Metrics Graphs" to their previous state.
+    - **runInference:** Converts a QImage into a raw pixel buffer, scales it to the required dimensions, and calls the C++ classify_pixels helper for a prediction.
+    - **runTesting:** Instantiates a TestingThread to evaluate the model on a test set, returning final metrics and a confusion matrix.
+    - **cleanup:** Explicitly stops all child threads (Loader, Training, Testing) to prevent "QThread Destroyed while running" errors on exit.
 
-### 🧪 Running Tests
+- **Background Threads (workers/)**
+    - **TrainingThread:** Runs `model.train_epoch` in a loop, handling batching and emitting visualization data (feature maps, current image) if enabled.
+    - **LoaderThread:** Handles the blocking I/O of loading large binary datasets or scanning thousands of image files from folders.
+    - **TestingThread:** Runs `model.evaluate` on the test set and computes the confusion matrix off the main thread.
 
-#### Windows
+#### 4.3.6. Core C++ Utilities
+These classes handle the low-level data and file operations:
 
-```cmd
-# Using the manager
-CGROOT_Manager.bat
-# Select option 8 to check project status
+1. **MNISTLoader (src/core/utils/mnist_loader.cpp)**  
+   Reads the standard IDX binary format used by the MNIST dataset.
+    - **load_images:** Parses the binary file header (magic number, count, rows, cols) and extracts pixel data into a vector of MnistImage objects.
+    - **load_labels:** Parses the label file and assigns ground truth values to the corresponding images.
 
-# Or manually run test executables
-.\build\bin\Debug\simple_test.exe
-```
+2. **DataUtils (src/core/utils/data_utils.cpp)**  
+   Helper functions for data manipulation.
+    - **normalize:** Scales pixel values from [0, 255] to [0.0, 1.0] for optimal network training.
+    - **one_hot_encode:** Converts integer labels (e.g., '5') into a probability vector (e.g., [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]).
 
-#### Linux/macOS
-
-```bash
-# Run tests
-make test
-# Or run individual test executables
-./bin/simple_test
-```
-
-### 📋 Test Coverage
-
-| Component                     | Test File           | Status     | Coverage                |
-| ----------------------------- | ------------------- | ---------- | ----------------------- |
-| **Tensor Operations**         | `test_tensor.cpp`   | 🚧 Planned | Basic math operations   |
-| **Automatic Differentiation** | `test_autograd.cpp` | 🚧 Planned | Gradient computation    |
-| **Neural Network Layers**     | Integration tests   | 🚧 Planned | Forward/backward passes |
-| **Optimizers**                | Integration tests   | 🚧 Planned | Parameter updates       |
-
----
-
-## 🤝 Contributing
-
-We welcome contributions to CGROOT++! Here's how you can help:
-
-### 🐛 Reporting Issues
-
-- Use the GitHub issue tracker
-- Provide detailed reproduction steps
-- Include system information and error messages
-
-### 💡 Suggesting Features
-
-- Open a GitHub issue with the "enhancement" label
-- Describe the use case and expected behavior
-- Consider contributing the implementation
-
-### 🔧 Development Setup
-
-1. **Fork the repository**
-2. **Clone your fork**:
-   ```bash
-   git clone https://github.com/yourusername/CGROOT.git
-   cd CGROOT
-   ```
-3. **Create a feature branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-4. **Make your changes** and test thoroughly
-5. **Commit your changes**:
-   ```bash
-   git commit -m "Add: your feature description"
-   ```
-6. **Push to your fork**:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-7. **Create a Pull Request**
-
-### 📋 Development Guidelines
-
-- **Code Style**: Follow existing code conventions
-- **Documentation**: Update README and code comments
-- **Testing**: Add tests for new features
-- **Performance**: Consider performance implications
-- **Compatibility**: Ensure cross-platform compatibility
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **PyTorch** for API design inspiration
-- **Eigen** for mathematical operations reference
-- **CMake** for cross-platform build system
-- **Visual Studio** for excellent C++ development tools
-
----
-
-## 🔗 Repository & Links
-
-- **GitHub Repository**: [https://github.com/3omd4/CGROOT](https://github.com/3omd4/CGROOT)
-- **Gantt Chart**: [Project Timeline](https://www.notion.so/28fa5133a8ef8068aeb9c2e69dc66e37?pvs=21)
-- **Issues & Discussions**: [GitHub Issues](https://github.com/3omd4/CGROOT/issues)
-
----
-
-<div align="center">
-
-**Made with ❤️ by the CGROOT++ Team**
-
-[⭐ Star us on GitHub](https://github.com/3omd4/CGROOT) • [🐛 Report Issues](https://github.com/3omd4/CGROOT/issues) • [💬 Discussions](https://github.com/3omd4/CGROOT/discussions)
-
-</div>
+3. **StoreAndLoad (src/core/utils/store_and_load.h)**  
+   Manages model persistence using a custom binary format.
+    - **writeModelHeader:** writes the "NNMD" magic bytes and version to the file ensures validity.
+    - **writeConvKernels / writeNeuronWeights:** Serializes the 4D kernel tensors and 2D weight matrices to disk.
