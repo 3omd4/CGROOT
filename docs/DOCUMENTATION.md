@@ -25,7 +25,6 @@ Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abs
 ### 1.3 Target Audience
 * **Students & Educators:** Those seeking to understand the internal mathematics and implementation of deep learning (CNNs, Backpropagation).
 
-
 ---
 
 ## 2. System Analysis
@@ -44,6 +43,7 @@ Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abs
 * **NFR-03 Reliability:** Gradient calculations must be numerically verified, and the system must handle data types safely between C++ and Python.
 * **NFR-04 Extensibility:** The modular architecture (using pybind11) shall allow for easy addition of new layers and optimizers without refactoring the core engine.
 * **NFR-05 Portability:** The system must be cross-platform (Windows, Linux, macOS), buildable via CMake, and function entirely locally without external dependencies.
+
 ---
 
 ## 3. System Design
@@ -153,6 +153,7 @@ sequenceDiagram
     Note over User, Main: Completion
     Main->>User: Display Results / Save Model
 ```
+
 ### 3.2 Class Diagram
 ```mermaid
 classDiagram
@@ -444,41 +445,56 @@ classDiagram
     outputLayer ..> Optimizer : uses
 ```
 
-
 ---
 
 ## 4. Implementation Details
 
-### 4.1 Tech Stack
+### 4.1. Tech Stack
 * **Core Engine:** **C++17** (Chosen for high-performance memory management and template meta-programming capabilities).
 * **Build System:** **CMake 3.10+** (Chosen for cross-platform compatibility).
 * **GUI:** **Python 3.8 + PyQt6 + PyQtGraph** (Chosen for rapid UI development and high-speed plotting capabilities compared to native C++ GUI frameworks).
-* **Interfacing:** Custom Subprocess pipes (To communicate between the C++ backend and Python frontend).
+* **Interfacing:** Custom pybind11 bindings (To provide a seamless, high-performance bridge between C++ and Python).
 
-### 4.2 Design Patterns
-1.  **Composite Pattern (`Sequential` Class):**
-    * *Justification:* Used to treat individual layers (like `Linear`) and collections of layers (`Sequential`) uniformly. This allows users to nest models within models seamlessly.
-2.  **Strategy Pattern (`Optimizer` Class):**
-    * *Justification:* Allows the optimization algorithm (SGD, Adam, RMSProp) to be swapped interchangeably at runtime without changing the core training loop code.
-3.  **Template Method Pattern (Layers):**
-    * *Justification:* The `Module` base class defines the skeleton of the `forward` pass, while subclasses (`ReLU`, `Linear`) implement the specific mathematical logic.
+### 4.2. Architectural Design
+Due to the nature of how neural networks work and how we foresaw the program to work and behave, a combination of three architectural design patterns was used:
 
-### 4.3 Key Algorithms: Automatic Differentiation (Backward Pass)
-The core of CGROOT++ is the Autograd engine. It uses a **Define-by-Run** dynamic graph.
-* **Time Complexity:** $O(N)$ where $N$ is the number of operations in the graph.
+#### 4.2.1. Model-View-Controller (MVC) Architecture
+The main Idea in mind in making the project is to be educational and simple, so a GUI is needed for this purpose, so the MVC pattern were used since the program is interactive, and information needs to be conveyed to the user in different ways.
+* **Model:** The Neural Network model and the training logic.
+* **View:** The GUI, as it gives information in many forms, Charts (Loss and accuracy), Logs and Image and feature maps viewing in addition to other features like inference that is used to classify an image.
+* **Controller:** The interactions with the GUI and the loader which feeds the dataset to the model.
 
-**Pseudocode:**
-```text
-Function Backward(node):
-    If node has no gradient: return
-    
-    Current_Gradient = node.gradient
-    
-    For each parent of node:
-        Local_Gradient = ComputeDerivative(node, parent)
-        Parent_Global_Gradient = Current_Gradient * Local_Gradient
-        
-        Accumulate parent.gradient += Parent_Global_Gradient
-        
-        If parent is not a leaf:
-            Backward(parent) // Recursive call
+#### 4.2.2. Layered Architecture 
+The program is complex so abstractions at different layers are needed. The layering structure is simple and consists of three main layers:
+* **The (Neural Network) Layers:** which consists of the class Layer and its derivative classes (inputLayer, convLayer, poolingLayer, FullyConnected, FlattenLayer, outputLayer) with every layer being abstract as it hides its algorithms and only communicates with its user using simple functions (3.2 Class Diagram).
+* **Neural Network Model (NNModel):** The NNModel is responsible for the training logic, the user need not know how it works but rather gives it the hyper parameters and use the functions classify, train, train_batch, and train_epoch (3.2 Class Diagram).
+* **GUI:** Further abstractions is accomplished using the GUI since the user doesn’t need to write code to load the data to the model or how to use the model functions, all the user needs is to use the simple and informative GUI.
+
+#### 4.2.3. Pipe and Filter Architecture
+What neural networks do are basically doing data processing and updating some variables using the results, and the processing is done sequentially as every layer does it works on the data and pass it to the next layer (the NNModel class is the one responsible for this operation). The processing operations consists of two main operations (3.3 Sequence Diagram):
+* **Forward Propagation:** Input -> Convolution -> Pooling -> Flatten -> Fully Connected -> Output
+* **Backward Propagation and update:** Output -> Fully Connected -> Flatten -> Pooling -> Convolution -> Input.
+
+### 4.3. Functions
+Here are a brief description of the functions of the different classes, for more compact perspective look at 3.2 Class Diagram.
+
+#### 4.3.1. Layers Functions
+* **forwardProp:** Do the forward propagation operation corresponding to the layer, different layers may have different names for this function, the operation of each is described below, with the functions with different name have the other name in brackets [func_name].
+    * **inputLayer [start]:** apply normalization on the data to be in the range from 0 to 1.
+    * **FullyConnected:** applies the forward propagation algorithm of a fully connected layer by applying the dot product and then applies the activation function.
+    * **FlattenLayer:** flattens a 3D vector coming from convLayer to be fed to a FullyConnected.
+    * **convLayer:** applies the forward propagation algorithm of a convolution layer by applying the convolution operation and then applies the activation function.
+    * **poolingLayer:** reduce the size of the incoming feature image to reduce computation.
+    * **outputLayer:** acts just as FullyConnected but have softmax as activation function by default.
+* **backwardProp:** Do the backward propagation operation corresponding to the layer, the operation of each is described below. There is another variation of this function called backwardProp_batch which is used when training with batches instead of individual samples.
+    * **FullyConnected:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
+    * **FlattenLayer:** passes the gradients back to the previous layer.
+    * **convLayer:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
+    * **poolingLayer:** passes the gradients back to the previous layer.
+    * **outputLayer:** apply the backward propagation using categorical cross entropy loss function and calculates the gradients of the previous layer.
+* **update:** updates the weights of FullyConnected and outputLayer and the kernels of convLayer by calling the update function of the used optimizer, both works the same way. There is another variation of this function called update_batch which is used when training with batches instead of individual samples.
+
+#### 4.3.2. NNModel Functions
+* **classify:** forward propagates the image through the layers by using the forward propagation of each layers, it does such by first checking what was the previous layer in order to get the data from it. In the end it returns the detected type of the image (which could be used for either training or as classification).
+* **train:** train the model on an image (or a batch of images if train_batch were to be used). The function calls classify first then backward propagates the gradients by first checking what the layers before and after to get the data and gradients from them, respectively, then updates the weights and kernels of each layer. 
+* **train_epoch:** used to train the model on a complete epoch.
