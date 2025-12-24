@@ -2,6 +2,8 @@
 import sys
 from pathlib import Path
 
+from PyQt6.QtCore import Qt
+
 # Try to find the build directory relative to this script
 script_dir = Path(__file__).parent
 project_root = script_dir.parent.parent
@@ -30,6 +32,11 @@ from mainwindow import MainWindow
 from dark_theme import apply_dark_theme
 
 def main():
+    # Enable High DPI Scaling
+    if hasattr(Qt, 'HighDpiScaleFactorRoundingPolicy'):
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+            
     app = QApplication(sys.argv)
     
     # Set AppUserModelID for proper taskbar icon handling

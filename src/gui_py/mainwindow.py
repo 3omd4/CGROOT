@@ -14,6 +14,7 @@ from widgets.spinner import SpinnerWidget
 from controllers.model_controller import ModelController
 from utils.resource_path import resource_path
 from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import pyqtSlot
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -27,7 +28,7 @@ class MainWindow(QMainWindow):
         
         self.setup_ui()
         self.setup_menubar()
-        # self.setup_toolbar()
+        self.setup_toolbar()
         self.setup_statusbar()
         self.create_connections()
         
@@ -114,40 +115,60 @@ class MainWindow(QMainWindow):
         how_to_act.triggered.connect(self.show_how_to_use)
         help_menu.addAction(how_to_act)
 
+    @pyqtSlot()
     def on_load_dataset(self):
-        from PyQt6.QtWidgets import QFileDialog
-        from utils.paths import get_datasets_dir
-        import os
+        # Ask user: MNIST Files or Custom Folder?
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Load Dataset")
+        msg_box.setText("Select dataset format:")
+        btn_mnist = msg_box.addButton("MNIST Files (Binary)", QMessageBox.ButtonRole.ActionRole)
+        btn_folder = msg_box.addButton("Custom Folder (Images)", QMessageBox.ButtonRole.ActionRole)
+        msg_box.addButton(QMessageBox.StandardButton.Cancel)
+        msg_box.exec()
         
-        # Default path
-        datasets_dir = get_datasets_dir()
-        start_dir = str(datasets_dir) if datasets_dir.exists() else "."
+        button = msg_box.clickedButton()
+        
+        if button == btn_mnist:
+            self.load_mnist_dataset()
+        elif button == btn_folder:
+            self.load_custom_dataset()
             
+    def load_mnist_dataset(self):
+        # Default dir
+        script_dir = Path(__file__).parent
+        project_root = script_dir.parent.parent
+        default_dir = project_root / "src" / "data" / "datasets" / "mnist"
+        
+        dir_name = str(default_dir) if default_dir.exists() else ""
+        
+        # 1. Select Images
         images_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Training Images", start_dir,
-            "IDX Files (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)"
+            self, "Select MNIST Images File", dir_name,
+            "MNIST Images (*.idx3-ubyte *.idx4-ubyte);;All Files (*.*)"
         )
         
         if not images_path:
             return
-
-        # Attempt to auto-discover labels file
+            
+        # 2. Auto-detect Labels (if standard naming)
         dir_name = os.path.dirname(images_path)
         base_name = os.path.basename(images_path)
         
-        # Common naming convention: swap 'images' with 'labels'
-        # e.g. train-images.idx3-ubyte -> train-labels.idx1-ubyte
-        #      train-images-idx3-ubyte -> train-labels-idx1-ubyte
+        labels_path = ""
+        # Common pairs: 
+        # train-images.idx3-ubyte <-> train-labels.idx1-ubyte
+        # t10k-images.idx3-ubyte <-> t10k-labels.idx1-ubyte
+        
         if 'images' in base_name:
             labels_name = base_name.replace('images', 'labels')
-            # Fix: Also replace idx3 with idx1 to handle standard MNIST extensions
+            # Adjust extension if needed (idx3 -> idx1)
             labels_name = labels_name.replace('idx3', 'idx1') 
             labels_name = labels_name.replace('idx4', 'idx1') 
-
         else:
             # Fallback check for common patterns if 'images' string not explicit or different case
             labels_name = base_name.replace('idx3', 'idx1') 
             labels_name = labels_name.replace('idx4', 'idx1') 
+
 
         guess_labels_path = os.path.join(dir_name, labels_name)
         
@@ -187,8 +208,25 @@ class MainWindow(QMainWindow):
         
         # Update Inference Tab
         self.inference_tab.set_dataset_type(dataset_type)
+        
+        # Clear previous metrics on new dataset load
+        # self.metrics_tab.clear()
             
         self.controller.requestLoadDataset.emit(images_path, labels_path)
+
+    def load_custom_dataset(self):
+        dir_path = QFileDialog.getExistingDirectory(self, "Select Root Dataset Folder")
+        if not dir_path:
+            return
+
+        self.dataset_type = "Custom"
+        self.log_message(f"Selected Custom Dataset Folder: {dir_path}")
+        
+        self.inference_tab.set_dataset_type("Custom")
+        self.metrics_tab.clear()
+        
+        # Pass empty string as labels path for directory mode
+        self.controller.requestLoadDataset.emit(dir_path, "")
 
     def setup_toolbar(self):
         toolbar = QToolBar("Main Toolbar")
@@ -201,6 +239,15 @@ class MainWindow(QMainWindow):
         
         stop_action = toolbar.addAction(QIcon(resource_path("icons/stop.png")), "&Stop Training (Ctrl+S)", self.training_tab.on_stop_clicked)
         stop_action.setShortcut("Ctrl+S")
+        
+        save_action = toolbar.addAction(QIcon(resource_path("icons/save.png")), "&Save Model (Ctrl+S)", self.training_tab.on_save_clicked)
+        save_action.setShortcut("Ctrl+I")
+
+        load_action = toolbar.addAction(QIcon(resource_path("icons/load.png")), "&Load Model (Ctrl+L)", self.training_tab.on_load_clicked)
+        load_action.setShortcut("Ctrl+L")
+
+        toolbar.addSeparator()
+        toolbar.visibility = False
 
     def setup_statusbar(self):
         self.status_bar = QStatusBar()
@@ -218,6 +265,8 @@ class MainWindow(QMainWindow):
         self.progress_bar.setMaximumWidth(200)
         self.progress_bar.setTextVisible(True)
         self.status_bar.addPermanentWidget(self.progress_bar)
+
+        self.status_bar.setContentsMargins(10, 0, 10, 5) # Add padding from screen edges
 
     def create_connections(self):
         # Controller -> MainWindow
@@ -301,6 +350,14 @@ class MainWindow(QMainWindow):
         
         self.metrics_tab.clear()
         self.metrics_tab.set_total_epochs(full_config['epochs'])
+        
+        # Architecture Validation
+        is_valid, error = self.config_tab.validate_architecture()
+        if not is_valid:
+            QMessageBox.critical(self, "Invalid Architecture", f"Cannot start training.\n\n{error}")
+            self.training_tab.set_training_state(False) # Reset button state
+            return
+
         self.controller.requestTrain.emit(full_config)
         
     def stop_training(self):
@@ -318,9 +375,9 @@ class MainWindow(QMainWindow):
         self.progress_bar.setMaximum(max_val)
         self.progress_bar.setValue(val)
         
-    def update_metrics(self, loss, acc, epoch):
-        self.metrics_tab.updateMetrics(loss, acc, epoch)
-        self.status_label.setText(f"Epoch: {epoch} | Loss: {loss:.4f} | Accuracy: {acc*100:.2f}%")
+    def update_metrics(self, t_loss, t_acc, v_loss, v_acc, epoch):
+        self.metrics_tab.updateMetrics(t_loss, t_acc, v_loss, v_acc, epoch)
+        self.status_label.setText(f"Epoch: {epoch} | Loss: {t_loss:.4f} | Acc: {t_acc*100:.2f}%")
         
     def training_finished(self):
         self.training_tab.training_finished()
@@ -495,16 +552,18 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Error during cleanup: {e}")
         
+        # 4. Stop and Wait for Controller Thread (Fixes QThread destroyed error)
+        if hasattr(self, 'controller') and self.controller:
+            self.log_message("Stopping controller thread...")
+            self.controller.cleanup()
+        
         self.log_message("=== Application Shutdown Complete ===")
         
         # 4. Accept the close event
         event.accept()
         
-        # Force process exit to ensure clean shutdown
-        print("Forcing process exit...")
-        QApplication.processEvents()
-        import sys
-        sys.exit(0)
+        # Do not force sys.exit(0) here, let Qt handling closing.
+        # If threads are properly cleaned up, it should close naturally.
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

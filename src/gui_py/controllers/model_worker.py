@@ -13,11 +13,12 @@ except ImportError:
 # Imported from workers package
 from workers.training_thread import TrainingThread
 from workers.loader_thread import LoaderThread
+from workers.testing_thread import TestingThread
 from utils.visualization_manager import VisualizationManager
 
 class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
-    metricsUpdated = pyqtSignal(float, float, int)  # loss, accuracy, epoch
+    metricsUpdated = pyqtSignal(float, float, float, float, int)  # t_loss, t_acc, v_loss, v_acc, epoch
     progressUpdated = pyqtSignal(int, int)
     featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
     trainingPreviewReady = pyqtSignal(int, object, list, int) # int, QImage, list of floats, int (true_label) (Training Only)
@@ -34,7 +35,7 @@ class ModelWorker(QObject):
     
     # Internal signals for thread-safe callback emissions
     _internal_log = pyqtSignal(str)
-    _internal_progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int, int)
+    _internal_progress = pyqtSignal(int, int, float, float, float, float, object, int, object, list, int, int, int)
     
     def __init__(self):
         super().__init__()
@@ -269,7 +270,7 @@ class ModelWorker(QObject):
     def stopTraining(self):
         """Stop the training thread."""
         self.should_stop = True
-        self.is_active = False # Ensure flag is off
+        self._training_active = False # Ensure flag is off
         if hasattr(self, "_train_thread") and self._train_thread:
             self._train_thread.stop()
             self._train_thread.wait(5000)  # Wait up to 5 seconds for thread to finish
@@ -277,7 +278,7 @@ class ModelWorker(QObject):
     @pyqtSlot(dict)
     def resetModel(self, config):
         """Reset and re-initialize the model with current config (Random Weights)."""
-        if self.is_active:
+        if self._training_active:
             self.logMessage.emit("Cannot reset model while training is active. Please stop training first.")
             return
 
@@ -473,8 +474,8 @@ class ModelWorker(QObject):
                             # emit metricsUpdated signal
                             # We emit one by one to populate graph
                             # Note: graph might need 'epoch' index 1-based or 0-based.
-                            # MetricsUpdated(loss, acc, epoch)
-                            self.metricsUpdated.emit(m.train_loss, m.train_accuracy, m.epoch)
+                            # MetricsUpdated(loss, acc, val_loss, val_acc, epoch)
+                            self.metricsUpdated.emit(m.train_loss, m.train_accuracy, m.val_loss, m.val_accuracy, m.epoch)
                     else:
                          self.logMessage.emit("Model loaded but no training history found (legacy format or empty).")
 
@@ -523,29 +524,12 @@ class ModelWorker(QObject):
             # fast access to bytes
             bits = img.bits()
             bits.setsize(img.sizeInBytes())
-            
-            import numpy as np
-            
-            # Create numpy array view from QImage memory
-            # QImage RGB888 is (H, W, 3), Grayscale is (H, W) or (H, W, 1)
-            # Strides are essential because QImage aligns rows to 4 bytes
-            
-            shape = (height, width, d)
-            strides = (stride, d, 1) # (row_bytes, pixel_bytes, component_bytes)
-            
-            # Note: QImage bits pointer is valid as long as 'img' is alive
-            input_array = np.ndarray(
-                shape=shape,
-                dtype=np.uint8,
-                buffer=bits,
-                strides=strides
-            )
 
-            # Run Classification using optimized binding
+            # Run Classification using C++ helper
             self.logMessage.emit(f"Running inference (Input: {width}x{height}x{d})...")
-            
-            # Passing array directly - C++ will infer dims and handle strides
-            predicted_class = cgroot_core.classify_pixels(self.model, input_array)
+
+            # Note: C++ classify_pixels logic must match the QImage format (RGB888 vs Grayscale8)
+            predicted_class = cgroot_core.classify_pixels(self.model, bits, width, height, stride)
             
             self.logMessage.emit(f"Inference Result: {predicted_class}")
             
@@ -583,8 +567,8 @@ class ModelWorker(QObject):
         if self._training_active:
             self.logMessage.emit(message)
     
-    @pyqtSlot(int, int, float, float, object, int, object, list, int, int, int)
-    def _emit_progress_from_thread(self, epoch, total_epochs, loss, accuracy, feature_maps, pred_class, q_image, probs, current_idx, layer_type, true_label):
+    @pyqtSlot(int, int, float, float, float, float, object, int, object, list, int, int, int)
+    def _emit_progress_from_thread(self, epoch, total_epochs, t_loss, t_acc, v_loss, v_acc, feature_maps, pred_class, q_image, probs, current_idx, layer_type, true_label):
         """
         Thread-safe progress/metrics emission helper.
         Called via QMetaObject.invokeMethod from C++ callback thread.
@@ -599,7 +583,7 @@ class ModelWorker(QObject):
             should_emit_viz = (current_time - self.last_viz_update > self.viz_interval) or is_epoch_end
 
             if is_epoch_end:
-                self.metricsUpdated.emit(loss, accuracy, epoch)
+                self.metricsUpdated.emit(t_loss, t_acc, v_loss, v_acc, epoch)
                 self.progressUpdated.emit(epoch, total_epochs)
                 
             # Emit feature maps if they were updated (checked by not None)
@@ -643,6 +627,21 @@ class ModelWorker(QObject):
         if hasattr(self, "_train_thread") and self._train_thread:
             self.stopTraining() # sets flag and waits
 
+        # 2c. Stop loader thread
+        if hasattr(self, "_loader_thread") and self._loader_thread:
+            if self._loader_thread.isRunning():
+                self.logMessage.emit("Waiting for loader thread to finish...")
+                self._loader_thread.quit()
+                self._loader_thread.wait(2000) # Wait max 2s
+
+        # 2d. Stop testing thread
+        if hasattr(self, "_test_thread") and self._test_thread:
+            if self._test_thread.isRunning():
+                self.logMessage.emit("Stopping testing thread...")
+                self._test_thread.stop()
+                self._test_thread.quit()
+                self._test_thread.wait(2000) # Wait max 2s
+
         # 3. Destroy C++ model object
         if self.model:
             self.logMessage.emit("Destroying C++ model...")
@@ -681,54 +680,43 @@ class ModelWorker(QObject):
     
     @pyqtSlot(str, str)
     def runTesting(self, images_path, labels_path):
-        """Run evaluation on a test dataset."""
+        """Run evaluation on a test dataset asynchronously."""
         if not self.model:
             self.logMessage.emit("Error: No model loaded to test.")
             return
 
-        self.logMessage.emit(f"Loading Test Dataset from: {images_path}")
+        self.logMessage.emit(f"Starting Test on: {images_path}")
         self.modelStatusChanged.emit(True)
 
-        try:
-            # Load dataset
-            test_dataset = cgroot_core.MNISTLoader.load_test_data(images_path, labels_path)
-            if not test_dataset:
-                self.logMessage.emit("Failed to load test dataset.")
-                self.modelStatusChanged.emit(False)
-                return
-
-            self.logMessage.emit(f"Loaded {test_dataset.num_images} test images. Starting Evaluation...")
-
-            # Progress Callback
-            def progress_cb(epoch, total, loss, acc, idx):
-                # Update progress bar
-                self.progressUpdated.emit(idx, test_dataset.num_images)
-                
-                # Log percentage periodically
-                if idx % 1000 == 0:
-                   perc = (idx / test_dataset.num_images) * 100
-                   self.logMessage.emit(f"Evaluating... {perc:.1f}%")
-
-            # Run Evaluation
-            loss, accuracy, matrix = self.model.evaluate(test_dataset, progress_cb)
-
-            self.logMessage.emit("=== Evaluation Results ===")
-            self.logMessage.emit(f"Test Accuracy: {accuracy * 100:.2f}%")
-            self.logMessage.emit(f"Test Loss: {loss:.4f}")
-            self.logMessage.emit("==========================")
-            
-            # Emit results (including matrix)
-            self.evaluationFinished.emit(loss, accuracy, matrix)
-
-        except Exception as e:
-            self.logMessage.emit(f"Evaluation Failed: {e}")
-            import traceback
-            traceback.print_exc()
+        # Create and start testing thread
+        self._test_thread = TestingThread(self.model, images_path, labels_path)
         
-        finally:
-            self.modelStatusChanged.emit(False)
-            # Cleanup dataset
-            try:
-                del test_dataset
-            except:
-                pass
+        # Connect signals using internal slots to ensure thread safety
+        self._test_thread.log.connect(self._internal_log.emit)
+        self._test_thread.progress.connect(self.progressUpdated)
+        self._test_thread.results.connect(self._on_testing_finished_results)
+        self._test_thread.error.connect(self._on_testing_error)
+        self._test_thread.finished.connect(self._on_testing_thread_finished)
+        self._test_thread.finished.connect(self._test_thread.deleteLater)
+        
+        self.should_stop = False 
+        self._test_thread.start()
+
+    @pyqtSlot(float, float, list)
+    def _on_testing_finished_results(self, loss, accuracy, matrix):
+        """Handle successful testing results."""
+        self.logMessage.emit("=== Evaluation Results ===")
+        self.logMessage.emit(f"Test Accuracy: {accuracy * 100:.2f}%")
+        self.logMessage.emit(f"Test Loss: {loss:.4f}")
+        self.logMessage.emit("==========================")
+        self.evaluationFinished.emit(loss, accuracy, matrix)
+
+    @pyqtSlot(str)
+    def _on_testing_error(self, error_msg):
+        self.logMessage.emit(error_msg)
+
+    @pyqtSlot()
+    def _on_testing_thread_finished(self):
+        """Cleanup testing thread."""
+        self._test_thread = None
+        self.modelStatusChanged.emit(False)

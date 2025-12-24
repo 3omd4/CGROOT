@@ -929,7 +929,7 @@ vector<TrainingMetrics> NNModel::train_epochs(
     if (stop_requested && stop_requested->load())
       break;
     if (log_callback)
-      log_callback("Epoch " + std::to_string(current_epoch_num));
+      log_callback("Epoch " + std::to_string(current_epoch_num) + " of " + std::to_string(config.epochs) + " - Starting...");
 
     // Shuffle indices
     vector<size_t> all_indices(num_images);

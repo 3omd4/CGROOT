@@ -4,7 +4,7 @@ from .model_worker import ModelWorker
 class ModelController(QObject):
     # Signals to GUI
     logMessage = pyqtSignal(str)
-    metricsUpdated = pyqtSignal(float, float, int) # loss, accuracy, epoch
+    metricsUpdated = pyqtSignal(float, float, float, float, int) # train_loss, train_acc, val_loss, val_acc, epoch
     progressUpdated = pyqtSignal(int, int) # value, maximum
     imagePredicted = pyqtSignal(int, object, list) # predictedClass, QImage, probabilities
     trainingFinished = pyqtSignal()
@@ -35,6 +35,7 @@ class ModelController(QObject):
         super().__init__()
         
         self.thread = QThread()
+        self.thread.setObjectName("ModelController_WorkerThread")
         self.worker = ModelWorker()
         self.worker.moveToThread(self.thread)
         

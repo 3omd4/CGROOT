@@ -60,11 +60,6 @@ class InferenceWidget(QWidget):
         inf_group = QGroupBox("Inference Settings")
         inf_layout = QFormLayout(inf_group)
         
-        self.num_samples = QSpinBox()
-        self.num_samples.setRange(1, 10000)
-        self.num_samples.setValue(100)
-        inf_layout.addRow("Number of Samples:", self.num_samples)
-        
         self.run_btn = QPushButton("Run Inference")
         self.run_btn.setStyleSheet("QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 10px; }")
         self.run_btn.setCursor(Qt.CursorShape.PointingHandCursor)

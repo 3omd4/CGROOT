@@ -9,11 +9,12 @@ from utils.visualization_manager import VisualizationManager
 
 class TrainingThread(QThread):
     # epoch, total, loss, acc, feature_maps(object), pred, qimage, probs, current_idx, layer_type, true_label
-    progress = pyqtSignal(int, int, float, float, object, int, object, list, int, int, int)
+    progress = pyqtSignal(int, int, float, float, float, float, object, int, object, list, int, int, int)
     log = pyqtSignal(str)
 
     def __init__(self, model, dataset, config):
         super().__init__()
+        self.setObjectName("TrainingThread")
         self.model = model
         self.dataset = dataset
         self.config = config
@@ -35,25 +36,8 @@ class TrainingThread(QThread):
                 maps = None
                 layer_type = -1
                 
-                # Fetch feature maps ONLY at epoch end (or if we decide to do it more often)
                 if self._visualizations_enabled:
-                    try:
-                        # Access dynamic layer index
-                        target_layer = self.layer_index
-                        if target_layer < 0: target_layer = 0
-                        
-                        # Get maps. If invalid layer, this returns []
-                        maps = self.model.getLayerFeatureMaps(target_layer)
-                        layer_type = self.model.getLayerType(target_layer)
-                        
-                        # Process maps using Manager (optional step for normalization/coloring if moved there)
-                        maps = VisualizationManager.process_feature_maps(maps, layer_type)
-                        
-                    except Exception as e:
-                        # No fallback! Let it be empty list or None so UI knows it failed/is invalid.
-                        maps = [] # Explicitly empty so UI clears it
-                        layer_type = -1
-                    
+                    # ... [Preview Image Logic] ...
                     # Preview Image Generation
                     preview_img_data = None
                     preview_pred = -1
@@ -100,8 +84,22 @@ class TrainingThread(QThread):
                     preview_probs = []
                     preview_label = -1
                 
-                # Emit
-                self.progress.emit(epoch, total, loss, acc, maps, preview_pred, preview_img_data, preview_probs, current_idx, layer_type, preview_label)
+                # Validation Metrics Retrieval (Workaround for C++ callback limitation)
+                v_loss = 0.0
+                v_acc = 0.0
+                
+                if current_idx == -1: # Epoch End
+                    try:
+                        history = self.model.getTrainingHistory()
+                        if history and len(history) > 0:
+                            last = history[-1]
+                            v_loss = last.val_loss
+                            v_acc = last.val_accuracy
+                    except Exception as e:
+                        print(f"Error fetching validation history: {e}")
+
+                # Emit with validation metrics
+                self.progress.emit(epoch, total, loss, acc, v_loss, v_acc, maps, preview_pred, preview_img_data, preview_probs, current_idx, layer_type, preview_label)
 
         def log_callback(msg):
             if not self._stop_requested:

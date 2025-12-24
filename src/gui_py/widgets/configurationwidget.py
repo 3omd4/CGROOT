@@ -533,6 +533,153 @@ class ConfigurationWidget(QWidget):
             **fc_params
         }
 
+    def validate_architecture(self):
+        """
+        Validate the current architecture to ensure it doesn't reduce dimensions to <= 0.
+        Returns (is_valid, error_message)
+        """
+        w = self.image_width.value()
+        h = self.image_height.value()
+        d = self.image_depth.value()
+        
+        # 1. Simulate Convolution Stack
+        conv_params = self.get_conv_layer_params()
+        
+        # We need to know which widgets map to which params, or just re-parse
+        # get_conv_layer_params returns lists.
+        # But we need layer order if we had mixing? Currently they are sequential blocks?
+        # No, the UI setup has Conv Group, Pool Group, FC Group.
+        # But real models often mix them.
+        # WAIT, current UI implementation separates them into blocks: All Convs -> All Pools -> All FCs??
+        # Let's check bindings.cpp or model construction.
+        # bindings.cpp: `arch.kernelsPerconvLayers`... `arch.poolingLayersInterval`.
+        # This implies pooling follows specific conv layers based on interval indices.
+        # Correct. Pooling is inserted AFTER conv layer i if i is in intervals.
+        
+        num_conv = self.num_conv_layers.value()
+        intervals_str = self.pooling_intervals.text()
+        try:
+            intervals = [int(x.strip()) for x in intervals_str.split(',') if x.strip()]
+        except:
+            intervals = []
+            
+        pooling_indices = set(intervals)
+        
+        # Get padding/stride for each conv layer
+        # get_conv_layer_params returns lists: 'conv_paddings', 'conv_strides', 'kernel_dims'
+        # keys: 'conv_paddings', 'kernel_dims', 'conv_strides'
+        
+        # Note: get_conv_layer_params returns 'conv_paddings' which might be strings ("Valid") or ints.
+        # logic in bindings.cpp for padding is internal to C++? 
+        # C++ bindings don't seem to expose padding calculation logic to python.
+        # But we must estimate.
+        
+        # "Valid" = No padding. Output = (Input - Kernel)/Stride + 1
+        # "Same" = Output = Input/Stride (ceil)
+        # Custom = Output = (Input + 2*Pad - Kernel)/Stride + 1
+        
+        paddings = conv_params.get('conv_paddings', [])
+        strides = conv_params.get('conv_strides', [])
+        kernels = conv_params.get('kernel_dims', [])
+        
+        # Get pooling strides (parsed in C++ from 'pooling_strides' if we added it, or defaulting to 2)
+        # ConfigurationWidget doesn't seem to expose 'pooling_strides' yet in get_pool_layer_params?
+        # Wait, I saw it in C++ bindings "Parse pooling strides (NEW)". 
+        # ConfigurationWidget has `rebuild_pool_layer_controls` which adds `stride` line edit.
+        pool_widgets = self.pool_layer_widgets
+        
+        import math
+        
+        current_w = w
+        current_h = h
+        
+        steps_log = []
+        steps_log.append(f"Input: {current_w}x{current_h}x{d}")
+        
+        pool_layer_counter = 0
+        
+        for i in range(num_conv):
+            # 1. Conv Layer
+            k_h, k_w = 3, 3
+            if i < len(kernels): k_h, k_w = kernels[i]
+            
+            s_h, s_w = 1, 1
+            if i < len(strides):
+                s_val = strides[i]
+                if isinstance(s_val, str) and 'x' in s_val:
+                     parts = s_val.split('x')
+                     s_h, s_w = int(parts[0]), int(parts[1])
+                elif isinstance(s_val, (int, str)):
+                     side = int(s_val)
+                     s_h, s_w = side, side
+            
+            pad_mode = "Valid"
+            pad_val = 0
+            if i < len(paddings):
+                val = paddings[i]
+                if isinstance(val, int): 
+                    pad_mode = "Custom"
+                    pad_val = val
+                else: 
+                    pad_mode = val
+            
+            # Update dimensions
+            if pad_mode == "Same":
+                current_w = math.ceil(current_w / s_w)
+                current_h = math.ceil(current_h / s_h)
+            elif pad_mode == "Valid":
+                current_w = math.floor((current_w - k_w) / s_w) + 1
+                current_h = math.floor((current_h - k_h) / s_h) + 1
+            else: # Custom
+                current_w = math.floor((current_w + 2*pad_val - k_w) / s_w) + 1
+                current_h = math.floor((current_h + 2*pad_val - k_h) / s_h) + 1
+
+            steps_log.append(f"After Conv {i+1}: {current_w}x{current_h}")
+            
+            if current_w <= 0 or current_h <= 0:
+                return False, f"Dimensions reduced to zero at Conv Layer {i+1}!\n" + "\n".join(steps_log)
+
+            # 2. Pooling Layer (if index match)
+            # C++ usage: "Pooling Layer i (after Conv i for interval)" 
+            # Note: intervals are 1-based indices of conv layers. 
+            # e.g interval=1 means after Conv Layer 1 (index 0). 
+            # So if (i+1) in intervals: apply pooling.
+            
+            if (i + 1) in pooling_indices:
+                # Find stride for this pooling layer
+                # pool_widgets is list matching intervals order
+                # We need to find which pool widget corresponds to this interval
+                # intervals list index matches pool_widgets index
+                
+                try:
+                    p_idx = intervals.index(i + 1)
+                    p_widget = pool_widgets[p_idx]
+                    p_stride_str = p_widget['stride'].text()
+                    if 'x' in p_stride_str:
+                         parts = p_stride_str.split('x')
+                         ps_h, ps_w = int(parts[0]), int(parts[1])
+                    else:
+                         val = int(p_stride_str)
+                         ps_h, ps_w = val, val
+                except:
+                    ps_h, ps_w = 2, 2
+                
+                # Pooling is typically valid padding (reduces size)
+                # Output = floor((Input - PoolSize)/Stride) + 1 ??
+                # Standard MaxPool2d (kernel=2, stride=2) -> Floor(H/2)
+                # C++ binding default kernel is 2x2.
+                pk_h, pk_w = 2, 2
+                
+                current_w = math.floor((current_w - pk_w) / ps_w) + 1
+                current_h = math.floor((current_h - pk_h) / ps_h) + 1
+                
+                steps_log.append(f"After Pool (after Conv {i+1}): {current_w}x{current_h}")
+                
+                if current_w <= 0 or current_h <= 0:
+                    return False, f"Dimensions reduced to zero at Pooling Layer (after Conv {i+1})!\n" + "\n".join(steps_log)
+                    
+        return True, "Valid"
+
     # =========================================================================
     # DYNAMIC LAYER CONTROL REBUILD METHODS
     # =========================================================================
@@ -1201,13 +1348,20 @@ class ConfigurationWidget(QWidget):
             if 'image_depth' in config: self.image_depth.setValue(config['image_depth'])
             
             # Network architecture - number of layers (this triggers rebuild of dynamic controls)
-            if 'num_conv_layers' in config: self.num_conv_layers.setValue(config['num_conv_layers'])
-            if 'num_fc_layers' in config: self.num_fc_layers.setValue(config['num_fc_layers'])
+            if 'num_conv_layers' in config:
+                self.num_conv_layers.setValue(config['num_conv_layers'])
+                self.rebuild_conv_layer_controls() # Explicit rebuild since signals blocked
+                
+            if 'num_fc_layers' in config:
+                self.num_fc_layers.setValue(config['num_fc_layers'])
+                self.rebuild_fc_layer_controls() # Explicit rebuild since signals blocked
+                
             if 'pooling_type' in config: self.pooling_type.setCurrentText(config['pooling_type'])
             if 'pooling_intervals' in config:
                 val = config['pooling_intervals']
                 if isinstance(val, list): val = ", ".join(map(str, val))
                 self.pooling_intervals.setText(str(val))
+                self.rebuild_pool_layer_controls() # Explicit rebuild since signals blocked
             
             # Load per-layer convolution parameters (NEW FORMAT)
             if 'conv_activations' in config or 'conv_init_types' in config:
