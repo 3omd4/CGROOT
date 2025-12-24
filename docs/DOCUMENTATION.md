@@ -12,37 +12,37 @@
 Deep learning frameworks like PyTorch and TensorFlow are powerful tools that abstract away the underlying mathematical mechanics, effectively making them "black boxes" for students and researchers. CGROOT++ addresses the lack of lightweight, educational frameworks that provide low-level implementations of automatic differentiation, convolutional operations, and optimization algorithms in C++ while remaining accessible via a user-friendly GUI.
 
 ### 1.2 Scope
-* **What the software does:**
-    * Implements core neural network layers: Convolutional (Conv2D), Pooling (Max/Average), Flatten, and Fully Connected layers.
-    * Supports multiple activation functions (ReLU, Sigmoid, Tanh, Softmax) and advanced optimizers (Adam, RMSprop, Momentum).
-    * Includes a feature-rich Python GUI (PyQt6) for interactive model configuration, real-time training visualization, feature map inspection, and image inference.
-    * Enables model persistence (saving/loading architecture and weights) for reproducible experiments.
-    * Utilizes OpenMP for multi-threaded CPU acceleration.
-* **What the software does NOT do:**
-    * It does not support GPU acceleration (CUDA/OpenCL).
-    * It does not support distributed training or cloud-based deployment.
+- **What the software does:**
+    - Implements core neural network layers: Convolutional (Conv2D), Pooling (Max/Average), Flatten, and Fully Connected layers.
+    - Supports multiple activation functions (ReLU, Sigmoid, Tanh, Softmax) and advanced optimizers (Adam, RMSprop, Momentum).
+    - Includes a feature-rich Python GUI (PyQt6) for interactive model configuration, real-time training visualization, feature map inspection, and image inference.
+    - Enables model persistence (saving/loading architecture and weights) for reproducible experiments.
+    - Utilizes OpenMP for multi-threaded CPU acceleration.
+- **What the software does NOT do:**
+    - It does not support GPU acceleration (CUDA/OpenCL).
+    - It does not support distributed training or cloud-based deployment.
 
 ### 1.3 Target Audience
-* **Students & Educators:** Those seeking to understand the internal mathematics and implementation of deep learning (CNNs, Backpropagation).
+- **Students & Educators:** Those seeking to understand the internal mathematics and implementation of deep learning (CNNs, Backpropagation).
 
 ---
 
 ## 2. System Analysis
 
 ### 2.1 Functional Requirements
-* **FR-01 Data Loader:** The system shall parse and load MNIST-format (IDX) binary datasets (MNIST, Fashion-MNIST, CIFAR-10) and automatically pair label files with image files.
-* **FR-02 Neural Network Engine:** The system shall support complex architectures with Convolutional, Pooling (Max/Avg), Flatten, and Fully Connected layers, utilizing core activations (ReLU, Sigmoid, Tanh, Softmax) and loss functions (MSE, Cross-Entropy).
-* **FR-03 Automatic Differentiation:** The system must implement a dynamic computational graph to automatically calculate gradients for all parameters via backpropagation.
-* **FR-04 Optimization:** The system shall support advanced optimizers including SGD, SGD with Momentum, Adam, and RMSprop.
-* **FR-05 Training & Inference:** The system shall support batch training with validation splits, real-time metric tracking, model persistence (save/load), and single-image inference.
-* **FR-06 Graphical User Interface:** The Python-based GUI shall provide interactive configuration, real-time visualization of training metrics and image previews, feature map visualization, and comprehensive logging.
+- **FR-01 Data Loader:** The system shall parse and load MNIST-format (IDX) binary datasets (MNIST, Fashion-MNIST, CIFAR-10) and automatically pair label files with image files.
+- **FR-02 Neural Network Engine:** The system shall support complex architectures with Convolutional, Pooling (Max/Avg), Flatten, and Fully Connected layers, utilizing core activations (ReLU, Sigmoid, Tanh, Softmax) and loss functions (MSE, Cross-Entropy).
+- **FR-03 Automatic Differentiation:** The system must implement a dynamic computational graph to automatically calculate gradients for all parameters via backpropagation.
+- **FR-04 Optimization:** The system shall support advanced optimizers including SGD, SGD with Momentum, Adam, and RMSprop.
+- **FR-05 Training & Inference:** The system shall support batch training with validation splits, real-time metric tracking, model persistence (save/load), and single-image inference.
+- **FR-06 Graphical User Interface:** The Python-based GUI shall provide interactive configuration, real-time visualization of training metrics and image previews, feature map visualization, and comprehensive logging.
 
 ### 2.2 Non-Functional Requirements
-* **NFR-01 Performance:** Heavy mathematical operations shall be implemented in optimized C++ utilizing OpenMP for parallelization to ensure high throughput.
-* **NFR-02 Usability:** The GUI must remain responsive during training. 
-* **NFR-03 Reliability:** Gradient calculations must be numerically verified, and the system must handle data types safely between C++ and Python.
-* **NFR-04 Extensibility:** The modular architecture (using pybind11) shall allow for easy addition of new layers and optimizers without refactoring the core engine.
-* **NFR-05 Portability:** The system must be cross-platform (Windows, Linux, macOS), buildable via CMake, and function entirely locally without external dependencies.
+- **NFR-01 Performance:** Heavy mathematical operations shall be implemented in optimized C++ utilizing OpenMP for parallelization to ensure high throughput.
+- **NFR-02 Usability:** The GUI must remain responsive during training. 
+- **NFR-03 Reliability:** Gradient calculations must be numerically verified, and the system must handle data types safely between C++ and Python.
+- **NFR-04 Extensibility:** The modular architecture (using pybind11) shall allow for easy addition of new layers and optimizers without refactoring the core engine.
+- **NFR-05 Portability:** The system must be cross-platform (Windows, Linux, macOS), buildable via CMake, and function entirely locally without external dependencies.
 
 ---
 
@@ -450,51 +450,168 @@ classDiagram
 ## 4. Implementation Details
 
 ### 4.1. Tech Stack
-* **Core Engine:** **C++17** (Chosen for high-performance memory management and template meta-programming capabilities).
-* **Build System:** **CMake 3.10+** (Chosen for cross-platform compatibility).
-* **GUI:** **Python 3.8 + PyQt6 + PyQtGraph** (Chosen for rapid UI development and high-speed plotting capabilities compared to native C++ GUI frameworks).
-* **Interfacing:** Custom pybind11 bindings (To provide a seamless, high-performance bridge between C++ and Python).
+- **Core Logic:** C++ for high-performance tensor operations and OpenMP for multi-threaded parallel processing.
+- **GUI Framework:** Python 3.13 with PyQt6 for a responsive, cross-platform interface.
+- **Interface Bridge:** pybind11 to expose C++ neural network classes and functions to the Python environment.
+- **Visualization:** PyQtGraph for real-time loss/accuracy metrics and QImage/QPainter for feature map rendering.
 
 ### 4.2. Architectural Design
 Due to the nature of how neural networks work and how we foresaw the program to work and behave, a combination of three architectural design patterns was used:
 
 #### 4.2.1. Model-View-Controller (MVC) Architecture
 The main Idea in mind in making the project is to be educational and simple, so a GUI is needed for this purpose, so the MVC pattern were used since the program is interactive, and information needs to be conveyed to the user in different ways.
-* **Model:** The Neural Network model and the training logic.
-* **View:** The GUI, as it gives information in many forms, Charts (Loss and accuracy), Logs and Image and feature maps viewing in addition to other features like inference that is used to classify an image.
-* **Controller:** The interactions with the GUI and the loader which feeds the dataset to the model.
+
+- **Model:** The Neural Network model implemented in C++ (NNModel) and the training logic handled by ModelWorker in Python. 
+- **View:** The GUI, composed of several specialized widgets:
+    - Training Tab: Displays "Training Preview" (images and labels) and "Feature Maps".
+    - Metrics Tab: Visualizes "Loss" and "Accuracy" charts.
+    - Configuration Tab: Provides fields for "Hyperparameters" (Learning Rate, Epochs, Batch Size) and "Network Architecture" (Conv/FC layer counts).
+    - Log Output: Real-time terminal-style logging at the bottom of the window.
+- **Controller:** The ModelController and ModelWorker manage the flow of data between the GUI and the C++ backend using asynchronous threads (QThread) to keep the UI responsive during heavy computation.
 
 #### 4.2.2. Layered Architecture 
-The program is complex so abstractions at different layers are needed. The layering structure is simple and consists of three main layers:
-* **The (Neural Network) Layers:** which consists of the class Layer and its derivative classes (inputLayer, convLayer, poolingLayer, FullyConnected, FlattenLayer, outputLayer) with every layer being abstract as it hides its algorithms and only communicates with its user using simple functions (3.2 Class Diagram).
-* **Neural Network Model (NNModel):** The NNModel is responsible for the training logic, the user need not know how it works but rather gives it the hyper parameters and use the functions classify, train, train_batch, and train_epoch (3.2 Class Diagram).
-* **GUI:** Further abstractions is accomplished using the GUI since the user doesn’t need to write code to load the data to the model or how to use the model functions, all the user needs is to use the simple and informative GUI.
+The program is complex so abstractions at different layers are needed.
+The layering structure is simple and consists of three main layers:
+
+- **The (Neural Network) Layers:** which consists of the class Layer and its derivative classes (inputLayer, convLayer, poolingLayer, FullyConnected, FlattenLayer, outputLayer) with every layer being abstract as it hides its algorithms and only communicates with its user using simple functions (3.2 Class Diagram).
+- **Neural Network Model (NNModel):** Responsible for training logic. The user interacts via the GUI to set "Learning Rate", "Optimizer", and "Weight Decay". It uses functions like classify, train, train_batch, and train_epochs (3.2 Class Diagram).
+- **GUI:** Further abstractions is accomplished using the GUI since the user doesn’t need to write code to load the data to the model or how to use the model functions, all the user needs is to use the simple and informative GUI.
 
 #### 4.2.3. Pipe and Filter Architecture
 What neural networks do are basically doing data processing and updating some variables using the results, and the processing is done sequentially as every layer does it works on the data and pass it to the next layer (the NNModel class is the one responsible for this operation). The processing operations consists of two main operations (3.3 Sequence Diagram):
-* **Forward Propagation:** Input -> Convolution -> Pooling -> Flatten -> Fully Connected -> Output
-* **Backward Propagation and update:** Output -> Fully Connected -> Flatten -> Pooling -> Convolution -> Input.
+
+- **Forward Propagation:** Input -> Convolution -> Pooling -> Flatten -> Fully Connected -> Output
+- **Backward Propagation and update:** Output -> Fully Connected -> Flatten -> Pooling -> Convolution -> Input.
 
 ### 4.3. Functions
-Here are a brief description of the functions of the different classes, for more compact perspective look at 3.2 Class Diagram.
+Here is a brief description of the functions of the different classes, for more compact perspective look at 3.2 Class Diagram.
 
 #### 4.3.1. Layers Functions
-* **forwardProp:** Do the forward propagation operation corresponding to the layer, different layers may have different names for this function, the operation of each is described below, with the functions with different name have the other name in brackets [func_name].
-    * **inputLayer [start]:** apply normalization on the data to be in the range from 0 to 1.
-    * **FullyConnected:** applies the forward propagation algorithm of a fully connected layer by applying the dot product and then applies the activation function.
-    * **FlattenLayer:** flattens a 3D vector coming from convLayer to be fed to a FullyConnected.
-    * **convLayer:** applies the forward propagation algorithm of a convolution layer by applying the convolution operation and then applies the activation function.
-    * **poolingLayer:** reduce the size of the incoming feature image to reduce computation.
-    * **outputLayer:** acts just as FullyConnected but have softmax as activation function by default.
-* **backwardProp:** Do the backward propagation operation corresponding to the layer, the operation of each is described below. There is another variation of this function called backwardProp_batch which is used when training with batches instead of individual samples.
-    * **FullyConnected:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
-    * **FlattenLayer:** passes the gradients back to the previous layer.
-    * **convLayer:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
-    * **poolingLayer:** passes the gradients back to the previous layer.
-    * **outputLayer:** apply the backward propagation using categorical cross entropy loss function and calculates the gradients of the previous layer.
-* **update:** updates the weights of FullyConnected and outputLayer and the kernels of convLayer by calling the update function of the used optimizer, both works the same way. There is another variation of this function called update_batch which is used when training with batches instead of individual samples.
+- **forwardProp:** Do the forward propagation operation corresponding to the layer, different layers may have different names for this function, the operation of each is described below, with the functions with different name have the other name in brackets [func_name].
+    - **inputLayer [start]:** apply normalization on the data to be in the range from 0 to 1.
+    - **FullyConnected:** applies the forward propagation algorithm of a fully connected layer by applying the dot product and then applies the activation function.
+    - **FlattenLayer:** flattens a 3D vector coming from convLayer to be fed to a FullyConnected.
+    - **convLayer:** applies the forward propagation algorithm of a convolution layer by applying the convolution operation and then applies the activation function.
+    - **poolingLayer:** reduce the size of the incoming feature image to reduce computation.
+    - **outputLayer:** acts just as FullyConnected but have softmax as activation function by default.
+- **backwardProp:** Do the backward propagation operation corresponding to the layer, the operation of each is described below. There is another variation of this function called backwardProp_batch which is used when training with batches instead of individual samples.
+    - **FullyConnected:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
+    - **FlattenLayer:** passes the gradients back to the previous layer.
+    - **convLayer:** applies the backward propagation algorithm and calculates the gradients of the previous layer.
+    - **poolingLayer:** passes the gradients back to the previous layer
+    - **outputLayer:** apply the backward propagation using categorical cross entropy loss function and calculates the gradients of the previous layer.
+- **update:** updates the weights of FullyConnected and outputLayer and the kernels of convLayer by calling the update function of the used optimizer, both works the same way. There is another variation of this function called update_batch which is used when training with batches instead of individual samples.
 
 #### 4.3.2. NNModel Functions
-* **classify:** forward propagates the image through the layers by using the forward propagation of each layers, it does such by first checking what was the previous layer in order to get the data from it. In the end it returns the detected type of the image (which could be used for either training or as classification).
-* **train:** train the model on an image (or a batch of images if train_batch were to be used). The function calls classify first then backward propagates the gradients by first checking what the layers before and after to get the data and gradients from them, respectively, then updates the weights and kernels of each layer. 
-* **train_epoch:** used to train the model on a complete epoch.
+- **classify:** forward propagates the image through the layers by using the forward propagation of each layer, it does such by first checking what was the previous layer in order to get the data from it. In the end it returns the detected type of the image (which could be used for either training or as classification).
+- **train:** train the model on an image (or a batch of images if train_batch were to be used). The function calls classify first then backward propagates the gradients by first checking what the layers before and after to get the data and gradients from them, respectively, then updates the weights and kernels of each layer. 
+- **train_epoch:** used to train the model on a complete epoch.
+
+To complete the implementation details regarding the GUI files and functions, here is the documentation detailing the Python-based PyQt6 infrastructure:
+
+#### 4.3.3. GUI Files and Widget Functions
+The graphical user interface is structured into modular widgets, each responsible for a specific stage of the neural network lifecycle:
+
+1. **mainwindow.py (Main Window)**  
+   This is the application's entry point and orchestrator. It manages the primary layout and connects the user's actions to the backend controller.
+    - **setup_ui:** Initializes the main layout using a QSplitter to allow users to resize the workspace between the "Tabbed View" and the "Log Output".
+    - **on_load_dataset:** Opens a QFileDialog to select MNIST-format image files and automatically attempts to discover the corresponding labels file.
+    - **log_message:** Appends status updates and system messages to the read-only "Log Output" text panel, supporting auto-scroll functionality.
+    - **on_store_model_requested:** Gathers all current architecture (Conv/Pool/FC), training parameters (Hyperparameters), and GUI settings to send a unified configuration payload to the controller for saving.
+
+2. **configurationwidget.py (Configuration Tab)**  
+   This file manages the hyperparameters and network architecture settings.
+    - **setup_network_tab:** Dynamically builds the architecture interface, allowing users to add or remove "Convolutional" and "Fully Connected" layers.
+    - **rebuild_conv_layer_controls / rebuild_fc_layer_controls / rebuild_pool_layer_controls:** Dynamically generates UI rows for each layer based on the user's count settings, allowing per-layer customization of kernels, strides, padding, and activation functions.
+    - **validate_architecture:** Simulates the forward pass of the network to ensure that the input dimensions (Width/Height) remain positive after all convolution and pooling operations, preventing crashes before training starts.
+    - **get_architecture_parameters:** Aggregates configuration from all dynamic layer widgets into a dictionary for the backend.
+    - **on_optimizer_changed:** Adjusts the visibility of input fields (like "Beta1", "Beta2", or "Momentum") based on the selected optimization algorithm (e.g., Adam vs. SGD).
+    - **sync_output_layer:** A helper function that ensures the number of neurons in the final layer always matches the "Number of Classes" specified in the model settings.
+    - **on_save_config / on_load_config:** Handles the serialization of the current GUI state into a JSON file for future sessions.
+
+3. **trainingwidget.py (Training Tab)**  
+   Responsible for real-time visualization of the learning process.
+    - **display_image:** Renders the current training sample as a "Training Preview", showing the image alongside its predicted and true labels.
+    - **display_feature_maps:** Processes 3D data (vector<vector<vector<float>>>) from the C++ model and generates a grid of grayscale images to visualize what the filters are "seeing" at a specific layer.
+    - **on_viz_toggled:** A master switch that enables or disables real-time data transfer between C++ and Python to maximize training speed.
+    - **on_test_clicked:** Triggers the testing process on a separate test dataset and displays results (Loss/Accuracy) and the Confusion Matrix.
+
+4. **metricswidget.py (Metrics Tab)**  
+   Focuses on statistical performance monitoring.
+    - **updateMetrics:** Receives live data from the controller to plot the "Loss" and "Accuracy" curves for both training and validation sets. It handles dynamic X-axis rescaling.
+    - **save_charts:** Exports the current Training/Validation Loss and Accuracy charts as high-resolution PNG images to a user-selected directory.
+    - **set_animations:** Toggles chart transitions to save CPU resources during high-speed training.
+
+5. **confusion_matrix.py (Confusion Matrix Widget)**  
+   Visualizes classification performance.
+    - **update_matrix:** Takes a 2D list (ground truth vs predicted) and renders a color-coded grid using QPainter. Darker cells represent higher counts.
+    - **paintEvent:** Custom painting logic that draws the grid, text labels, and color intensity overlays.
+
+6. **utils/custom_loader.py (Custom Dataset Loader)**  
+   Utility for loading non-MNIST datasets.
+    - **load_from_folder:** Scans a directory structure (root/class_name/image.png), resizes images to target dimensions (e.g., 28x28), converts them to grayscale or RGB, and packs them into the C++ compatible MNISTDataset structure.
+
+7. **inferencewidget.py (Inference Tab)**  
+   Allows users to run the trained model on single images.
+    - **on_load_image:** Opens a file dialog to load an external image (PNG/JPG).
+    - **on_run_inference:** Sends the loaded image to the model for prediction and updates the results area with the predicted class and confidence scores.
+    - **displayPrediction:** Updates the UI with the top predicted class and a probability distribution list.
+
+8. **imageviewerwidget.py (Image Viewer)**  
+   A reusable component for displaying images while maintaining aspect ratio.
+    - **displayImage:** Scales and renders a QImage onto a label with smooth transformation, ensuring the image fits within the layout without distortion.
+
+9. **spinner.py (Loading Indicator)**  
+   A custom-drawn loading spinner used during long operations.
+    - **paintEvent:** Draws a rotating arc using QPainter to indicate activity when the main thread is waiting for a background task.
+
+10. **utils/visualization_manager.py**  
+    Handles the complex conversion of raw C++ data to PyQt images.
+    - **create_preview_image:** Converts flattened 1D vectors (from C++) into 2D QImages, handling both Grayscale (depth=1) and RGB (depth=3) formats, including planar-to-interleaved conversion for RGB.
+
+11. **utils/paths.py**  
+    Centralizes file path management.
+    - **get_logs_dir / get_models_dir:** Returns absolute paths to standard application directories, creating them if they don't exist, to ensure cross-platform compatibility.
+
+12. **dark_theme.py**  
+    Manages the application's visual style.
+    - **apply_dark_theme:** Configures the global QPalette with a dark color scheme (Project Fusion) and applies specific QSS stylesheets for widgets like GroupBoxes and ProgressBars.
+
+#### 4.3.4. Controller and Worker Functions
+The GUI communicates with the C++ backend through a dedicated controller-worker thread system to prevent interface freezing:
+
+- **model_controller.py:** 
+  Acts as a bridge between the main thread (GUI) and the worker thread.
+    - **Signals:** Defines all communication channels (requestTrain, metricsUpdated, etc.) to ensure thread safety without direct function calls across threads.
+    - **cleanup:** Stop the worker thread and waits for it to finish before application exit used in the main window close event.
+
+- **model_worker.py (The "Brain" of the GUI):**
+  Manages the lifecycle of the C++ objects and background threads.
+    - **trainModel:** Instantiates a TrainingThread that executes the C++ training loop. It connects internal signals to emit progressUpdated and featureMapsReady back to the UI at controlled intervals.
+    - **loadModel:** Finds the matching .bin weights and .json configuration files to restore a previously saved state. It also deserializes training history to restore the "Metrics Graphs" to their previous state.
+    - **runInference:** Converts a QImage into a raw pixel buffer, scales it to the required dimensions, and calls the C++ classify_pixels helper for a prediction.
+    - **runTesting:** Instantiates a TestingThread to evaluate the model on a test set, returning final metrics and a confusion matrix.
+    - **cleanup:** Explicitly stops all child threads (Loader, Training, Testing) to prevent "QThread Destroyed while running" errors on exit.
+
+- **Background Threads (workers/)**
+    - **TrainingThread:** Runs `model.train_epoch` in a loop, handling batching and emitting visualization data (feature maps, current image) if enabled.
+    - **LoaderThread:** Handles the blocking I/O of loading large binary datasets or scanning thousands of image files from folders.
+    - **TestingThread:** Runs `model.evaluate` on the test set and computes the confusion matrix off the main thread.
+
+#### 4.3.5. Core C++ Utilities
+These classes handle the low-level data and file operations:
+
+1. **MNISTLoader (src/core/utils/mnist_loader.cpp)**  
+   Reads the standard IDX binary format used by the MNIST dataset.
+    - **load_images:** Parses the binary file header (magic number, count, rows, cols) and extracts pixel data into a vector of MnistImage objects.
+    - **load_labels:** Parses the label file and assigns ground truth values to the corresponding images.
+
+2. **DataUtils (src/core/utils/data_utils.cpp)**  
+   Helper functions for data manipulation.
+    - **normalize:** Scales pixel values from [0, 255] to [0.0, 1.0] for optimal network training.
+    - **one_hot_encode:** Converts integer labels (e.g., '5') into a probability vector (e.g., [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]).
+
+3. **StoreAndLoad (src/core/utils/store_and_load.h)**  
+   Manages model persistence using a custom binary format.
+    - **writeModelHeader:** writes the "NNMD" magic bytes and version to the file ensures validity.
+    - **writeConvKernels / writeNeuronWeights:** Serializes the 4D kernel tensors and 2D weight matrices to disk.
