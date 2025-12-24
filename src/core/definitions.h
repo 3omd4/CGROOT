@@ -2,6 +2,7 @@
 #define _DEFINITIONS_H
 
 #include <vector>
+
 using namespace std;
 
 typedef vector<vector<vector<unsigned char>>> image;
@@ -92,23 +93,23 @@ enum poolingLayerType {
 // Optimizer Configuration
 struct OptimizerConfig {
   OptimizerType type = opt_SGD;
-  
+
   // Common parameters
-  double learningRate = 0.01;   // Learning rate (step size)
-  double weightDecay = 0.0;     // L2 regularization weight
-  
+  double learningRate = 0.01; // Learning rate (step size)
+  double weightDecay = 0.0;   // L2 regularization weight
+
   // SGD with Momentum parameters
-  double momentum = 0.9;        // Momentum coefficient (default: 0.9)
-  
+  double momentum = 0.9; // Momentum coefficient (default: 0.9)
+
   // Adam parameters
-  double beta1 = 0.9;           // First moment decay rate (default: 0.9)
-  double beta2 = 0.999;         // Second moment decay rate (default: 0.999)
-  
+  double beta1 = 0.9;   // First moment decay rate (default: 0.9)
+  double beta2 = 0.999; // Second moment decay rate (default: 0.999)
+
   // RMSprop parameters
-  double beta = 0.9;            // Decay rate for RMSprop (default: 0.9)
-  
+  double beta = 0.9; // Decay rate for RMSprop (default: 0.9)
+
   // Numerical stability (Adam & RMSprop)
-  double epsilon = 1e-8;        // Small constant to prevent division by zero
+  double epsilon = 1e-8; // Small constant to prevent division by zero
 };
 
 #endif
