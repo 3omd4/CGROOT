@@ -141,6 +141,7 @@ convLayer::kernelType convLayer::initKernel(convKernels &kernelConfig,
 void convLayer::convolute(vector<featureMapType> &inputFeatureMaps) {
   // do the same convolution operation using every kernel where each kernel
   // will result in a different feature map, iterate using "krnl"
+  #pragma omp parallel for
   for (int krnl = 0; krnl < static_cast<int>(kernel_info.numOfKerenels);
        krnl++) {
 
