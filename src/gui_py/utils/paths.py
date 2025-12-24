@@ -7,6 +7,9 @@ from pathlib import Path
 
 def get_project_root() -> Path:
     """Get the project root directory."""
+    if getattr(sys, 'frozen', False):
+        # If frozen (PyInstaller), use the executable's directory
+        return Path(sys.executable).parent
     # Assumes this file is in src/gui_py/utils/
     return Path(__file__).parent.parent.parent.parent
 
