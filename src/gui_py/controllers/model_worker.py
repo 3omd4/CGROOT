@@ -264,10 +264,11 @@ class ModelWorker(QObject):
         """Stop the training thread."""
         self.should_stop = True
         self._training_active = False # Ensure flag is off
+        self.modelStatusChanged.emit(False)
         if hasattr(self, "_train_thread") and self._train_thread:
             self._train_thread.stop()
             self.logMessage.emit("Training thread stopped")
-            self._train_thread.wait(1000)  # Wait up to 1 second for thread to finish
+            # self._train_thread.wait(1000)  # Wait up to 1 second for thread to finish
 
     @pyqtSlot(dict)
     def resetModel(self, config):
@@ -284,7 +285,10 @@ class ModelWorker(QObject):
              # Clear history signals if any UI components listen to them
              # Currently we just re-emit initialized status
              self.modelStatusChanged.emit(False) # Training not active
-             self.modelInfoLoaded.emit(config) # Inform UI of new (clean) state
+             w = self.model.getInputWidth()
+             h = self.model.getInputHeight()
+             d = self.model.getInputDepth()
+             self.modelInfoLoaded.emit(w, h, d) # Inform UI of new (clean) state
              self.logMessage.emit("Model reset successfully.")
         else:
              self.logMessage.emit("Failed to reset model.")

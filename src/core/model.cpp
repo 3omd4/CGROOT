@@ -877,7 +877,7 @@ vector<double> NNModel::getProbabilities() {
 vector<TrainingMetrics> NNModel::train_epochs(
     const cgroot::data::MNISTLoader::MNISTDataset &dataset,
     const TrainingConfig &config, ProgressCallback progress_callback,
-    LogCallback log_callback, std::atomic<bool> *stop_requested) {
+    LogCallback log_callback, std::function<bool()> stop_check) {
 
   vector<TrainingMetrics> new_metrics;
 
@@ -926,10 +926,11 @@ vector<TrainingMetrics> NNModel::train_epochs(
   for (size_t epoch = 0; epoch < config.epochs; epoch++) {
     size_t current_epoch_num = start_epoch + epoch + 1;
 
-    if (stop_requested && stop_requested->load())
+    if (stop_check && stop_check())
       break;
     if (log_callback)
-      log_callback("Epoch " + std::to_string(current_epoch_num) + " of " + std::to_string(config.epochs) + " - Starting...");
+      log_callback("Epoch " + std::to_string(current_epoch_num) + " of " +
+                   std::to_string(config.epochs) + " - Starting...");
 
     // Shuffle indices
     vector<size_t> all_indices(num_images);
@@ -959,7 +960,7 @@ vector<TrainingMetrics> NNModel::train_epochs(
     batch_labels.reserve(config.batch_size);
 
     for (size_t i = 0; i < train_indices.size(); i++) {
-      if (stop_requested && (i % 100 == 0) && stop_requested->load())
+      if (stop_check && (i % 100 == 0) && stop_check())
         goto epoch_end;
 
       size_t idx = train_indices[i];

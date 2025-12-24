@@ -188,7 +188,7 @@ public:
                const TrainingConfig &config,
                ProgressCallback progress_callback = nullptr,
                LogCallback log_callback = nullptr,
-               std::atomic<bool> *stop_requested = nullptr);
+               std::function<bool()> stop_check = nullptr);
 
   // Evaluate the model on a test dataset (Forward-Only)
   // input:        -dataset (MNIST dataset with images and labels)

@@ -372,6 +372,8 @@ class MainWindow(QMainWindow):
     def stop_training(self):
         self.controller.requestStop.emit()
         self.spinner.stop()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Stopped")
         
     def log_message(self, msg):
         print(msg) # Ensure console output
