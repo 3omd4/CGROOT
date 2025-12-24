@@ -10,26 +10,26 @@ class ModelController(QObject):
     trainingFinished = pyqtSignal()
     modelStatusChanged = pyqtSignal(bool) # isTraining
     featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
-    trainingPreviewReady = pyqtSignal(int, object, list, int) # NEW
-    configurationLoaded = pyqtSignal(dict) # NEW: Propagate config loaded signal
+    trainingPreviewReady = pyqtSignal(int, object, list, int) # int: epoch, object: image, list: probabilities, int: predicted_class
+    configurationLoaded = pyqtSignal(dict) # dict: configuration
     metricsCleared = pyqtSignal() # Signal to clear metrics graph
     metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
     datasetInfoLoaded = pyqtSignal(int, int, int, int) # num_images, width, height, depth
-    modelInfoLoaded = pyqtSignal(int, int, int) # w, h, d (From loaded model)
+    modelInfoLoaded = pyqtSignal(int, int, int) # width, height, depth (From loaded model)
     evaluationFinished = pyqtSignal(float, float, list) # loss, acc, confusion_matrix
 
     
     # Signals to Worker
     requestLoadDataset = pyqtSignal(str, str)
-    requestTrain = pyqtSignal(dict) # CHANGED: Accepts config dict now
+    requestTrain = pyqtSignal(dict) # Accepts configuration dict
     requestStop = pyqtSignal()
     requestInference = pyqtSignal(object)
     setTargetLayer = pyqtSignal(int)
     requestStoreModel = pyqtSignal(str, dict) # folderPath, configuration
     requestLoadModel = pyqtSignal(str) # filePath
-    requestResetModel = pyqtSignal(dict) # New Signal: configuration
+    requestResetModel = pyqtSignal(dict) # configuration
     requestTest = pyqtSignal(str, str) # images_path, labels_path
-    setVisualizationsEnabled = pyqtSignal(bool) # NEW: Toggle visualizations
+    setVisualizationsEnabled = pyqtSignal(bool) # Toggle visualizations
 
     def __init__(self):
         super().__init__()
@@ -44,11 +44,11 @@ class ModelController(QObject):
         self.worker.metricsUpdated.connect(self.metricsUpdated)
         self.worker.progressUpdated.connect(self.progressUpdated)
         self.worker.imagePredicted.connect(self.imagePredicted)
-        self.worker.trainingPreviewReady.connect(self.trainingPreviewReady) # NEW
+        self.worker.trainingPreviewReady.connect(self.trainingPreviewReady)
         self.worker.trainingFinished.connect(self.trainingFinished)
         self.worker.modelStatusChanged.connect(self.modelStatusChanged)
         self.worker.featureMapsReady.connect(self.featureMapsReady)
-        self.worker.configurationLoaded.connect(self.configurationLoaded) # Connect Worker -> Controller
+        self.worker.configurationLoaded.connect(self.configurationLoaded)
         self.worker.metricsCleared.connect(self.metricsCleared)
         self.worker.metricsSetEpoch.connect(self.metricsSetEpoch)
         self.worker.datasetInfoLoaded.connect(self.datasetInfoLoaded)
@@ -67,7 +67,7 @@ class ModelController(QObject):
         self.requestLoadModel.connect(self.worker.loadModel)
         self.requestTest.connect(self.worker.runTesting)
         self.setVisualizationsEnabled.connect(self.worker.setVisualizationsEnabled)
-        self.requestResetModel.connect(self.worker.resetModel) # Connect Reset
+        self.requestResetModel.connect(self.worker.resetModel)
         
         self.thread.start()
         

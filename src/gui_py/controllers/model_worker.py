@@ -19,13 +19,13 @@ from utils.visualization_manager import VisualizationManager
 class ModelWorker(QObject):
     logMessage = pyqtSignal(str)
     metricsUpdated = pyqtSignal(float, float, float, float, int)  # t_loss, t_acc, v_loss, v_acc, epoch
-    progressUpdated = pyqtSignal(int, int)
+    progressUpdated = pyqtSignal(int, int) # value, maximum
     featureMapsReady = pyqtSignal(list, int, bool) # maps, layer_type, is_epoch_end
     trainingPreviewReady = pyqtSignal(int, object, list, int) # int, QImage, list of floats, int (true_label) (Training Only)
     imagePredicted = pyqtSignal(int, object, list) # int, QImage, list of floats (Inference Only)
     trainingFinished = pyqtSignal()
     inferenceFinished = pyqtSignal()
-    modelStatusChanged = pyqtSignal(bool)
+    modelStatusChanged = pyqtSignal(bool) # isTraining
     configurationLoaded = pyqtSignal(dict) # New signal for config
     metricsCleared = pyqtSignal() # Signal to clear metrics graph
     metricsSetEpoch = pyqtSignal(int) # Signal to set epoch for metrics graph
@@ -98,24 +98,16 @@ class ModelWorker(QObject):
         """Handle successful dataset loading."""
         self.dataset = dataset
         if self.dataset:
-            # Use getattr with default 1 for depth since binding might not be updated during runtime immediately without recompile
             d = getattr(self.dataset, 'depth', 1) 
             self.logMessage.emit(f"Dataset loaded successfully: {self.dataset.num_images} images, {self.dataset.image_width}x{self.dataset.image_height}x{d}")
             self.datasetInfoLoaded.emit(self.dataset.num_images, self.dataset.image_width, self.dataset.image_height, d)
         else:
             self.logMessage.emit("Failed to load dataset (returned None)")
-        
-        # Thread cleanup handled by finished signal
-
 
     @pyqtSlot(str)
     def _on_loader_error(self, error_msg):
         """Handle dataset loading error."""
         self.logMessage.emit(error_msg)
-        # Thread cleanup handled by finished signal
-
-
-
 
     @pyqtSlot(bool)
     def setVisualizationsEnabled(self, enabled):
@@ -463,18 +455,12 @@ class ModelWorker(QObject):
                         
                         # # Debug: Log first and last history item
                         # if len(history) > 0:
-
                         #     first = history[0]
                         #     last = history[-1]
                         #     self.logMessage.emit(f"  First: Epoch {first.epoch}, Loss {first.train_loss:.4f}, Acc {first.train_accuracy:.2f}")
                         #     self.logMessage.emit(f"  Last:  Epoch {last.epoch}, Loss {last.train_loss:.4f}, Acc {last.train_accuracy:.2f}")
 
                         for m in history:
-                            # m is TrainingMetrics object (bound from C++)
-                            # emit metricsUpdated signal
-                            # We emit one by one to populate graph
-                            # Note: graph might need 'epoch' index 1-based or 0-based.
-                            # MetricsUpdated(loss, acc, val_loss, val_acc, epoch)
                             self.metricsUpdated.emit(m.train_loss, m.train_accuracy, m.val_loss, m.val_accuracy, m.epoch)
                     else:
                          self.logMessage.emit("Model loaded but no training history found (legacy format or empty).")
@@ -511,9 +497,6 @@ class ModelWorker(QObject):
             # Format image based on depth
             fmt = QImage.Format.Format_Grayscale8 if d == 1 else QImage.Format.Format_RGB888
             
-            # Scale and convert FIRST
-            # Using VisualizationManager to handle format issues if possible, or just standard Qt
-            # Note: runInference uses QImage directly passed from UI, so we keep using QImage methods here
             img = qimage_obj.scaled(w, h).convertToFormat(fmt)
 
             
@@ -553,10 +536,7 @@ class ModelWorker(QObject):
         self.modelStatusChanged.emit(False)
         self.inferenceFinished.emit()
     
-    # ========================================================================
     # Thread-Safe Signal Emission Helpers
-    # ========================================================================
-    
     @pyqtSlot(str)
     def _emit_log_from_thread(self, message):
         """
@@ -598,20 +578,12 @@ class ModelWorker(QObject):
             if should_emit_viz:
                 self.last_viz_update = current_time
     
-    # ========================================================================
     # Lifecycle Management
-    # ========================================================================
-    
+
     def cleanup(self):
         """
         Explicit cleanup method for safe resource deallocation.
         Call this before destroying the worker object.
-        
-        Destruction order:
-        1. Stop training flag
-        2. Clear callback references
-        3. Destroy model
-        4. Clear dataset
         """
         self.logMessage.emit("=== ModelWorker Cleanup Start ===")
         
